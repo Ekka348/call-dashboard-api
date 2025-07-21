@@ -108,6 +108,7 @@ function presetChat(text) {
 
 function showSuggestions() {
   const box = document.getElementById("chatbox");
+  if (document.getElementById("suggestions")) return;
   const sug = document.createElement("div");
   sug.id = "suggestions";
   sug.innerHTML = `
@@ -115,13 +116,14 @@ function showSuggestions() {
     <ul>
       <li>НДЗ неделя по Алие</li>
       <li>Сравни НДЗ и НДЗ 2 за неделю</li>
-      <li>Активность НДЗ по дням</li>
       <li>НДЗ по часам сегодня</li>
+      <li>Активность НДЗ по дням</li>
       <li>НДЗ по неделям</li>
       <li>Скачай отчёт по НДЗ</li>
     </ul>`;
   box.appendChild(sug);
 }
+
 
 // 📊 Стандартный бар-график
 function renderChart(data) {
