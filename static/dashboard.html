@@ -5,7 +5,7 @@
   <title>CRM Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
-    body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; color: #333; }
     select, button, input { font-size: 16px; padding: 6px 10px; margin: 5px; }
     #report, #chart, #chatbox, #historybox { margin-top: 20px; }
     #report table { border-collapse: collapse; width: 100%; background: #fff; }
@@ -46,42 +46,48 @@
   <div id="report"></div>
   <div id="chart"></div>
 
-<hr>
+  <hr>
   <div id="chatbox">
     <h3>💬 Chat Assistant</h3>
-
     <div id="chatbuttons">
       <button onclick="presetChat('НДЗ неделя')">НДЗ неделя</button>
       <button onclick="presetChat('НДЗ 2 месяц')">НДЗ 2 месяц</button>
       <button onclick="presetChat('перезвонить сегодня')">Перезвонить сегодня</button>
       <button onclick="presetChat('рекрутер неделя')">Рекрутер неделя</button>
     </div>
-
     <div id="chatlog"></div>
-    <input type="text" id="chatinput" placeholder="Например: 'НДЗ неделя'" title="Попробуй: 'НДЗ неделя', 'НДЗ 2 месяц', 'перезвонить сегодня'" onkeypress="handleChat(event)" />
+    <input type="text" id="chatinput" placeholder="Например: 'НДЗ неделя'" onkeypress="handleChat(event)" />
     <button onclick="toggleHistory()">📜 Скрыть/Показать историю</button>
     <div id="historybox"></div>
   </div>
 
   <script>
-    let chatHistory = [];
+    function toggleReport() {
+      const r = document.getElementById("report");
+      r.style.display = r.style.display === "none" ? "block" : "none";
+    }
+
+    function toggleChart() {
+      const c = document.getElementById("chart");
+      c.style.display = c.style.display === "none" ? "block" : "none";
+    }
+
+    function toggleHistory() {
+      const h = document.getElementById("historybox");
+      h.style.display = h.style.display === "none" ? "block" : "none";
+    }
 
     async function loadStats() {
       const stage = document.getElementById("stage").value;
       const range = document.getElementById("range").value;
-      showLoading(true, "⏳ Загрузка отчёта...");
+      const spinner = document.getElementById("spinner");
+      spinner.style.display = "inline";
+      spinner.innerText = "⏳ Загрузка...";
       const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
       const data = await res.json();
+      spinner.style.display = "none";
       renderTable(data);
       renderChart(data);
-      announceTopUser(data);
-      showLoading(false);
-    }
-
-    function showLoading(show, text = "") {
-      const spinner = document.getElementById("spinner");
-      spinner.style.display = show ? "inline" : "none";
-      spinner.innerText = text;
     }
 
     function renderTable(data) {
@@ -107,73 +113,11 @@
       };
       Plotly.newPlot("chart", [trace], layout);
     }
-
-    function announceTopUser(data) {
-      const maxIndex = data.values.indexOf(Math.max(...data.values));
-      const topUser = data.labels[maxIndex];
-      logChat(`🏆 Самый активный сотрудник: ${topUser} (${data.values[maxIndex]} лидов)`);
-    }
-
-    function handleChat(e) {
-      if (e.key === "Enter") {
-        const input = document.getElementById("chatinput").value.trim();
-        if (!input) return;
-        logChat("👤 " + input);
-        processChat(input);
-        document.getElementById("chatinput").value = "";
-      }
-    }
-
-    function logChat(message) {
-      chatHistory.push(message);
-      const log = document.getElementById("chatlog");
-      log.innerHTML += `<div>${message}</div>`;
-      log.scrollTop = log.scrollHeight;
-    }
-
-    function toggleHistory() {
-      const box = document.getElementById("historybox");
-      box.style.display = box.style.display === "none" || !box.style.display ? "block" : "none";
-      if (box.style.display === "block") {
-        box.innerHTML = "<h4>📜 История запросов:</h4>" + chatHistory.map(m => `<div>${m}</div>`).join("");
-      }
-    }
-
-    function toggleChart() {
-      const chart = document.getElementById("chart");
-      chart.style.display = chart.style.display === "none" ? "block" : "none";
-    }
-
-    function toggleReport() {
-      const report = document.getElementById("report");
-      report.style.display = report.style.display === "none" ? "block" : "none";
-    }
-
-    async function processChat(message) {
-      let stage = "НДЗ", range = "week";
-      if (message.includes("НДЗ 2")) stage = "НДЗ 2";
-      if (message.includes("перезвонить")) stage = "Перезвонить";
-      if (message.includes("рекрутер")) stage = "Приглашен к рекрутеру";
-      if (message.includes("сегодня")) range = "today";
-      if (message.includes("неделя")) range = "week";
-      if (message.includes("месяц")) range = "month";
-
-      showLoading(true, "💬 Обрабатываем запрос...");
-      const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
-      const data = await res.json();
-      logChat(`🤖 ${data.stage}, ${data.range}: ${data.total} лидов`);
-      renderTable(data);
-      renderChart(data);
-      announceTopUser(data);
-      showLoading(false);
-    }
-
-    function presetChat(text) {
-      document.getElementById("chatinput").value = text;
-      handleChat({ key: "Enter" });
-    }
   </script>
+
+  <script src="/static/chat.js"></script>
 </body>
 </html>
+
 
 
