@@ -5,25 +5,30 @@
   <title>CRM Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
-    body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; color: #333; }
     select, button { font-size: 16px; padding: 6px 10px; margin: 5px; }
-    #report, #chart { margin-top: 20px; }
-    #report table { border-collapse: collapse; width: 100%; background: #fff; }
-    #report th, #report td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-    #chart { height: 400px; margin-top: 20px; }
-    #timestamp { margin-top: 10px; color: #555; font-size: 14px; }
+    #statusbar { margin-top: 10px; font-size: 14px; }
+    #spinner { display: none; margin-right: 8px; }
+    #status { color: gray; }
+    .stage-block {
+      flex: 1;
+      min-width: 300px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+    }
+    .stage-block.blue     { border-color: #007bff; }
+    .stage-block.purple   { border-color: #6f42c1; }
+    .stage-block.orange   { border-color: #fd7e14; }
+    .stage-block.green    { border-color: #28a745; }
+    .stage-block h4 { margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
   </style>
 </head>
 <body>
   <h2>📊 CRM Dashboard</h2>
-
-  <label>Стадия:</label>
-  <select id="stage">
-    <option>НДЗ</option>
-    <option>НДЗ 2</option>
-    <option>Перезвонить</option>
-    <option>Приглашен к рекрутеру</option>
-  </select>
 
   <label>Период:</label>
   <select id="range">
@@ -32,115 +37,24 @@
     <option value="month">Месяц</option>
   </select>
 
-  <button onclick="loadStats()">📋 Статистика по стадиям</button>
-  <button onclick="loadWeekly()">📅 Понедельная разбивка</button>
-  <button onclick="toggleAutoRefresh()">🔄 Автообновление: <span id="autostatus">ВКЛ</span></button>
+  <button onclick="updateAllStages()">🔁 Обновить вручную</button>
+  <button onclick="toggleAutoRefresh()">Автообновление: <span id="autostatus">ВКЛ</span></button>
 
-  <div id="timestamp"></div>
-  <div id="report"></div>
-  <div id="chart"></div>
+  <div id="statusbar">
+    <span id="spinner">🌀 Загрузка...</span>
+    <span id="status">🕒 Статус: не обновлялось</span>
+  </div>
 
-  <script>
-    let autoRefresh = true;
-    let refreshInterval;
+  <div style="display:flex; flex-wrap:wrap; gap:20px; margin-top:20px;">
+    <div class="stage-block blue" id="report_ndz"></div>
+    <div class="stage-block purple" id="report_ndz2"></div>
+    <div class="stage-block orange" id="report_call"></div>
+    <div class="stage-block green" id="report_recruiter"></div>
+  </div>
 
-    function updateTimestamp() {
-      const now = new Date();
-      const formatted = now.toLocaleTimeString();
-      document.getElementById("timestamp").innerText = `🕒 Обновлено: ${formatted}`;
-    }
-
-    async function loadStats() {
-      const stage = document.getElementById("stage").value;
-      const range = document.getElementById("range").value;
-      const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
-      const data = await res.json();
-      renderTable(data);
-      renderChart(data);
-      updateTimestamp();
-    }
-
-    async function loadWeekly() {
-      const stage = document.getElementById("stage").value;
-      const res = await fetch(`/weekly_breakdown?label=${encodeURIComponent(stage)}`);
-      const data = await res.json();
-      renderWeeklyTable(data);
-      renderWeeklyChart(data, stage);
-      updateTimestamp();
-    }
-
-    function renderTable(data) {
-      let html = `<h3>📋 Стадия: "${data.stage}", период: "${data.range}"</h3>`;
-      html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
-      for (let i = 0; i < data.labels.length; i++) {
-        html += `<tr><td>${data.labels[i]}</td><td>${data.values[i]}</td></tr>`;
-      }
-      html += `</table>`;
-      document.getElementById("report").innerHTML = html;
-    }
-
-    function renderChart(data) {
-      const trace = {
-        x: data.labels,
-        y: data.values,
-        type: "bar",
-        marker: { color: "#007bff" }
-      };
-      const layout = {
-        title: `📊 Активность — "${data.stage}" (${data.range})`,
-        margin: { t: 40, l: 60, r: 30, b: 100 }
-      };
-      Plotly.newPlot("chart", [trace], layout);
-    }
-
-    function renderWeeklyTable(data) {
-      let html = `<h3>📅 Понедельная разбивка</h3>`;
-      html += `<table><tr><th>Неделя</th><th>Лидов</th></tr>`;
-      for (let i = 0; i < data.length; i++) {
-        html += `<tr><td>${data[i].week}</td><td>${data[i].count}</td></tr>`;
-      }
-      html += `</table>`;
-      document.getElementById("report").innerHTML = html;
-    }
-
-    function renderWeeklyChart(data, stage) {
-      const labels = data.map(d => d.week);
-      const values = data.map(d => d.count);
-      const trace = {
-        x: labels,
-        y: values,
-        type: "scatter",
-        mode: "lines+markers",
-        marker: { color: "#28a745" }
-      };
-      const layout = {
-        title: `📈 Разбивка по неделям — "${stage}"`,
-        margin: { t: 40, l: 60, r: 30, b: 100 }
-      };
-      Plotly.newPlot("chart", [trace], layout);
-    }
-
-    function toggleAutoRefresh() {
-      autoRefresh = !autoRefresh;
-      document.getElementById("autostatus").innerText = autoRefresh ? "ВКЛ" : "ВЫКЛ";
-      if (!autoRefresh) clearInterval(refreshInterval);
-      else startAutoRefresh();
-    }
-
-    function startAutoRefresh() {
-      refreshInterval = setInterval(() => {
-        const activeButton = document.activeElement?.innerText;
-        if (activeButton?.includes("Понедельная")) loadWeekly();
-        else loadStats();
-      }, 120000); // каждые 2 минуты
-    }
-
-    window.onload = () => {
-      loadStats();
-      startAutoRefresh();
-    };
-  </script>
+  <script src="/static/stages.js"></script>
 </body>
 </html>
+
 
 
