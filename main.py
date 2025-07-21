@@ -174,6 +174,32 @@ def debug():
     """
     return render_template_string(html)
 
+@app.route("/stats_data")
+def stats_data():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "today")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
+    users = load_users()
+    leads = fetch_leads(stage, start, end)
+
+    stats = Counter()
+    for lead in leads:
+        uid = lead.get("ASSIGNED_BY_ID")
+        if uid: stats[int(uid)] += 1
+
+    labels = [users.get(uid, str(uid)) for uid, _ in stats.items()]
+    values = [cnt for _, cnt in stats.items()]
+
+    return {
+        "labels": labels,
+        "values": values,
+        "total": sum(values),
+        "stage": label,
+        "range": rtype
+    }
+
+
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
