@@ -13,7 +13,7 @@
     #chart { height: 400px; margin-top: 20px; }
     #loading { font-weight: bold; font-size: 16px; margin-top: 10px; color: #555; }
     #spinner { display: none; margin-right: 8px; }
-    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; max-width: 650px; }
+    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; max-width: 700px; }
     #chatlog { height: 180px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #fefefe; }
     #chatinput { width: 100%; padding: 8px; font-size: 15px; }
     #chatbuttons button { margin: 4px; padding: 6px 10px; font-size: 14px; }
@@ -60,8 +60,16 @@
       <button onclick="showSuggestions()">❓ Подсказки</button>
     </div>
 
-    <div id="chatlog"></div>
-    <input type="text" id="chatinput" placeholder="Например: 'НДЗ по дням', 'Сравни НДЗ и НДЗ 2'" onkeypress="handleChat(event)" />
+    <div id="chatcontrols">
+      <label for="userselect">Сотрудник:</label>
+      <select id="userselect">
+        <option value="">— Без фильтра —</option>
+      </select>
+    </div>
+
+    <input type="text" id="chatinput" list="userlist" placeholder="Например: 'НДЗ неделя по Алия Ахматшина'" onkeypress="handleChat(event)" />
+    <datalist id="userlist"></datalist>
+
     <button onclick="toggleHistory()">📜 Скрыть/Показать историю</button>
     <div id="historybox"></div>
   </div>
@@ -123,3 +131,4 @@
   <script src="/static/chat.js"></script>
 </body>
 </html>
+
