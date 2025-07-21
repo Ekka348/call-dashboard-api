@@ -5,11 +5,13 @@
   <title>CRM Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; color: #333; }
-    select, button { font-size: 16px; padding: 6px 10px; margin: 5px; }
+    body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
+    select { font-size: 16px; padding: 6px 10px; margin: 5px; }
+
     #statusbar { margin-top: 10px; font-size: 14px; }
     #spinner { display: none; margin-right: 8px; }
     #status { color: gray; }
+
     .stage-block {
       flex: 1;
       min-width: 300px;
@@ -22,9 +24,12 @@
     .stage-block.purple   { border-color: #6f42c1; }
     .stage-block.orange   { border-color: #fd7e14; }
     .stage-block.green    { border-color: #28a745; }
+
     .stage-block h4 { margin-top: 0; }
     table { border-collapse: collapse; width: 100%; background: #fff; }
     th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+
+    .chart-container { height: 180px; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -36,9 +41,6 @@
     <option value="week">Неделя</option>
     <option value="month">Месяц</option>
   </select>
-
-  <button onclick="updateAllStages()">🔁 Обновить вручную</button>
-  <button onclick="toggleAutoRefresh()">Автообновление: <span id="autostatus">ВКЛ</span></button>
 
   <div id="statusbar">
     <span id="spinner">🌀 Загрузка...</span>
@@ -55,6 +57,7 @@
   <script src="/static/stages.js"></script>
 </body>
 </html>
+
 
 
 
