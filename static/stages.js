@@ -1,16 +1,17 @@
 function showStageLoading(stage) {
-  document.getElementById("spinner").style.display = "inline";
-  document.getElementById("status").style.color = "gray";
-  document.getElementById("status").innerText = `🔄 Обновляем: ${stage}`;
+  const spinner = document.getElementById("spinner");
+  spinner.style.display = "block";
+  spinner.innerText = `🔄 Обновляем: ${stage}`;
 }
 
 function hideLoading(success = true) {
   const now = new Date().toLocaleTimeString();
-  document.getElementById("spinner").style.display = "none";
-  document.getElementById("status").style.color = success ? "#28a745" : "red";
-  document.getElementById("status").innerText = success
-    ? `✅ Обновлено: ${now} — успешно`
+  const update = document.getElementById("lastupdate");
+  update.style.color = success ? "#28a745" : "red";
+  update.innerText = success
+    ? `✅ Последнее обновление: ${now}`
     : `❌ Ошибка обновления`;
+  document.getElementById("spinner").style.display = "none";
 }
 
 function getDateParams() {
@@ -56,7 +57,7 @@ async function updateLoop() {
   await loadStatsFor("Перезвонить", "report_call");
   await loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
   hideLoading(true);
-  requestAnimationFrame(() => setTimeout(updateLoop, 100)); // запуск снова
+  requestAnimationFrame(() => setTimeout(updateLoop, 100));
 }
 
 function attachReactiveListeners() {
@@ -67,7 +68,8 @@ function attachReactiveListeners() {
 
 window.onload = () => {
   attachReactiveListeners();
-  updateLoop(); // бесконечный старт
+  updateLoop();
 };
+
 
 
