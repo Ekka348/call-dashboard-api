@@ -1,4 +1,5 @@
 let chatHistory = [];
+let dynamicUsers = {};
 
 function logChat(message) {
   chatHistory.push(message);
@@ -20,11 +21,34 @@ function handleChat(e) {
   document.getElementById("chatinput").value = "";
 }
 
-async function processChat(message) {
-  let label = "НДЗ", range = "week", uid = "";
-  const stages = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
-  const users = { "алия": 1, "наталья": 2, "сергей": 3 };
+async function loadUsers() {
+  try {
+    const res = await fetch("/users");
+    const data = await res.json();
+    for (let uid in data) {
+      const name = data[uid].toLowerCase();
+      dynamicUsers[name] = parseInt(uid);
+    }
+  } catch (e) {
+    console.warn("Не удалось загрузить список сотрудников");
+  }
+}
 
+// 🔍 Распознавание UID по тексту
+function detectUserId(message) {
+  const msg = message.toLowerCase();
+  for (let fullName in dynamicUsers) {
+    if (msg.includes(fullName)) {
+      logChat(`🕵️‍♂️ Найден сотрудник: ${fullName}`);
+      return dynamicUsers[fullName];
+    }
+  }
+  return "";
+}
+
+async function processChat(message) {
+  let label = "НДЗ", range = "week";
+  const stages = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
   for (let s of stages) {
     if (message.toLowerCase().includes(s.toLowerCase())) label = s;
   }
@@ -33,68 +57,22 @@ async function processChat(message) {
   if (message.includes("неделя")) range = "week";
   if (message.includes("месяц")) range = "month";
 
-  for (let name in users) {
-    if (message.toLowerCase().includes(name)) uid = users[name];
-  }
+  const uid = detectUserId(message);
 
-  // ⏱ По часам
-  if (message.includes("по часам")) {
-    const res = await fetch(`/hourly?label=${label}&range=${range}`);
-    const data = await res.json();
-    renderLineChart(data);
-    logChat(`🕒 Активность по часам: ${label}, ${range}`);
-    return;
-  }
-
-  // 📈 По дням
-  if (message.includes("по дням") || message.includes("тренд")) {
-    const res = await fetch(`/trend?label=${label}&range=${range}`);
-    const data = await res.json();
-    renderLineChart(data);
-    logChat(`📈 Активность по дням: ${label}, ${range}`);
-    return;
-  }
-
-  // 🔁 Сравнение двух стадий
-  if (message.includes("сравни")) {
-    const found = stages.filter(s => message.includes(s));
-    if (found.length === 2) {
-      const res = await fetch(`/compare_stages?stage1=${found[0]}&stage2=${found[1]}&range=${range}`);
-      const data = await res.json();
-      const diff = data.count1 - data.count2;
-      const emoji = diff > 0 ? "📈" : diff < 0 ? "📉" : "➖";
-      logChat(`🔁 Сравнение: ${data.stage1} (${data.count1}) vs ${data.stage2} (${data.count2}) → разница: ${diff} ${emoji}`);
-      return;
-    }
-  }
-
-  // 📥 Скачивание отчёта
-  if (message.includes("скачай") || message.includes("экспорт")) {
-    const link = `/export_csv?label=${label}&range=${range}`;
-    logChat(`📁 Скачать отчёт: <a href="${link}" target="_blank">${label} ${range}</a>`);
-    return;
-  }
-
-  // 📅 Понедельная аналитика
-  if (message.includes("неделям") || message.includes("по неделям")) {
-    const res = await fetch(`/weekly_breakdown?label=${label}`);
-    const data = await res.json();
-    let html = `<table border="1" cellpadding="6"><tr><th>Неделя</th><th>Лидов</th></tr>`;
-    for (let w of data) {
-      html += `<tr><td>${w.week}</td><td>${w.count}</td></tr>`;
-    }
-    html += `</table>`;
-    logChat(`📅 Понедельная аналитика по "${label}":`);
-    document.getElementById("chart").innerHTML = html;
-    return;
-  }
-
-  // 📊 Стандартный отчёт
-  const res = await fetch(`/stats_data?label=${label}&range=${range}&uid=${uid}`);
+  const res = await fetch(`/stats_data?label=${encodeURIComponent(label)}&range=${range}&uid=${uid}`);
   const data = await res.json();
-  logChat(`🤖 ${label}, ${range}: всего ${data.total} лидов`);
+
+  if (!data.values || !data.values.length || data.total === 0) {
+    logChat(`📭 Нет лидов по стадии "${label}" за период "${range}"${uid ? ` для выбранного сотрудника` : ""}.`);
+    document.getElementById("report").innerHTML = `<p>📭 Пусто: нет лидов по фильтру.</p>`;
+    document.getElementById("chart").innerHTML = "";
+    return;
+  }
+
+  logChat(`🤖 ${label}, ${range}${uid ? ` (фильтр по сотруднику)` : ""}: всего ${data.total} лидов`);
   renderTable(data);
   renderChart(data);
+
   const max = Math.max(...data.values);
   const idx = data.values.indexOf(max);
   const top = data.labels[idx];
@@ -106,26 +84,16 @@ function presetChat(text) {
   handleChat({ key: "Enter" });
 }
 
-function showSuggestions() {
-  const box = document.getElementById("chatbox");
-  if (document.getElementById("suggestions")) return;
-  const sug = document.createElement("div");
-  sug.id = "suggestions";
-  sug.innerHTML = `
-    <strong>💡 Примеры команд:</strong>
-    <ul>
-      <li>НДЗ неделя по Алие</li>
-      <li>Сравни НДЗ и НДЗ 2 за неделю</li>
-      <li>НДЗ по часам сегодня</li>
-      <li>Активность НДЗ по дням</li>
-      <li>НДЗ по неделям</li>
-      <li>Скачай отчёт по НДЗ</li>
-    </ul>`;
-  box.appendChild(sug);
+function renderTable(data) {
+  let html = `<h3>📋 Стадия: "${data.stage}", период: "${data.range}"</h3>`;
+  html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
+  for (let i = 0; i < data.labels.length; i++) {
+    html += `<tr><td>${data.labels[i]}</td><td>${data.values[i]}</td></tr>`;
+  }
+  html += `</table>`;
+  document.getElementById("report").innerHTML = html;
 }
 
-
-// 📊 Стандартный бар-график
 function renderChart(data) {
   const trace = {
     x: data.labels,
@@ -140,29 +108,24 @@ function renderChart(data) {
   Plotly.newPlot("chart", [trace], layout);
 }
 
-// 📈 Линейный график по дням/часам
-function renderLineChart(data) {
-  const trace = {
-    x: data.labels,
-    y: data.values,
-    type: "scatter",
-    mode: "lines+markers",
-    marker: { color: "#28a745" }
-  };
-  const layout = {
-    title: `📈 Тренд — "${data.stage}" (${data.range})`,
-    margin: { t: 40, l: 60, r: 30, b: 100 }
-  };
-  Plotly.newPlot("chart", [trace], layout);
+function showSuggestions() {
+  const box = document.getElementById("chatbox");
+  if (document.getElementById("suggestions")) return;
+  const sug = document.createElement("div");
+  sug.id = "suggestions";
+  sug.innerHTML = `
+    <strong>💡 Примеры команд:</strong>
+    <ul>
+      <li>НДЗ неделя по Алия Ахматшина</li>
+      <li>Сравни НДЗ и НДЗ 2 за неделю</li>
+      <li>НДЗ по часам сегодня</li>
+      <li>Активность НДЗ по дням</li>
+      <li>НДЗ по неделям</li>
+      <li>Скачай отчёт по НДЗ</li>
+    </ul>`;
+  box.appendChild(sug);
 }
 
-// 📋 Отображение таблицы
-function renderTable(data) {
-  let html = `<h3>📋 Стадия: "${data.stage}", период: "${data.range}"</h3>`;
-  html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
-  for (let i = 0; i < data.labels.length; i++) {
-    html += `<tr><td>${data.labels[i]}</td><td>${data.values[i]}</td></tr>`;
-  }
-  html += `</table>`;
-  document.getElementById("report").innerHTML = html;
-}
+// 🚀 Запустить авто-загрузку пользователей
+loadUsers();
+
