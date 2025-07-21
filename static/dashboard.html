@@ -46,7 +46,7 @@
   <div id="report"></div>
   <div id="chart"></div>
 
-  <hr>
+<hr>
   <div id="chatbox">
     <h3>💬 Chat Assistant</h3>
 
@@ -133,11 +133,9 @@
 
     function toggleHistory() {
       const box = document.getElementById("historybox");
-      if (box.style.display === "none" || !box.style.display) {
-        box.style.display = "block";
+      box.style.display = box.style.display === "none" || !box.style.display ? "block" : "none";
+      if (box.style.display === "block") {
         box.innerHTML = "<h4>📜 История запросов:</h4>" + chatHistory.map(m => `<div>${m}</div>`).join("");
-      } else {
-        box.style.display = "none";
       }
     }
 
@@ -172,7 +170,10 @@
 
     function presetChat(text) {
       document.getElementById("chatinput").value = text;
-      handleChat({ key: "Enter
-
+      handleChat({ key: "Enter" });
+    }
+  </script>
+</body>
+</html>
 
 
