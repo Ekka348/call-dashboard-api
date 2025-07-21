@@ -39,6 +39,7 @@
   </select>
 
   <button onclick="loadStats()">📥 Загрузить</button>
+  <button onclick="toggleReport()">📋 Скрыть/Показать таблицу</button>
   <button onclick="toggleChart()">📉 Скрыть/Показать график</button>
 
   <div id="loading"><span id="spinner">⏳ Загрузка...</span></div>
@@ -145,6 +146,11 @@
       chart.style.display = chart.style.display === "none" ? "block" : "none";
     }
 
+    function toggleReport() {
+      const report = document.getElementById("report");
+      report.style.display = report.style.display === "none" ? "block" : "none";
+    }
+
     async function processChat(message) {
       let stage = "НДЗ", range = "week";
       if (message.includes("НДЗ 2")) stage = "НДЗ 2";
@@ -166,11 +172,7 @@
 
     function presetChat(text) {
       document.getElementById("chatinput").value = text;
-      handleChat({ key: "Enter" });
-    }
-  </script>
-</body>
-</html>
+      handleChat({ key: "Enter
 
 
 
