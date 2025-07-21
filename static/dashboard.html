@@ -5,7 +5,7 @@
   <title>CRM Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; color: #333; }
+    body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
     select, button, input { font-size: 16px; padding: 6px 10px; margin: 5px; }
     #report, #chart, #chatbox, #historybox { margin-top: 20px; }
     #report table { border-collapse: collapse; width: 100%; background: #fff; }
@@ -13,11 +13,13 @@
     #chart { height: 400px; margin-top: 20px; }
     #loading { font-weight: bold; font-size: 16px; margin-top: 10px; color: #555; }
     #spinner { display: none; margin-right: 8px; }
-    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; max-width: 600px; }
+    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; max-width: 650px; }
     #chatlog { height: 180px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #fefefe; }
     #chatinput { width: 100%; padding: 8px; font-size: 15px; }
     #chatbuttons button { margin: 4px; padding: 6px 10px; font-size: 14px; }
     #historybox { font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ddd; display: none; margin-top: 10px; }
+    #suggestions ul { padding-left: 18px; }
+    #suggestions li { margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -49,32 +51,21 @@
   <hr>
   <div id="chatbox">
     <h3>💬 Chat Assistant</h3>
+
     <div id="chatbuttons">
       <button onclick="presetChat('НДЗ неделя')">НДЗ неделя</button>
       <button onclick="presetChat('НДЗ 2 месяц')">НДЗ 2 месяц</button>
       <button onclick="presetChat('перезвонить сегодня')">Перезвонить сегодня</button>
       <button onclick="presetChat('рекрутер неделя')">Рекрутер неделя</button>
+      <button onclick="showSuggestions()">❓ Подсказки</button>
     </div>
+
     <div id="chatlog"></div>
-    <input type="text" id="chatinput" placeholder="Например: 'НДЗ неделя'" onkeypress="handleChat(event)" />
+    <input type="text" id="chatinput" placeholder="Например: 'НДЗ по дням', 'Сравни НДЗ и НДЗ 2'" onkeypress="handleChat(event)" />
     <button onclick="toggleHistory()">📜 Скрыть/Показать историю</button>
     <div id="historybox"></div>
   </div>
 
-  <div id="suggestions" style="margin-top:10px; display:none;">
-  <strong>💡 Примеры команд:</strong>
-  <ul>
-    <li>НДЗ неделя по Алие</li>
-    <li>Сравни НДЗ и НДЗ 2 за неделю</li>
-    <li>НДЗ по часам сегодня</li>
-    <li>Активность НДЗ по дням</li>
-    <li>НДЗ по неделям</li>
-    <li>Скачай отчёт по НДЗ</li>
-  </ul>
-</div>
-
-  <button onclick="showSuggestions()">❓ Подсказки</button>
-  
   <script>
     function toggleReport() {
       const r = document.getElementById("report");
@@ -132,6 +123,3 @@
   <script src="/static/chat.js"></script>
 </body>
 </html>
-
-
-
