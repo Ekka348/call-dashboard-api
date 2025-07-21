@@ -21,7 +21,6 @@ async function loadStatsFor(stage, targetId, color) {
     const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
     const data = await res.json();
     renderMiniTable(data, targetId);
-    renderMiniChart(data, `${targetId}_chart`, color);
   } catch {
     document.getElementById(targetId).innerHTML = `<p>❌ Ошибка загрузки для стадии "${stage}"</p>`;
   }
