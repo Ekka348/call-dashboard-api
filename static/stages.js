@@ -38,7 +38,7 @@ function renderMiniTable(data, targetId) {
   for (const row of sorted) {
     html += `<tr><td>${row.name}</td><td>${row.count}</td></tr>`;
   }
-  html += `</table><div class="chart-container" id="${targetId}_chart"></div>`;
+  
   document.getElementById(targetId).innerHTML = html;
 }
 
