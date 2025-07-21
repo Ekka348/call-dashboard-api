@@ -1,4 +1,3 @@
-let autoRefresh = true;
 let refreshInterval;
 
 function showLoading(message = "Загрузка...") {
@@ -16,12 +15,13 @@ function hideLoading(success = true) {
     : `❌ Обновление не удалось`;
 }
 
-async function loadStatsFor(stage, targetId) {
+async function loadStatsFor(stage, targetId, color) {
   try {
     const range = document.getElementById("range").value;
     const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
     const data = await res.json();
     renderMiniTable(data, targetId);
+    renderMiniChart(data, `${targetId}_chart`, color);
   } catch {
     document.getElementById(targetId).innerHTML = `<p>❌ Ошибка загрузки для стадии "${stage}"</p>`;
   }
@@ -39,31 +39,38 @@ function renderMiniTable(data, targetId) {
   for (const row of sorted) {
     html += `<tr><td>${row.name}</td><td>${row.count}</td></tr>`;
   }
-  html += `</table>`;
+  html += `</table><div class="chart-container" id="${targetId}_chart"></div>`;
   document.getElementById(targetId).innerHTML = html;
+}
+
+function renderMiniChart(data, chartId, color) {
+  const trace = {
+    x: data.labels,
+    y: data.values,
+    type: "bar",
+    marker: { color }
+  };
+  const layout = {
+    margin: { t: 20, l: 30, r: 20, b: 80 },
+    height: 180,
+    xaxis: { tickangle: -45 },
+    yaxis: { title: "Лидов", automargin: true },
+  };
+  Plotly.newPlot(chartId, [trace], layout);
 }
 
 function updateAllStages() {
   showLoading("🔄 Обновляем все стадии...");
-  loadStatsFor("НДЗ", "report_ndz");
-  loadStatsFor("НДЗ 2", "report_ndz2");
-  loadStatsFor("Перезвонить", "report_call");
-  loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
+  loadStatsFor("НДЗ", "report_ndz", "#007bff");
+  loadStatsFor("НДЗ 2", "report_ndz2", "#6f42c1");
+  loadStatsFor("Перезвонить", "report_call", "#fd7e14");
+  loadStatsFor("Приглашен к рекрутеру", "report_recruiter", "#28a745");
   hideLoading(true);
 }
 
-function toggleAutoRefresh() {
-  autoRefresh = !autoRefresh;
-  document.getElementById("autostatus").innerText = autoRefresh ? "ВКЛ" : "ВЫКЛ";
-  if (!autoRefresh) clearInterval(refreshInterval);
-  else startAutoRefresh();
-}
-
-function startAutoRefresh() {
-  refreshInterval = setInterval(updateAllStages, 120000);
-}
-
 window.onload = () => {
+  document.getElementById("range").onchange = updateAllStages;
   updateAllStages();
-  startAutoRefresh();
+  refreshInterval = setInterval(updateAllStages, 120000);
 };
+
