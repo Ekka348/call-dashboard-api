@@ -6,12 +6,20 @@
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
     body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
-    select { font-size: 16px; padding: 6px 10px; margin: 5px; }
-
-    #statusbar { margin-top: 10px; font-size: 14px; }
-    #spinner { display: none; margin-right: 8px; }
+    select, input[type="date"] {
+      font-size: 16px;
+      padding: 6px 10px;
+      margin: 5px;
+    }
+    #statusbar {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    #spinner {
+      display: none;
+      margin-right: 8px;
+    }
     #status { color: gray; }
-
     .stage-block {
       flex: 1;
       min-width: 300px;
@@ -24,12 +32,17 @@
     .stage-block.purple   { border-color: #6f42c1; }
     .stage-block.orange   { border-color: #fd7e14; }
     .stage-block.green    { border-color: #28a745; }
-
     .stage-block h4 { margin-top: 0; }
-    table { border-collapse: collapse; width: 100%; background: #fff; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-
-    
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
   </style>
 </head>
 <body>
@@ -38,9 +51,15 @@
   <label>Период:</label>
   <select id="range">
     <option value="today">Сегодня</option>
-    <option value="week">Неделя</option>
+    <option value="week">Текущая неделя</option>
     <option value="month">Месяц</option>
+    <option value="custom">Выбрать вручную</option>
   </select>
+
+  <label>С:</label>
+  <input type="date" id="startdate">
+  <label>По:</label>
+  <input type="date" id="enddate">
 
   <div id="statusbar">
     <span id="spinner">🌀 Загрузка...</span>
@@ -57,7 +76,3 @@
   <script src="/static/stages.js"></script>
 </body>
 </html>
-
-
-
-
