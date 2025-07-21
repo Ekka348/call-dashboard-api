@@ -6,20 +6,12 @@
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
     body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
-    select, button, input { font-size: 16px; padding: 6px 10px; margin: 5px; }
-    #report, #chart, #chatbox, #historybox { margin-top: 20px; }
+    select, button { font-size: 16px; padding: 6px 10px; margin: 5px; }
+    #report, #chart { margin-top: 20px; }
     #report table { border-collapse: collapse; width: 100%; background: #fff; }
     #report th, #report td { border: 1px solid #ccc; padding: 6px; text-align: left; }
     #chart { height: 400px; margin-top: 20px; }
-    #loading { font-weight: bold; font-size: 16px; margin-top: 10px; color: #555; }
-    #spinner { display: none; margin-right: 8px; }
-    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; max-width: 700px; }
-    #chatlog { height: 180px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #fefefe; }
-    #chatinput { width: 100%; padding: 8px; font-size: 15px; }
-    #chatbuttons button { margin: 4px; padding: 6px 10px; font-size: 14px; }
-    #historybox { font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ddd; display: none; margin-top: 10px; }
-    #suggestions ul { padding-left: 18px; }
-    #suggestions li { margin-bottom: 4px; }
+    #timestamp { margin-top: 10px; color: #555; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -40,67 +32,41 @@
     <option value="month">Месяц</option>
   </select>
 
-  <button onclick="loadStats()">📥 Загрузить</button>
-  <button onclick="toggleReport()">📋 Скрыть/Показать таблицу</button>
-  <button onclick="toggleChart()">📉 Скрыть/Показать график</button>
+  <button onclick="loadStats()">📋 Статистика по стадиям</button>
+  <button onclick="loadWeekly()">📅 Понедельная разбивка</button>
+  <button onclick="toggleAutoRefresh()">🔄 Автообновление: <span id="autostatus">ВКЛ</span></button>
 
-  <div id="loading"><span id="spinner">⏳ Загрузка...</span></div>
+  <div id="timestamp"></div>
   <div id="report"></div>
   <div id="chart"></div>
 
-  <hr>
-  <div id="chatbox">
-    <h3>💬 Chat Assistant</h3>
-
-    <div id="chatbuttons">
-      <button onclick="presetChat('НДЗ неделя')">НДЗ неделя</button>
-      <button onclick="presetChat('НДЗ 2 месяц')">НДЗ 2 месяц</button>
-      <button onclick="presetChat('перезвонить сегодня')">Перезвонить сегодня</button>
-      <button onclick="presetChat('рекрутер неделя')">Рекрутер неделя</button>
-      <button onclick="showSuggestions()">❓ Подсказки</button>
-    </div>
-
-    <div id="chatcontrols">
-      <label for="userselect">Сотрудник:</label>
-      <select id="userselect">
-        <option value="">— Без фильтра —</option>
-      </select>
-    </div>
-
-    <input type="text" id="chatinput" list="userlist" placeholder="Например: 'НДЗ неделя по Алия Ахматшина'" onkeypress="handleChat(event)" />
-    <datalist id="userlist"></datalist>
-
-    <button onclick="toggleHistory()">📜 Скрыть/Показать историю</button>
-    <div id="historybox"></div>
-  </div>
-
   <script>
-    function toggleReport() {
-      const r = document.getElementById("report");
-      r.style.display = r.style.display === "none" ? "block" : "none";
-    }
+    let autoRefresh = true;
+    let refreshInterval;
 
-    function toggleChart() {
-      const c = document.getElementById("chart");
-      c.style.display = c.style.display === "none" ? "block" : "none";
-    }
-
-    function toggleHistory() {
-      const h = document.getElementById("historybox");
-      h.style.display = h.style.display === "none" ? "block" : "none";
+    function updateTimestamp() {
+      const now = new Date();
+      const formatted = now.toLocaleTimeString();
+      document.getElementById("timestamp").innerText = `🕒 Обновлено: ${formatted}`;
     }
 
     async function loadStats() {
       const stage = document.getElementById("stage").value;
       const range = document.getElementById("range").value;
-      const spinner = document.getElementById("spinner");
-      spinner.style.display = "inline";
-      spinner.innerText = "⏳ Загрузка...";
       const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
       const data = await res.json();
-      spinner.style.display = "none";
       renderTable(data);
       renderChart(data);
+      updateTimestamp();
+    }
+
+    async function loadWeekly() {
+      const stage = document.getElementById("stage").value;
+      const res = await fetch(`/weekly_breakdown?label=${encodeURIComponent(stage)}`);
+      const data = await res.json();
+      renderWeeklyTable(data);
+      renderWeeklyChart(data, stage);
+      updateTimestamp();
     }
 
     function renderTable(data) {
@@ -126,9 +92,55 @@
       };
       Plotly.newPlot("chart", [trace], layout);
     }
-  </script>
 
-  <script src="/static/chat.js"></script>
+    function renderWeeklyTable(data) {
+      let html = `<h3>📅 Понедельная разбивка</h3>`;
+      html += `<table><tr><th>Неделя</th><th>Лидов</th></tr>`;
+      for (let i = 0; i < data.length; i++) {
+        html += `<tr><td>${data[i].week}</td><td>${data[i].count}</td></tr>`;
+      }
+      html += `</table>`;
+      document.getElementById("report").innerHTML = html;
+    }
+
+    function renderWeeklyChart(data, stage) {
+      const labels = data.map(d => d.week);
+      const values = data.map(d => d.count);
+      const trace = {
+        x: labels,
+        y: values,
+        type: "scatter",
+        mode: "lines+markers",
+        marker: { color: "#28a745" }
+      };
+      const layout = {
+        title: `📈 Разбивка по неделям — "${stage}"`,
+        margin: { t: 40, l: 60, r: 30, b: 100 }
+      };
+      Plotly.newPlot("chart", [trace], layout);
+    }
+
+    function toggleAutoRefresh() {
+      autoRefresh = !autoRefresh;
+      document.getElementById("autostatus").innerText = autoRefresh ? "ВКЛ" : "ВЫКЛ";
+      if (!autoRefresh) clearInterval(refreshInterval);
+      else startAutoRefresh();
+    }
+
+    function startAutoRefresh() {
+      refreshInterval = setInterval(() => {
+        const activeButton = document.activeElement?.innerText;
+        if (activeButton?.includes("Понедельная")) loadWeekly();
+        else loadStats();
+      }, 120000); // каждые 2 минуты
+    }
+
+    window.onload = () => {
+      loadStats();
+      startAutoRefresh();
+    };
+  </script>
 </body>
 </html>
+
 
