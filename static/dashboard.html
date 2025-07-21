@@ -17,7 +17,7 @@
     #chatlog { height: 180px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #fefefe; }
     #chatinput { width: 100%; padding: 8px; font-size: 15px; }
     #chatbuttons button { margin: 4px; padding: 6px 10px; font-size: 14px; }
-    #historybox { font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ddd; display: none; }
+    #historybox { font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ddd; display: none; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -39,6 +39,7 @@
   </select>
 
   <button onclick="loadStats()">📥 Загрузить</button>
+  <button onclick="toggleChart()">📉 Скрыть/Показать график</button>
 
   <div id="loading"><span id="spinner">⏳ Загрузка...</span></div>
   <div id="report"></div>
@@ -57,10 +58,9 @@
 
     <div id="chatlog"></div>
     <input type="text" id="chatinput" placeholder="Например: 'НДЗ неделя'" title="Попробуй: 'НДЗ неделя', 'НДЗ 2 месяц', 'перезвонить сегодня'" onkeypress="handleChat(event)" />
-    <button onclick="showHistory()">📜 Показать историю</button>
+    <button onclick="toggleHistory()">📜 Скрыть/Показать историю</button>
+    <div id="historybox"></div>
   </div>
-
-  <div id="historybox"></div>
 
   <script>
     let chatHistory = [];
@@ -130,10 +130,19 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    function showHistory() {
+    function toggleHistory() {
       const box = document.getElementById("historybox");
-      box.style.display = "block";
-      box.innerHTML = "<h4>📜 История запросов:</h4>" + chatHistory.map(m => `<div>${m}</div>`).join("");
+      if (box.style.display === "none" || !box.style.display) {
+        box.style.display = "block";
+        box.innerHTML = "<h4>📜 История запросов:</h4>" + chatHistory.map(m => `<div>${m}</div>`).join("");
+      } else {
+        box.style.display = "none";
+      }
+    }
+
+    function toggleChart() {
+      const chart = document.getElementById("chart");
+      chart.style.display = chart.style.display === "none" ? "block" : "none";
     }
 
     async function processChat(message) {
@@ -162,6 +171,7 @@
   </script>
 </body>
 </html>
+
 
 
 
