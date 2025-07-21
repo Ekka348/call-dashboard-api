@@ -21,26 +21,42 @@ function handleChat(e) {
   document.getElementById("chatinput").value = "";
 }
 
+// 🚀 Загружаем сотрудников из /users
 async function loadUsers() {
   try {
     const res = await fetch("/users");
     const data = await res.json();
+    const select = document.getElementById("userselect");
+    const datalist = document.getElementById("userlist");
+
     for (let uid in data) {
-      const name = data[uid].toLowerCase();
-      dynamicUsers[name] = parseInt(uid);
+      const name = data[uid];
+      const norm = name.toLowerCase();
+      const reversed = norm.split(" ").reverse().join(" ");
+      dynamicUsers[norm] = parseInt(uid);
+      dynamicUsers[reversed] = parseInt(uid);
+
+      const opt = document.createElement("option");
+      opt.value = uid;
+      opt.textContent = name;
+      select.appendChild(opt);
+
+      const dl = document.createElement("option");
+      dl.value = name;
+      datalist.appendChild(dl);
     }
-  } catch (e) {
-    console.warn("Не удалось загрузить список сотрудников");
+  } catch {
+    logChat("⚠️ Не удалось загрузить список сотрудников.");
   }
 }
 
-// 🔍 Распознавание UID по тексту
+// 🔍 Распознаем UID по тексту
 function detectUserId(message) {
   const msg = message.toLowerCase();
-  for (let fullName in dynamicUsers) {
-    if (msg.includes(fullName)) {
-      logChat(`🕵️‍♂️ Найден сотрудник: ${fullName}`);
-      return dynamicUsers[fullName];
+  for (let name in dynamicUsers) {
+    if (msg.includes(name)) {
+      logChat(`🕵️‍♀️ Найден сотрудник: ${name}`);
+      return dynamicUsers[name];
     }
   }
   return "";
@@ -57,19 +73,21 @@ async function processChat(message) {
   if (message.includes("неделя")) range = "week";
   if (message.includes("месяц")) range = "month";
 
-  const uid = detectUserId(message);
+  const uidText = detectUserId(message);
+  const selectedUid = document.getElementById("userselect").value;
+  const uid = selectedUid || uidText;
 
-  const res = await fetch(`/stats_data?label=${encodeURIComponent(label)}&range=${range}&uid=${uid}`);
+  const res = await fetch(`/stats_data?label=${label}&range=${range}&uid=${uid}`);
   const data = await res.json();
 
   if (!data.values || !data.values.length || data.total === 0) {
-    logChat(`📭 Нет лидов по стадии "${label}" за период "${range}"${uid ? ` для выбранного сотрудника` : ""}.`);
+    logChat(`📭 Нет лидов по "${label}" (${range})${uid ? " для выбранного сотрудника" : ""}.`);
     document.getElementById("report").innerHTML = `<p>📭 Пусто: нет лидов по фильтру.</p>`;
     document.getElementById("chart").innerHTML = "";
     return;
   }
 
-  logChat(`🤖 ${label}, ${range}${uid ? ` (фильтр по сотруднику)` : ""}: всего ${data.total} лидов`);
+  logChat(`🤖 ${label}, ${range}${uid ? " (фильтр по сотруднику)" : ""}: всего ${data.total} лидов`);
   renderTable(data);
   renderChart(data);
 
@@ -82,6 +100,24 @@ async function processChat(message) {
 function presetChat(text) {
   document.getElementById("chatinput").value = text;
   handleChat({ key: "Enter" });
+}
+
+function showSuggestions() {
+  const box = document.getElementById("chatbox");
+  if (document.getElementById("suggestions")) return;
+  const sug = document.createElement("div");
+  sug.id = "suggestions";
+  sug.innerHTML = `
+    <strong>💡 Примеры команд:</strong>
+    <ul>
+      <li>НДЗ неделя по Алия Ахматшина</li>
+      <li>Сравни НДЗ и НДЗ 2 за неделю</li>
+      <li>НДЗ по часам сегодня</li>
+      <li>Активность НДЗ по дням</li>
+      <li>НДЗ по неделям</li>
+      <li>Скачай отчёт по НДЗ</li>
+    </ul>`;
+  box.appendChild(sug);
 }
 
 function renderTable(data) {
@@ -108,24 +144,7 @@ function renderChart(data) {
   Plotly.newPlot("chart", [trace], layout);
 }
 
-function showSuggestions() {
-  const box = document.getElementById("chatbox");
-  if (document.getElementById("suggestions")) return;
-  const sug = document.createElement("div");
-  sug.id = "suggestions";
-  sug.innerHTML = `
-    <strong>💡 Примеры команд:</strong>
-    <ul>
-      <li>НДЗ неделя по Алия Ахматшина</li>
-      <li>Сравни НДЗ и НДЗ 2 за неделю</li>
-      <li>НДЗ по часам сегодня</li>
-      <li>Активность НДЗ по дням</li>
-      <li>НДЗ по неделям</li>
-      <li>Скачай отчёт по НДЗ</li>
-    </ul>`;
-  box.appendChild(sug);
-}
-
-// 🚀 Запустить авто-загрузку пользователей
+// 🚀 При старте — загружаем сотрудников
 loadUsers();
+
 
