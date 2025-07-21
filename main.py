@@ -199,6 +199,78 @@ def stats_data():
         "range": rtype
     }
 
+@app.route("/trend")
+def trend():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "week")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
+    leads = fetch_leads(stage, start, end)
+
+    daily = Counter()
+    for lead in leads:
+        date_str = lead.get("DATE_CREATE", "")[:10]
+        if date_str: daily[date_str] += 1
+
+    sorted_days = sorted(daily)
+    values = [daily[d] for d in sorted_days]
+
+    return {
+        "stage": label,
+        "range": rtype,
+        "labels": sorted_days,
+        "values": values
+    }
+
+@app.route("/compare_stages")
+def compare_stages():
+    s1 = request.args.get("stage1", "НДЗ")
+    s2 = request.args.get("stage2", "НДЗ 2")
+    rtype = request.args.get("range", "week")
+    start, end = get_range_dates(rtype)
+    users = load_users()
+
+    def get_count(stage_label):
+        stage = STAGE_LABELS.get(stage_label, stage_label)
+        leads = fetch_leads(stage, start, end)
+        return sum(1 for l in leads if l.get("ASSIGNED_BY_ID"))
+
+    return {
+        "stage1": s1,
+        "count1": get_count(s1),
+        "stage2": s2,
+        "count2": get_count(s2),
+        "range": rtype
+    }
+
+@app.route("/export_csv")
+def export_csv():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "week")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
+    users = load_users()
+    leads = fetch_leads(stage, start, end)
+
+    stats = Counter()
+    for l in leads:
+        uid = l.get("ASSIGNED_BY_ID")
+        if uid: stats[int(uid)] += 1
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Сотрудник", "Количество"])
+    for uid, cnt in stats.items():
+        writer.writerow([users.get(uid, str(uid)), cnt])
+
+    mem = io.BytesIO()
+    mem.write(output.getvalue().encode("utf-8"))
+    mem.seek(0)
+
+    fname = f"{label}_{rtype}_stats.csv"
+    return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
+
+
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
