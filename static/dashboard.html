@@ -1,23 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>CRM Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
     body { font-family: Arial; margin: 20px; background-color: #f4f4f4; color: #333; }
     select, button { font-size: 16px; padding: 6px 10px; margin: 5px; }
     #report, #chart, #chatbox { margin-top: 20px; }
-    #report table { border-collapse: collapse; width: 100%; }
+    #report table { border-collapse: collapse; width: 100%; background: #fff; }
     #report th, #report td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-    #chart { height: 400px; }
-    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; width: 100%; max-width: 600px; }
-    #chatlog { height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #fefefe; }
+    #chart { height: 400px; margin-top: 20px; }
+    #chatbox { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff; max-width: 600px; }
+    #chatlog { height: 180px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-bottom: 10px; background: #fefefe; }
     #chatinput { width: 100%; padding: 8px; font-size: 15px; }
+    #chatbuttons button { margin: 4px; padding: 6px 10px; font-size: 14px; }
   </style>
 </head>
 <body>
-  <h2>📊 CRM Dashboard с таблицей, графиком и чатом</h2>
+  <h2>📊 CRM Dashboard</h2>
 
   <label>Стадия:</label>
   <select id="stage">
@@ -42,8 +43,16 @@
   <hr>
   <div id="chatbox">
     <h3>💬 Chat Assistant</h3>
+
+    <div id="chatbuttons">
+      <button onclick="presetChat('НДЗ неделя')">НДЗ неделя</button>
+      <button onclick="presetChat('НДЗ 2 месяц')">НДЗ 2 месяц</button>
+      <button onclick="presetChat('перезвонить сегодня')">Перезвонить сегодня</button>
+      <button onclick="presetChat('рекрутер неделя')">Рекрутер неделя</button>
+    </div>
+
     <div id="chatlog"></div>
-    <input type="text" id="chatinput" placeholder="Напиши, например: покажи график за неделю" onkeypress="handleChat(event)">
+    <input type="text" id="chatinput" placeholder="Например: 'НДЗ неделя' или 'статистика за месяц по рекрутеру'" title="Попробуй: 'НДЗ неделя', 'НДЗ 2 месяц', 'перезвонить сегодня'" onkeypress="handleChat(event)" />
   </div>
 
   <script>
@@ -57,7 +66,7 @@
     }
 
     function renderTable(data) {
-      let html = `<h3>📋 Статистика по стадии "${data.stage}" за период "${data.range}"</h3>`;
+      let html = `<h3>📋 Стадия: "${data.stage}", период: "${data.range}"</h3>`;
       html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
       for (let i = 0; i < data.labels.length; i++) {
         html += `<tr><td>${data.labels[i]}</td><td>${data.values[i]}</td></tr>`;
@@ -110,11 +119,17 @@
       const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&range=${range}`);
       const data = await res.json();
 
-      logChat(`🤖 Показано по стадии "${stage}" за период "${range}": ${data.total} лидов`);
+      logChat(`🤖 ${data.stage}, ${data.range}: ${data.total} лидов`);
       renderTable(data);
       renderChart(data);
+    }
+
+    function presetChat(text) {
+      document.getElementById("chatinput").value = text;
+      handleChat({ key: "Enter" });
     }
   </script>
 </body>
 </html>
+
 
