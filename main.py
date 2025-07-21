@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from collections import Counter
 import pandas as pd
 import time
+from pytz import timezone  # 🕒 для московского времени
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
@@ -17,14 +18,19 @@ STAGE_LABELS = {
 user_cache = {"data": {}, "last": 0}
 
 def get_range_dates(rtype):
-    now = datetime.now()
-    if rtype == "week": start = now - timedelta(days=now.weekday())
-    elif rtype == "month": start = now.replace(day=1)
-    else: start = now
+    tz = timezone("Europe/Moscow")
+    now = datetime.now(tz)
+    if rtype == "week":
+        start = now - timedelta(days=now.weekday())
+    elif rtype == "month":
+        start = now.replace(day=1)
+    else:
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
 def load_users():
-    if time.time() - user_cache["last"] < 300: return user_cache["data"]
+    if time.time() - user_cache["last"] < 300:
+        return user_cache["data"]
     users, start = {}, 0
     try:
         while True:
@@ -43,7 +49,7 @@ def fetch_leads(stage, start, end):
         while True:
             r = requests.post(HOOK + "crm.lead.list.json", json={
                 "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                "select": ["ID", "ASSIGNED_BY_ID", "DATE_MODIFY"],
+                "select": ["ID", "ASSIGNED_BY_ID", "DATE_CREATE", "DATE_MODIFY", "STATUS_ID"],
                 "start": offset
             }, timeout=10).json()
             page = r.get("result", [])
@@ -57,6 +63,16 @@ def fetch_leads(stage, start, end):
 @app.route("/ping")
 def ping(): return {"status": "ok"}
 
+@app.route("/clock")
+def clock():
+    tz = timezone("Europe/Moscow")
+    moscow_now = datetime.now(tz)
+    utc_now = datetime.utcnow()
+    return {
+        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
+        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
 @app.route("/daily")
 def daily():
     label = request.args.get("label", "НДЗ")
@@ -65,6 +81,15 @@ def daily():
     start, end = get_range_dates(rtype)
     users = load_users()
     leads = fetch_leads(stage, start, end)
+
+    if not leads:
+        return render_template_string(f"""
+        <html><body>
+        <h2>📭 Нет лидов по стадии: {label} за {rtype.upper()}</h2>
+        <p>Фильтр: c {start} по {end} (московское время)</p>
+        </body></html>
+        """)
+
     stats = Counter()
     for l in leads:
         uid = l.get("ASSIGNED_BY_ID")
@@ -81,7 +106,8 @@ def daily():
 def compare():
     label = request.args.get("label", "НДЗ")
     stage = STAGE_LABELS.get(label, label)
-    now = datetime.now()
+    tz = timezone("Europe/Moscow")
+    now = datetime.now(tz)
     today_s, today_e = get_range_dates("today")
     yesterday = now - timedelta(days=1)
     y_start = yesterday.strftime("%Y-%m-%d 00:00:00")
@@ -113,9 +139,6 @@ def compare():
     </body></html>
     """)
 
-@app.route("/")
-def home(): return app.send_static_file("dashboard.html")
-
 @app.route("/debug")
 def debug():
     label = request.args.get("label", "НДЗ")
@@ -124,7 +147,7 @@ def debug():
     start, end = get_range_dates(rtype)
 
     leads = fetch_leads(stage, start, end)
-    chunk = leads[:10]  # только первые 10 лидов
+    chunk = leads[:10]
 
     rows = []
     for l in chunk:
@@ -141,6 +164,7 @@ def debug():
     html = f"""
     <html><body>
     <h2>🔍 DEBUG: первые лиды со стадии {label}</h2>
+    <p>Фильтр: c {start} по {end} (московское время)</p>
     <table border="1" cellpadding="6">
       <tr><th>ID</th><th>STATUS_ID</th><th>Сотрудник</th><th>Создан</th><th>Изменён</th></tr>
       {''.join(rows)}
@@ -150,7 +174,11 @@ def debug():
     """
     return render_template_string(html)
 
+@app.route("/")
+def home(): return app.send_static_file("dashboard.html")
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
 
 
