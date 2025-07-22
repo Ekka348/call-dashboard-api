@@ -11,16 +11,18 @@ const statusIDs = {
 async function loadDailyStatusSummary() {
   const list = document.getElementById("status_list");
   if (!list) return;
+
   list.innerHTML = "";
 
   for (const [name, id] of Object.entries(statusIDs)) {
     try {
       const res = await fetch(`/daily_status?status_id=${encodeURIComponent(id)}`);
       const data = await res.json();
+
       const item = document.createElement("li");
       item.innerText = `${name} — ${data.count} лидов`;
       list.appendChild(item);
-    } catch {
+    } catch (error) {
       const item = document.createElement("li");
       item.innerText = `${name} — ❌ ошибка`;
       item.style.color = "red";
