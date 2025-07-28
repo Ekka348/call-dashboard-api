@@ -73,34 +73,48 @@ def clock():
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
 
-@app.route("/daily")
+@app.route('/daily')
 def daily():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
+    label = request.args.get('label', 'НДЗ')
+    rtype = request.args.get('type', 'today')
+    start, end = get_range(rtype)
 
-    if not leads:
-        return render_template_string(f"""
-        <html><body>
-        <h2>📭 Нет лидов по стадии: {label} за {rtype.upper()}</h2>
-        <p>Фильтр: c {start} по {end} (московское время)</p>
-        </body></html>
-        """)
+    # 👥 Лиды по сотрудникам
+    status_id = get_status_id_by_label(label)
+    stats = get_leads_stats(status_id, start, end)
+    rows = [f"<tr><td>{name}</td><td>{count}</td></tr>" for name, count in stats.items()]
 
-    stats = Counter()
-    for l in leads:
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
-    rows = [f"<tr><td>{users.get(uid, uid)}</td><td>{cnt}</td></tr>" for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])]
+    # 📦 Totals по другим стадиям
+    totals_stages = {
+        "NEW": "NEW",
+        "OLD": "UC_VTOOIM",
+        "База ВВ": "11"
+    }
+
+    totals_rows = []
+    for stage_label, stage_id in totals_stages.items():
+        leads_group = fetch_leads(stage_id, start, end)
+        totals_rows.append(f"<tr><td>{stage_label}</td><td>{len(leads_group)}</td></tr>")
+
     return render_template_string(f"""
     <html><body>
     <h2>📊 Стадия: {label} — {rtype.upper()}</h2>
-    <table border="1" cellpadding="6"><tr><th>Сотрудник</th><th>Количество</th></tr>{''.join(rows)}</table>
-    <p>Всего лидов: {sum(stats.values())}</p></body></html>
+    <p>Фильтр: с {start} по {end} (московское время)</p>
+
+    <h3>👥 Лиды по сотрудникам</h3>
+    <table border="1" cellpadding="6">
+    <tr><th>Сотрудник</th><th>Количество</th></tr>
+    {''.join(rows)}</table>
+    <p>Всего лидов: {sum(stats.values())}</p>
+
+    <h3>📦 Лиды в стадиях за сегодня</h3>
+    <table border="1" cellpadding="6">
+    <tr><th>Стадия</th><th>Лидов</th></tr>
+    {''.join(totals_rows)}</table>
+
+    </body></html>
     """)
+
 
 @app.route("/compare")
 def compare():
