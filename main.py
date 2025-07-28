@@ -102,7 +102,11 @@ def daily():
     stage = STAGE_LABELS.get(label, label)
     start, end = get_range_dates(rtype)
     users = load_users()
-    leads = fetch_leads(stage, start, end)
+   if label == "НДЗ":
+    leads = fetch_leads(stage, start, end)  # фильтрация по DATE_CREATE
+else:
+    leads = fetch_modified_leads(stage, start, end)  # фильтрация по DATE_MODIFY
+
 
     if not leads:
         return render_template_string(f"""
