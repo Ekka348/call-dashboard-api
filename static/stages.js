@@ -26,6 +26,7 @@ function getDateParams() {
   if (range === "custom") {
     const start = document.getElementById("startdate").value;
     const end = document.getElementById("enddate").value;
+    if (start && end) params += `&start=${start}&end=${end}`;
     if (start && end) {
       params += `&start=${start}&end=${end}`;
     } else {
@@ -80,4 +81,29 @@ async function updateLoop() {
   const params = getDateParams();
   if (!params) {
     showWarning();
+    return setTimeout(updateLoop, 1000); // ждём и пробуем снова
+  }
+
+  await loadStatsFor("НДЗ", "report_ndz");
+  await loadStatsFor("НДЗ 2", "report_ndz2");
+  await loadStatsFor("Перезвонить", "report_call");
+  await loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
+  hideLoading(true);
+  requestAnimationFrame(() => setTimeout(updateLoop, 100));
+  requestAnimationFrame(() => setTimeout(updateLoop, 100)); // непрерывный цикл
+}
+
+function attachReactiveListeners() {
+  ["range", "startdate", "enddate"].forEach(id => {
+    document.getElementById(id).onchange = () => updateLoop();
+  });
+}
+
+window.onload = () => {
+  attachReactiveListeners();
+  updateLoop();
+};
+
+
+
     return setTimeout(update
