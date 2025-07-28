@@ -107,11 +107,6 @@ def totals():
 @app.route("/ping")
 def ping(): return jsonify({"status": "ok"})
 
-if __name__ == "__main__":
-    app.run(debug=True, port=8080)
-
-
-
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
