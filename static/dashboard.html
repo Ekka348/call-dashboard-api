@@ -5,7 +5,6 @@
   <title>CRM Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial; margin: 20px; background: #f4f4f4; color: #333; }
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
@@ -109,6 +108,27 @@
         font-size: 14px;
       }
     }
+
+    /* 💡 Стили для расширенного блока OLD */
+    .status-container.old-extended {
+      padding: 16px;
+      background-color: #fff9c4;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-top: 10px;
+    }
+
+    .related-status {
+      margin-top: 10px;
+      background-color: #fafafa;
+      border-left: 3px solid #ccc;
+      padding: 10px;
+      font-size: 0.95em;
+    }
+
+    .related-status div {
+      margin-bottom: 6px;
+    }
   </style>
 </head>
 <body>
@@ -141,44 +161,10 @@
     <div class="stage-block green" id="report_recruiter"></div>
   </div>
 
-  .status-container.old-extended {
-  padding: 16px;
-  background-color: #fff9c4;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  margin-top: 20px;
-}
-
-.related-status {
-  margin-top: 10px;
-  background-color: #fafafa;
-  border-left: 3px solid #ccc;
-  padding: 10px;
-  font-size: 0.95em;
-}
-.related-status div {
-  margin-bottom: 6px;
-
-<div class="status-container old-extended">
-  <h3>🟡 OLD лиды</h3>
-  <p>Всего: <span id="count-old">—</span></p>
-
-  <div class="related-status">
-    <div>
-      <strong>🟢 NEW (сегодня):</strong>
-      <span id="count-new-today">—</span>
-    </div>
-    <div>
-      <strong>🔵 База ВВ (сегодня):</strong>
-      <span id="count-vv-today">—</span>
-    </div>
-  </div>
-</div>
-
-  
   <script src="/static/stages.js"></script>
   <script src="/static/old_total.js"></script>
   <script src="/static/daily_status.js"></script>
   <script src="/static/status_totals.js"></script>
 </body>
 </html>
+
