@@ -2,22 +2,20 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Лиды по стадиям</title>
+  <title>📦 Лиды в стадиях за сегодня</title>
   <style>
-    body { font-family: Arial; background: #f9f9f9; margin: 20px; }
+    body { font-family: Arial; background: #f4f4f4; margin: 20px; }
     table { border-collapse: collapse; width: 100%; background: #fff; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     h2 { margin-bottom: 10px; }
   </style>
 </head>
 <body>
   <h2>📦 Лиды в стадиях за сегодня</h2>
-  <div id="totals_block">
-    <table>
-      <thead><tr><th>Стадия</th><th>Количество</th></tr></thead>
-      <tbody id="totals_table"></tbody>
-    </table>
-  </div>
+  <table>
+    <thead><tr><th>Стадия</th><th>Количество</th></tr></thead>
+    <tbody id="totals_table"><tr><td>Загрузка...</td><td></td></tr></tbody>
+  </table>
 
   <script>
     function loadTotals() {
@@ -31,11 +29,15 @@
             tr.innerHTML = `<td>${item.label}</td><td>${item.count}</td>`;
             tbody.appendChild(tr);
           });
+        })
+        .catch(() => {
+          document.getElementById("totals_table").innerHTML =
+            "<tr><td colspan='2'>⚠️ Ошибка загрузки</td></tr>";
         });
     }
 
-    loadTotals();
-    setInterval(loadTotals, 30000); // обновление каждые 30 сек
+    loadTotals();                 // загрузка при старте
+    setInterval(loadTotals, 30000); // автообновление каждые 30 сек
   </script>
 </body>
 </html>
