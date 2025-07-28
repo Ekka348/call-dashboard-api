@@ -174,19 +174,6 @@ def debug():
     """
     return render_template_string(html)
 
-@app.route("/daily_status")
-def daily_status():
-    status_id = request.args.get("status_id")
-    if not status_id:
-        return {"error": "status_id отсутствует"}, 400
-
-    # Получаем временной диапазон — можно изменить на "week", "month" или оставить "today"
-    start, end = get_range_dates("today")
-
-    leads = fetch_leads(status_id, start, end)
-    return {"count": len(leads)}
-
-
 @app.route("/stats_data")
 def stats_data():
     label = request.args.get("label", "НДЗ")
@@ -283,7 +270,9 @@ def export_csv():
     fname = f"{label}_{rtype}_stats.csv"
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
-app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
+
