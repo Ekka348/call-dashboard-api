@@ -270,7 +270,7 @@ def export_csv():
     fname = f"{label}_{rtype}_stats.csv"
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
-
+app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
