@@ -1,150 +1,94 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>CRM Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background: #f4f4f4;
-      color: #333;
+function showStageLoading(stage) {
+  const spinner = document.getElementById("spinner");
+  spinner.style.display = "block";
+  spinner.innerText = `🔄 Обновляем: ${stage}`;
+}
+
+function showWarning(msg = "⚠️ Выберите период") {
+  const spinner = document.getElementById("spinner");
+  spinner.style.display = "block";
+  spinner.innerText = msg;
+}
+
+function hideLoading(success = true) {
+  const now = new Date().toLocaleTimeString();
+  const update = document.getElementById("lastupdate");
+  update.style.color = success ? "#28a745" : "red";
+  update.innerText = success
+    ? `✅ Последнее обновление: ${now}`
+    : `❌ Ошибка обновления`;
+  document.getElementById("spinner").style.display = "none";
+}
+
+function getDateParams() {
+  const range = document.getElementById("range").value;
+  let params = `range=${range}`;
+  if (range === "custom") {
+    const start = document.getElementById("startdate").value;
+    const end = document.getElementById("enddate").value;
+    if (start && end) params += `&start=${start}&end=${end}`;
+    if (start && end) {
+      params += `&start=${start}&end=${end}`;
+    } else {
+      return null; // период не выбран
     }
+  }
+  return params;
+}
 
-    select, input[type="date"] {
-      font-size: 16px;
-      padding: 6px 10px;
-      margin: 5px;
+async function loadStatsFor(stage, targetId) {
+  try {
+    showStageLoading(stage);
+    const params = getDateParams();
+    if (!params) {
+      showWarning();
+      return;
     }
+    const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&${params}`);
+    const data = await res.json();
+    renderMiniTable(data, targetId);
+  } catch {
+    document.getElementById(targetId).innerHTML =
+      `<p>❌ Ошибка загрузки для стадии "${stage}"</p>`;
+  }
+}
 
-    #statusbar {
-      margin-top: 10px;
-      font-size: 14px;
-    }
+function renderMiniTable(data, targetId) {
+  const sorted = data.labels.map((name, i) => ({ name, count: data.values[i] }))
+    .sort((a, b) => b.count - a.count);
 
-    #spinner, #lastupdate {
-      margin: 5px 0;
-    }
+  let html = `<h4>📋 ${data.stage}</h4>`;
+  html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
+  for (const row of sorted) {
+    html += `<tr><td>${row.name}</td><td>${row.count}</td></tr>`;
+  }
+  html += `</table>`;
+  document.getElementById(targetId).innerHTML = html;
+}
 
-    #spinner { color: gray; }
-    #lastupdate { color: #28a745; }
+async function updateLoop() {
+  const params = getDateParams();
+  if (!params) {
+    showWarning();
+    return setTimeout(updateLoop, 1000); // ждём и пробуем снова
+  }
 
-    .stage-block {
-      flex: 1;
-      min-width: 300px;
-      border: 2px solid #ccc;
-      border-radius: 8px;
-      padding: 10px;
-      background: #fff;
-    }
+  await loadStatsFor("НДЗ", "report_ndz");
+  await loadStatsFor("НДЗ 2", "report_ndz2");
+  await loadStatsFor("Перезвонить", "report_call");
+  await loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
+  hideLoading(true);
+  requestAnimationFrame(() => setTimeout(updateLoop, 100));
+  requestAnimationFrame(() => setTimeout(updateLoop, 100)); // непрерывный цикл
+}
 
-    .stage-block.blue     { border-color: #007bff; }
-    .stage-block.purple   { border-color: #6f42c1; }
-    .stage-block.orange   { border-color: #fd7e14; }
-    .stage-block.green    { border-color: #28a745; }
+function attachReactiveListeners() {
+  ["range", "startdate", "enddate"].forEach(id => {
+    document.getElementById(id).onchange = () => updateLoop();
+  });
+}
 
-    .stage-block h4 { margin-top: 0; }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      background: #fff;
-    }
-
-    th, td {
-      border: 1px solid #ccc;
-      padding: 6px;
-      text-align: left;
-    }
-
-    #status_summary {
-      margin-top: 30px;
-      background: #fff;
-      border: 2px solid #444;
-      padding: 10px;
-      border-radius: 8px;
-    }
-
-    #status_list {
-      list-style: none;
-      padding-left: 0;
-      font-size: 15px;
-    }
-
-    #status_list li {
-      margin: 4px 0;
-    }
-
-    @media screen and (max-width: 768px) {
-      .stage-block {
-        flex: 1 1 100%;
-      }
-
-      body {
-        margin: 10px;
-      }
-
-      h2, h3 {
-        font-size: 20px;
-      }
-
-      select, input[type="date"] {
-        font-size: 15px;
-        width: 100%;
-        margin: 5px 0;
-      }
-
-      #statusbar {
-        font-size: 13px;
-      }
-
-      #status_summary {
-        padding: 10px;
-        font-size: 14px;
-      }
-
-      #status_list li {
-        font-size: 14px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <h2>📊 CRM Dashboard</h2>
-
-  <label>Период:</label>
-  <select id="range">
-    <option value="today">Сегодня</option>
-    <option value="week">Текущая неделя</option>
-    <option value="month">Месяц</option>
-    <option value="custom">Выбрать вручную</option>
-  </select>
-
-  <label>С:</label>
-  <input type="date" id="startdate">
-
-  <label>По:</label>
-  <input type="date" id="enddate">
-
-  <div id="statusbar">
-    <div id="spinner">🌀 Загрузка не начата</div>
-    <div id="lastupdate">✅ Последнее обновление: нет данных</div>
-  </div>
-
-  <div style="display:flex; flex-wrap:wrap; gap:20px; margin-top:20px;">
-    <div class="stage-block blue" id="report_ndz"></div>
-    <div class="stage-block purple" id="report_ndz2"></div>
-    <div class="stage-block orange" id="report_call"></div>
-    <div class="stage-block green" id="report_recruiter"></div>
-  </div>
-
-  <div id="status_summary">
-    <h3>📦 Лиды в стадиях за сегодня</h3>
-    <ul id="status_list"></ul>
-  </div>
-
-  <script src="/static/stages.js"></script>
-  <script src="/static/daily_status.js"></script>
-</body>
-</html>
+window.onload = () => {
+  attachReactiveListeners();
+  updateLoop();
+};
