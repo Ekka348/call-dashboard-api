@@ -252,8 +252,9 @@ def daily_status():
     start, end = get_range_dates("today")
     leads = fetch_leads(status_id, start, end)
 
-    count = sum(1 for lead in leads if lead.get("STATUS_ID") == status_id)
+    count = len(leads)
     return {"count": count}
+
 
 
 
