@@ -5,6 +5,7 @@ from collections import Counter
 import pandas as pd
 import time
 from pytz import timezone  # 🕒 для московского времени
+from flask import jsonify
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
@@ -72,6 +73,20 @@ def clock():
         "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
+
+@app.route('/api/lead_extended_summary')
+def lead_extended_summary():
+    start, end = get_range_dates("today")
+    
+    old = fetch_leads("UC_VTOOIM", start, end)
+    new = fetch_leads("NEW", start, end)
+    vv = fetch_leads("11", start, end)
+
+    return jsonify({
+        "OLD": len(old),
+        "NEW_TODAY": len(new),
+        "VV_TODAY": len(vv)
+    })
 
 @app.route("/daily")
 def daily():
