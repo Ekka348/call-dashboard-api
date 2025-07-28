@@ -273,6 +273,22 @@ def export_csv():
 @app.route("/totals_table")
 def totals_table(): return app.send_static_file("totals.html")
 
+@app.route("/totals")
+def totals():
+    start, end = get_range_dates("today")
+    stages = {
+        "NEW": "NEW",
+        "OLD": "UC_VTOOIM",
+        "База ВВ": "11"
+    }
+
+    results = []
+    for label, stage_id in stages.items():
+        leads = fetch_leads(stage_id, start, end)
+        results.append({"label": label, "count": len(leads)})
+
+    return {"data": results, "range": "today"}
+
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
