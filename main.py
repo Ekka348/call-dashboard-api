@@ -1,4 +1,3 @@
-from flask import Flask, request, render_template_string
 from flask import Flask, request, render_template_string, send_file
 import requests, os
 from datetime import datetime, timedelta
@@ -223,45 +222,61 @@ def trend():
         "values": values
     }
 
+@app.route("/compare_stages")
+def compare_stages():
+    s1 = request.args.get("stage1", "НДЗ")
+    s2 = request.args.get("stage2", "НДЗ 2")
+    rtype = request.args.get("range", "week")
+    start, end = get_range_dates(rtype)
+    users = load_users()
 
-@app.route("/daily_status")
-def daily_status():
-    status_id = request.args.get("status_id")
-    if not status_id:
-        return {"error": "no status_id"}, 400
+    def get_count(stage_label):
+        stage = STAGE_LABELS.get(stage_label, stage_label)
+        leads = fetch_leads(stage, start, end)
+        return sum(1 for l in leads if l.get("ASSIGNED_BY_ID"))
+
+    return {
+        "stage1": s1,
+        "count1": get_count(s1),
+        "stage2": s2,
+        "count2": get_count(s2),
+        "range": rtype
+    }
+
+@app.route("/export_csv")
+def export_csv():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "week")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
+    users = load_users()
+    leads = fetch_leads(stage, start, end)
+
+    stats = Counter()
+    for l in leads:
+        uid = l.get("ASSIGNED_BY_ID")
+        if uid: stats[int(uid)] += 1
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Сотрудник", "Количество"])
     for uid, cnt in stats.items():
         writer.writerow([users.get(uid, str(uid)), cnt])
-    start, end = get_range_dates("today")
-    leads = fetch_leads(status_id, start, end)
 
     mem = io.BytesIO()
     mem.write(output.getvalue().encode("utf-8"))
     mem.seek(0)
-    count = sum(1 for lead in leads if lead.get("STATUS_ID") == status_id)
-    return {"count": count}
 
     fname = f"{label}_{rtype}_stats.csv"
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
-    rows = [f"<tr><td>{label}</td><td>{count}</td></tr>" for label, count in results.items()]
-    return render_template_string(f"""
-    <html><body>
-    <h2>📋 Общее количество лидов за СЕГОДНЯ</h2>
-    <table border="1" cellpadding="6">
-      <tr><th>Стадия</th><th>Лидов</th></tr>
-      {''.join(rows)}
-    </table>
-    <p>Фильтр: с {start} по {end} (московское время)</p>
-    </body></html>
-    """)
 
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
