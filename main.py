@@ -243,32 +243,18 @@ def compare_stages():
         "range": rtype
     }
 
-@app.route("/export_csv")
-def export_csv():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "week")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
+@app.route("/daily_status")
+def daily_status():
+    status_id = request.args.get("status_id")
+    if not status_id:
+        return {"error": "no status_id"}, 400
 
-    stats = Counter()
-    for l in leads:
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
+    start, end = get_range_dates("today")
+    leads = fetch_leads(status_id, start, end)
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Сотрудник", "Количество"])
-    for uid, cnt in stats.items():
-        writer.writerow([users.get(uid, str(uid)), cnt])
+    count = sum(1 for lead in leads if lead.get("STATUS_ID") == status_id)
+    return {"count": count}
 
-    mem = io.BytesIO()
-    mem.write(output.getvalue().encode("utf-8"))
-    mem.seek(0)
-
-    fname = f"{label}_{rtype}_stats.csv"
-    return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
 
 
