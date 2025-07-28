@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Лиды по стадиям</title>
+  <style>
+    body { font-family: Arial; background: #f9f9f9; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    h2 { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h2>📦 Лиды в стадиях за сегодня</h2>
+  <div id="totals_block">
+    <table>
+      <thead><tr><th>Стадия</th><th>Количество</th></tr></thead>
+      <tbody id="totals_table"></tbody>
+    </table>
+  </div>
+
+  <script>
+    function loadTotals() {
+      fetch("/totals")
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.getElementById("totals_table");
+          tbody.innerHTML = "";
+          data.data.forEach(item => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${item.label}</td><td>${item.count}</td>`;
+            tbody.appendChild(tr);
+          });
+        });
+    }
+
+    loadTotals();
+    setInterval(loadTotals, 30000); // обновление каждые 30 сек
+  </script>
+</body>
+</html>
