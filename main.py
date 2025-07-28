@@ -134,6 +134,20 @@ def old_total():
     leads = fetch_leads(stage, start, end)
     return {"total": len(leads), "stage": "OLD", "range": "today"}
 
+@app.route("/new_total")
+def new_total():
+    start, end = get_range_dates("today")
+    stage = "NEW"
+    leads = fetch_leads(stage, start, end)
+    return {"total": len(leads), "stage": "NEW", "range": "today"}
+
+@app.route("/basevv_total")
+def basevv_total():
+    start, end = get_range_dates("today")
+    stage = "11"
+    leads = fetch_leads(stage, start, end)
+    return {"total": len(leads), "stage": "База ВВ", "range": "today"}
+
 
 @app.route("/daily_status")
 def daily_status():
