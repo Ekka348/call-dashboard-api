@@ -173,6 +173,11 @@ def daily_status():
     fname = f"{label}_{rtype}_stats.csv"
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
+@app.route("/totals")
+def totals():
+    return lead_extended_summary()
+
+
 @app.route("/")
 def home():
     return app.send_static_file("dashboard.html")
