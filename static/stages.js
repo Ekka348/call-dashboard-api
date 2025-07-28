@@ -66,17 +66,6 @@ function renderMiniTable(data, targetId) {
   document.getElementById(targetId).innerHTML = html;
 }
 
-async function loadTotals() {
-  try {
-    const res = await fetch("/totals");
-    const html = await res.text();
-    document.getElementById("totals_table").innerHTML = html;
-  } catch (e) {
-    document.getElementById("totals_table").innerHTML = "⚠️ Ошибка загрузки данных";
-    console.error("Ошибка /totals:", e);
-  }
-}
-
 async function updateLoop() {
   const params = getDateParams();
   if (!params) {
@@ -103,7 +92,3 @@ window.onload = () => {
   attachReactiveListeners();
   updateLoop();
 };
-
-
-
-    return setTimeout(update
