@@ -127,6 +127,14 @@ def stats_data():
         "range": rtype
     }
 
+@app.route("/ndz_total")
+def ndz_total():
+    start, end = get_range_dates("today")
+    stage = STAGE_LABELS.get("НДЗ", "5")
+    leads = fetch_leads(stage, start, end)
+    return {"total": len(leads), "stage": "НДЗ", "range": "today"}
+
+
 @app.route("/daily_status")
 def daily_status():
     status_id = request.args.get("status_id")
