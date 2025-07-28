@@ -77,7 +77,7 @@ def clock():
 @app.route('/api/lead_extended_summary')
 def lead_extended_summary():
     start, end = get_range_dates("today")
-    
+
     old = fetch_leads("UC_VTOOIM", start, end)
     new = fetch_leads("NEW", start, end)
     vv = fetch_leads("11", start, end)
@@ -87,6 +87,7 @@ def lead_extended_summary():
         "NEW_TODAY": len(new),
         "VV_TODAY": len(vv)
     })
+
 
 @app.route("/daily")
 def daily():
