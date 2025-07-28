@@ -13,7 +13,16 @@ function showWarning(msg = "⚠️ Выберите период") {
 function hideLoading(success = true) {
   const now = new Date().toLocaleTimeString();
   const update = document.getElementById("lastupdate");
-@@ -20,7 +26,11 @@
+  update.style.color = success ? "#28a745" : "red";
+  update.innerText = success
+    ? `✅ Последнее обновление: ${now}`
+    : `❌ Ошибка обновления`;
+  document.getElementById("spinner").style.display = "none";
+}
+
+function getDateParams() {
+  const range = document.getElementById("range").value;
+  let params = `range=${range}`;
   if (range === "custom") {
     const start = document.getElementById("startdate").value;
     const end = document.getElementById("enddate").value;
@@ -26,7 +35,8 @@ function hideLoading(success = true) {
   }
   return params;
 }
-@@ -29,6 +39,10 @@
+
+async function loadStatsFor(stage, targetId) {
   try {
     showStageLoading(stage);
     const params = getDateParams();
@@ -37,7 +47,23 @@ function hideLoading(success = true) {
     const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&${params}`);
     const data = await res.json();
     renderMiniTable(data, targetId);
-@@ -52,12 +66,18 @@
+  } catch {
+    document.getElementById(targetId).innerHTML =
+      `<p>❌ Ошибка загрузки для стадии "${stage}"</p>`;
+  }
+}
+
+function renderMiniTable(data, targetId) {
+  const sorted = data.labels.map((name, i) => ({ name, count: data.values[i] }))
+    .sort((a, b) => b.count - a.count);
+
+  let html = `<h4>📋 ${data.stage}</h4>`;
+  html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
+  for (const row of sorted) {
+    html += `<tr><td>${row.name}</td><td>${row.count}</td></tr>`;
+  }
+  html += `</table>`;
+  document.getElementById(targetId).innerHTML = html;
 }
 
 async function updateLoop() {
@@ -57,13 +83,15 @@ async function updateLoop() {
 }
 
 function attachReactiveListeners() {
-@@ -70,6 +90,3 @@
-  attachReactiveListeners();
-  updateLoop();
+  ["range", "startdate", "enddate"].forEach(id => {
+    document.getElementById(id).onchange = () => updateLoop();
+  });
+}
 
-  window.onload = () => {
+window.onload = () => {
   attachReactiveListeners();
   updateLoop();
-  loadDailyStatusSummary(); // 👈 добавляем вызов загрузки сводки по стадиям
 };
-};
+
+
+
