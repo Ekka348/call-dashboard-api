@@ -74,6 +74,27 @@ def clock():
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
 
+@app.route("/api/lead_extended_summary")
+def lead_extended_summary():
+    start, end = get_range_dates("today")
+    
+    data = {}
+    try:
+        old = fetch_leads("UC_VTOOIM", start, end)
+        new = fetch_leads("NEW", start, end)
+        vv = fetch_leads("11", start, end)
+
+        data = {
+            "OLD": len(old),
+            "NEW_TODAY": len(new),
+            "VV_TODAY": len(vv)
+        }
+    except Exception as e:
+        print("Ошибка при сборе расширенной статистики:", e)
+
+    return jsonify(data)
+
+
 @app.route("/daily")
 def daily():
     label = request.args.get("label", "НДЗ")
