@@ -74,21 +74,6 @@ def clock():
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
 
-@app.route('/api/lead_extended_summary')
-def lead_extended_summary():
-    start, end = get_range_dates("today")
-
-    old = fetch_leads("UC_VTOOIM", start, end)
-    new = fetch_leads("NEW", start, end)
-    vv = fetch_leads("11", start, end)
-
-    return jsonify({
-        "OLD": len(old),
-        "NEW_TODAY": len(new),
-        "VV_TODAY": len(vv)
-    })
-
-
 @app.route("/daily")
 def daily():
     label = request.args.get("label", "НДЗ")
