@@ -127,12 +127,12 @@ def stats_data():
         "range": rtype
     }
 
-@app.route("/ndz_total")
-def ndz_total():
+@app.route("/old_total")
+def old_total():
     start, end = get_range_dates("today")
-    stage = STAGE_LABELS.get("НДЗ", "5")
+    stage = "UC_VTOOIM"  # это ID стадии OLD из AGGREGATE_STAGES
     leads = fetch_leads(stage, start, end)
-    return {"total": len(leads), "stage": "НДЗ", "range": "today"}
+    return {"total": len(leads), "stage": "OLD", "range": "today"}
 
 
 @app.route("/daily_status")
