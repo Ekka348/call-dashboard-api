@@ -174,6 +174,19 @@ def debug():
     """
     return render_template_string(html)
 
+@app.route("/daily_status")
+def daily_status():
+    status_id = request.args.get("status_id")
+    if not status_id:
+        return {"error": "status_id отсутствует"}, 400
+
+    # Получаем временной диапазон — можно изменить на "week", "month" или оставить "today"
+    start, end = get_range_dates("today")
+
+    leads = fetch_leads(status_id, start, end)
+    return {"count": len(leads)}
+
+
 @app.route("/stats_data")
 def stats_data():
     label = request.args.get("label", "НДЗ")
