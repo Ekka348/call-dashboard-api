@@ -187,6 +187,34 @@ def trend():
         "values": values
     }
 
+@app.route("/totals")
+def totals():
+    tz = timezone("Europe/Moscow")
+    start, end = get_range_dates("today")
+    stages = {
+        "NEW": "NEW",
+        "OLD": "UC_VTOOIM",
+        "База ВВ": "11"
+    }
+
+    results = {}
+    for label, stage_id in stages.items():
+        leads = fetch_leads(stage_id, start, end)
+        results[label] = len(leads)
+
+    rows = [f"<tr><td>{label}</td><td>{count}</td></tr>" for label, count in results.items()]
+    return render_template_string(f"""
+    <html><body>
+    <h2>📋 Общее количество лидов за СЕГОДНЯ</h2>
+    <table border="1" cellpadding="6">
+      <tr><th>Стадия</th><th>Лидов</th></tr>
+      {''.join(rows)}
+    </table>
+    <p>Фильтр: с {start} по {end} (московское время)</p>
+    </body></html>
+    """)
+
+
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
