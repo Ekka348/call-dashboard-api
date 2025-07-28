@@ -223,52 +223,7 @@ def trend():
         "values": values
     }
 
-@app.route("/totals")
-def totals():
-    tz = timezone("Europe/Moscow")
-    start, end = get_range_dates("today")
-    stages = {
-        "NEW": "NEW",
-        "OLD": "UC_VTOOIM",
-        "База ВВ": "11"
-@app.route("/compare_stages")
-def compare_stages():
-    s1 = request.args.get("stage1", "НДЗ")
-    s2 = request.args.get("stage2", "НДЗ 2")
-    rtype = request.args.get("range", "week")
-    start, end = get_range_dates(rtype)
-    users = load_users()
 
-    def get_count(stage_label):
-        stage = STAGE_LABELS.get(stage_label, stage_label)
-        leads = fetch_leads(stage, start, end)
-        return sum(1 for l in leads if l.get("ASSIGNED_BY_ID"))
-
-    return {
-        "stage1": s1,
-        "count1": get_count(s1),
-        "stage2": s2,
-        "count2": get_count(s2),
-        "range": rtype
-    }
-
-    results = {}
-    for label, stage_id in stages.items():
-        leads = fetch_leads(stage_id, start, end)
-        results[label] = len(leads)
-@app.route("/export_csv")
-def export_csv():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "week")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
-
-    stats = Counter()
-    for l in leads:
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
 @app.route("/daily_status")
 def daily_status():
     status_id = request.args.get("status_id")
