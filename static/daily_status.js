@@ -18,6 +18,7 @@ async function loadDailyStatusSummary() {
     try {
       const res = await fetch(`/daily_status?status_id=${encodeURIComponent(id)}`);
       const data = await res.json();
+
       const item = document.createElement("li");
       item.innerText = `${name} — ${data.count} лидов`;
       list.appendChild(item);
