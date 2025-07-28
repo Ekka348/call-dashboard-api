@@ -44,6 +44,7 @@ async function loadDailyStatusSummary() {
 // 🚀 Вызов при загрузке страницы
 window.onload = () => {
   loadDailyStatusSummary();
+setInterval(loadDailyStatusSummary, 30000); // 🔁 обновление каждые 30 сек
 };
 
 
