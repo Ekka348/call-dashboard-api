@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, send_file
+from flask import Flask, request, render_template_string
 import requests, os
 from datetime import datetime, timedelta
 from collections import Counter
@@ -139,41 +139,6 @@ def compare():
     </body></html>
     """)
 
-@app.route("/debug")
-def debug():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-
-    leads = fetch_leads(stage, start, end)
-    chunk = leads[:10]
-
-    rows = []
-    for l in chunk:
-        rows.append(f"""
-        <tr>
-          <td>{l.get("ID")}</td>
-          <td>{l.get("STATUS_ID")}</td>
-          <td>{l.get("ASSIGNED_BY_ID", "Нет")}</td>
-          <td>{l.get("DATE_CREATE", "—")}</td>
-          <td>{l.get("DATE_MODIFY", "—")}</td>
-        </tr>
-        """)
-
-    html = f"""
-    <html><body>
-    <h2>🔍 DEBUG: первые лиды со стадии {label}</h2>
-    <p>Фильтр: c {start} по {end} (московское время)</p>
-    <table border="1" cellpadding="6">
-      <tr><th>ID</th><th>STATUS_ID</th><th>Сотрудник</th><th>Создан</th><th>Изменён</th></tr>
-      {''.join(rows)}
-    </table>
-    <p>Всего лидов: {len(leads)}</p>
-    </body></html>
-    """
-    return render_template_string(html)
-
 @app.route("/stats_data")
 def stats_data():
     label = request.args.get("label", "НДЗ")
@@ -221,56 +186,6 @@ def trend():
         "labels": sorted_days,
         "values": values
     }
-
-@app.route("/compare_stages")
-def compare_stages():
-    s1 = request.args.get("stage1", "НДЗ")
-    s2 = request.args.get("stage2", "НДЗ 2")
-    rtype = request.args.get("range", "week")
-    start, end = get_range_dates(rtype)
-    users = load_users()
-
-    def get_count(stage_label):
-        stage = STAGE_LABELS.get(stage_label, stage_label)
-        leads = fetch_leads(stage, start, end)
-        return sum(1 for l in leads if l.get("ASSIGNED_BY_ID"))
-
-    return {
-        "stage1": s1,
-        "count1": get_count(s1),
-        "stage2": s2,
-        "count2": get_count(s2),
-        "range": rtype
-    }
-
-@app.route("/export_csv")
-def export_csv():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "week")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
-
-    stats = Counter()
-    for l in leads:
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Сотрудник", "Количество"])
-    for uid, cnt in stats.items():
-        writer.writerow([users.get(uid, str(uid)), cnt])
-
-    mem = io.BytesIO()
-    mem.write(output.getvalue().encode("utf-8"))
-    mem.seek(0)
-
-    fname = f"{label}_{rtype}_stats.csv"
-    return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
-
-
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
