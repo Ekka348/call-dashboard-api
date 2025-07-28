@@ -10,5 +10,20 @@ async function loadOldTotal() {
   `;
 }
 
+async function fetchExtendedStatus() {
+  try {
+    const response = await fetch('/api/lead_extended_summary');
+    const data = await response.json();
+
+    document.getElementById("count-old").textContent = data.OLD;
+    document.getElementById("count-new-today").textContent = data.NEW_TODAY;
+    document.getElementById("count-vv-today").textContent = data.VV_TODAY;
+  } catch (err) {
+    console.error("Ошибка загрузки расширенной сводки:", err);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", fetchExtendedStatus);
+
 loadOldTotal();
 setInterval(loadOldTotal, 600000);
