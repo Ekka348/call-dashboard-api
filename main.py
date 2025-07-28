@@ -172,6 +172,15 @@ def daily_status():
     fname = f"{label}_{rtype}_stats.csv"
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
+@app.route('/api/lead_extended_summary')
+def lead_extended_summary():
+    today = datetime.date.today()
+
+    return jsonify({
+        "OLD": count_leads(stage_id="UC_VTOOIM"),
+        "NEW_TODAY": count_leads(stage_id="NEW", date=today),
+        "VV_TODAY": count_leads(stage_id="11", date=today)
+
 @app.route("/")
 def home():
     return app.send_static_file("dashboard.html")
