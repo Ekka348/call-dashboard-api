@@ -60,4 +60,10 @@ function attachReactiveListeners() {
 @@ -70,6 +90,3 @@
   attachReactiveListeners();
   updateLoop();
+
+  window.onload = () => {
+  attachReactiveListeners();
+  updateLoop();
+  loadDailyStatusSummary(); // 👈 добавляем вызов загрузки сводки по стадиям
+};
 };
