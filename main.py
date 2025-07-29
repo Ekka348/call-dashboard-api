@@ -150,11 +150,13 @@ def summary_stage():
 
 @app.route("/api/leads/stages")
 def api_leads_stages():
+    start, end = get_range_dates("today")  # 💡 используем текущий день
     results = []
     for name, stage in STAGE_LABELS.items():
         leads = fetch_leads(stage, start, end)
         results.append({"name": name, "count": len(leads)})
     return jsonify({"stages": results})
+
 
 
 
