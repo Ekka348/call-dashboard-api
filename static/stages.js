@@ -63,7 +63,10 @@ fetch("/api/leads/info-stages-today")
 
 async function fetchStageCount(stageCode) {
   const params = getDateParams();
-  const res = await fetch(`/summary_stage?stage=${encodeURIComponent(stageCode)}&${params}`);
+  const res = await fetch("/api/leads/by-stage");
+const data = await res.json();
+return data.data?.[stageCode]?.count ?? 0;
+
   const data = await res.json();
   return data.count ?? 0;
 }
