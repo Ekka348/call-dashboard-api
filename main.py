@@ -166,6 +166,27 @@ if response.status_code == 200:
 else:
     print(f"Ошибка: {response.status_code}")
 
+@app.route("/data")
+def get_data():
+    label = request.args.get("label")
+    dtype = request.args.get("type", "json")  # можно: 'json', 'summary', 'stats'
+    rtype = request.args.get("range", "today")  # например: 'today', 'week'
+
+    if label == "total" and dtype == "json":
+        total = get_total_leads_from_bitrix(HOOK, rtype)
+        return jsonify({"total": total})
+
+    elif label == "stats" and dtype == "summary":
+        stats = get_stats_summary(HOOK, rtype)
+        return jsonify(stats)
+
+    elif label == "leads" and dtype == "list":
+        leads = get_leads_data(HOOK, rtype)
+        return jsonify(leads)
+
+    return jsonify({"error": "Unsupported label/type combo"}), 400
+
+
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
