@@ -1,3 +1,4 @@
+<script>
 const STAGES = {
   "НДЗ": "5",
   "НДЗ 2": "9",
@@ -8,73 +9,137 @@ const STAGES = {
   "База ВВ": "11"
 };
 
-const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
-const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+fetch("/api/leads/by-stage")
+  .then(res => res.json())
+  .then(data => {
+    const container = document.getElementById("stats");
+    container.innerHTML = "";
 
-async function updateDashboard() {
-  try {
-    const res = await fetch("/api/leads/by-stage?_=" + Date.now()); // ⚠ анти-кэш
-    const data = await res.json();
-
-    // 🔹 Инфо-стадии
-    const statsContainer = document.getElementById("stats");
-    statsContainer.innerHTML = "";
-    INFO_STAGES.forEach(stage => {
-      const info = data.data[stage];
-      const value = info?.count ?? 0;
-      const statLine = document.createElement("p");
-      statLine.innerHTML = `<strong>${stage}:</strong> ${value}`;
-      statsContainer.appendChild(statLine);
-    });
-
-    // 🔹 Рабочие стадии
-    const content = document.getElementById("content");
-    content.innerHTML = "";
-    WORK_STAGES.forEach(stage => {
-      const info = data.data[stage];
+    for (const [stage, info] of Object.entries(data.data)) {
       const block = document.createElement("div");
-      block.className = "stage-table";
+      block.className = "stage-block";
 
-      const heading = document.createElement("h2");
-      heading.textContent = `Стадия: ${stage}`;
-      block.appendChild(heading);
-
-      if (!info?.details || info.details.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "empty-message";
-        empty.textContent = "Нет лидов.";
-        block.appendChild(empty);
+      if (info.grouped) {
+        block.innerHTML = `<h3>Стадия: ${stage}</h3><p>Всего: ${info.count}</p>`;
       } else {
-        const table = document.createElement("table");
-        const header = document.createElement("thead");
-        header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-        table.appendChild(header);
-
-        const body = document.createElement("tbody");
-        info.details.forEach(row => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
-          body.appendChild(tr);
-        });
-
-        table.appendChild(body);
-        block.appendChild(table);
+        const rows = info.details
+          .map(x => `<tr><td>${x.operator}</td><td>${x.count}</td></tr>`)
+          .join("");
+        block.innerHTML = `
+          <h3>Стадия: ${stage}</h3>
+          <table><thead><tr><th>Оператор</th><th>Количество</th></tr></thead>
+          <tbody>${rows}</tbody></table>`;
       }
 
-      content.appendChild(block);
-    });
+      container.appendChild(block);
+    }
+  });
 
-    // 🔸 Лог времени
-    const now = new Date().toLocaleTimeString();
-    document.getElementById("last-update").textContent = now;
-  } catch (err) {
-    document.getElementById("last-update").textContent = "⚠ Ошибка загрузки";
-    console.error("Ошибка автообновления:", err);
+
+const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
+
+function getDateParams() {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const start = startOfDay.toISOString().slice(0, 19).replace("T", " ");
+  const end = now.toISOString().slice(0, 19).replace("T", " ");
+
+  return `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+}
+
+fetch("/api/leads/info-stages-today")
+  .then(res => res.json())
+  .then(data => {
+    const list = document.getElementById("info-list");
+    list.innerHTML = "";
+    data.info.forEach(stage => {
+      const li = document.createElement("li");
+      li.textContent = `${stage.name}: ${stage.count} лидов`;
+      list.appendChild(li);
+    });
+  });
+
+
+async function fetchStageCount(stageCode) {
+  const params = getDateParams();
+  const res = await fetch(`/summary_stage?stage=${encodeURIComponent(stageCode)}&${params}`);
+  const data = await res.json();
+  return data.count ?? 0;
+}
+
+async function loadFixedStages() {
+  const stages = Object.entries(STAGES);
+  const list = document.getElementById("fixed_stage_list");
+  list.innerHTML = ""; // очищаем "⏳ Загрузка данных..."
+
+  for (const [name, code] of stages) {
+    const count = await fetchStageCount(code);
+    const item = document.createElement("li");
+    item.textContent = `${name}: ${count} лидов`;
+    list.appendChild(item);
   }
 }
 
-// ⏱ автообновление каждые 30 сек
+function groupLeadsByStageAndUser(leads) {
+  const stageByCode = Object.entries(STAGES).reduce((acc, [name, code]) => {
+    acc[code] = name;
+    return acc;
+  }, {});
+
+  const result = {};
+
+  leads.forEach(lead => {
+    const stageName = stageByCode[lead.STAGE_ID];
+    const userId = lead.ASSIGNED_BY_ID;
+
+    if (WORK_STAGES.includes(stageName)) {
+      if (!result[stageName]) result[stageName] = {};
+      if (!result[stageName][userId]) result[stageName][userId] = 0;
+      result[stageName][userId]++;
+    }
+  });
+
+  return result;
+}
+
+function renderOperatorTables(data) {
+  const container = document.getElementById("operator_stage_tables");
+  container.innerHTML = "";
+
+  for (const stage in data) {
+    const operators = data[stage];
+    if (!operators || Object.keys(operators).length === 0) continue;
+
+    const block = document.createElement("div");
+    block.className = "stage-block";
+
+    const table = document.createElement("table");
+
+    const header = document.createElement("tr");
+    header.innerHTML = `<th>${stage}</th><th>Лидов</th>`;
+    table.appendChild(header);
+
+    for (const [uid, count] of Object.entries(operators)) {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${uid}</td><td>${count}</td>`;
+      table.appendChild(row);
+    }
+
+    block.appendChild(table);
+    container.appendChild(block);
+  }
+}
+
+async function loadOperatorTables() {
+  const res = await fetch("/api/leads/all");
+  const data = await res.json();
+  const grouped = groupLeadsByStageAndUser(data.leads);
+  renderOperatorTables(grouped);
+}
+
 window.onload = () => {
-  updateDashboard();
-  setInterval(updateDashboard, 30000);
+  loadFixedStages();
+  loadOperatorTables();
 };
+</script>
