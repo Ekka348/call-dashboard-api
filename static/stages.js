@@ -15,16 +15,12 @@ function groupLeadsByStageAndUser(leads) {
   workStages.forEach(stage => result[stage] = {});
 
   leads.forEach(lead => {
-    const stage = lead.STAGE_ID;
+    // переводим stageCode обратно в имя стадии
+    const stageName = Object.entries(STAGES).find(([name, code]) => code === lead.STAGE_ID)?.[0];
     const user = lead.ASSIGNED_BY_ID;
 
-    if (workStages.includes(stage)) {
-      if (!result[stage]
-
-function getDateParams() {
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
-  return `start=2020-01-01 00:00:00&end=${encodeURIComponent(now)}`;
-}
+    if (workStages.includes(stageName)) {
+      if (!result[stageName]
 
 async function fetchStageCount(stageCode) {
   const params = getDateParams();
