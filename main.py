@@ -18,6 +18,27 @@ STAGE_LABELS = {
     "База ВВ": "11"
 }
 
+GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
+
+@app.route("/api/leads/by-stage")
+def leads_by_stage():
+    start, end = get_range_dates("today")
+    data = {}
+
+    for name, stage_id in STAGE_LABELS.items():
+        leads = fetch_leads(stage_id, start, end)
+
+        if name in GROUPED_STAGES:
+            data[name] = {"grouped": True, "count": len(leads)}
+        else:
+            # Группировка по сотрудникам
+            operators = Counter(lead["ASSIGNED_BY_NAME"] for lead in leads)
+            data[name] = {
+                "grouped": False,
+                "details": [{"operator": op, "count": count} for op, count in operators.items()]
+            }
+
+    return {"range": "today", "data": data}
 
 user_cache = {"data": {}, "last": 0}
 
