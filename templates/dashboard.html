@@ -30,7 +30,7 @@
       margin-bottom: 6px;
     }
   </style>
-  <script src="stages.js" defer></script>
+  <script src="{{ url_for('static', filename='stages.js') }}" defer></script>
 </head>
 <body>
   <h1>📊 Лиды по стадиям Bitrix24</h1>
@@ -44,36 +44,5 @@
   <footer style="color:#888;">
     <p>Источник: Bitrix24 через заданный хук. Стадии — динамически загружаются через API.</p>
   </footer>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const stagesContainer = document.getElementById('fixed_stage_list');
-
-      async function fetchStages() {
-        try {
-          const response = await fetch('/api/leads/stages');
-          if (!response.ok) throw new Error(`Ошибка: ${response.status}`);
-
-          const data = await response.json();
-          renderStages(data.stages);
-        } catch (error) {
-          console.error('Не удалось загрузить стадии:', error);
-          stagesContainer.innerHTML = '<li>⚠️ Ошибка загрузки стадий.</li>';
-        }
-      }
-
-      function renderStages(stages) {
-        stagesContainer.innerHTML = '';
-        stages.forEach(stage => {
-          const li = document.createElement('li');
-          li.innerHTML = `<span class="stage-name">${stage.name}</span>: ${stage.count}`;
-          stagesContainer.appendChild(li);
-        });
-      }
-
-      fetchStages();
-    });
-  </script>
 </body>
 </html>
-
