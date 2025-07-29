@@ -11,24 +11,32 @@
     h1, h2 {
       margin-top: 30px;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background-color: #f3f3f3;
-    }
     .info-box {
       background-color: #e8f4ff;
       padding: 15px;
       border: 1px solid #b3d8ff;
       margin-bottom: 20px;
+    }
+    .stage-container {
+      margin-bottom: 30px;
+    }
+    .stage-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .stage-list {
+      list-style: none;
+      padding: 0;
+      border-left: 4px solid #bbb;
+    }
+    .stage-list li {
+      padding: 5px 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    .empty-message {
+      font-style: italic;
+      color: #888;
     }
   </style>
 </head>
@@ -54,23 +62,33 @@
 
         WORK_STAGES.forEach(stage => {
           const rows = data.data[stage];
-          const section = document.createElement("div");
-          const title = document.createElement("h2");
+          const stageBlock = document.createElement("div");
+          stageBlock.className = "stage-container";
+
+          const title = document.createElement("div");
+          title.className = "stage-title";
           title.textContent = `Стадия: ${stage}`;
-          section.appendChild(title);
+          stageBlock.appendChild(title);
 
           if (!rows || rows.length === 0) {
-            section.innerHTML += "<p>Нет лидов по этой стадии сегодня.</p>";
+            const emptyMessage = document.createElement("p");
+            emptyMessage.className = "empty-message";
+            emptyMessage.textContent = "Нет лидов по этой стадии сегодня.";
+            stageBlock.appendChild(emptyMessage);
           } else {
-            const table = document.createElement("table");
-            table.innerHTML = `
-              <thead><tr><th>Оператор</th><th>Количество</th></tr></thead>
-              <tbody>${rows.map(row => `<tr><td>${row.name}</td><td>${row.count}</td></tr>`).join("")}</tbody>
-            `;
-            section.appendChild(table);
+            const list = document.createElement("ul");
+            list.className = "stage-list";
+
+            rows.forEach(row => {
+              const item = document.createElement("li");
+              item.textContent = `${row.name} — ${row.count}`;
+              list.appendChild(item);
+            });
+
+            stageBlock.appendChild(list);
           }
 
-          container.appendChild(section);
+          container.appendChild(stageBlock);
         });
       })
       .catch(err => {
@@ -80,4 +98,3 @@
 
 </body>
 </html>
-
