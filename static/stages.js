@@ -65,7 +65,7 @@ function renderMiniTable(data, targetId) {
   document.getElementById(targetId).innerHTML = html;
 }
 
-async function loadSummaryVV() {
+async function loadSummaryOLD() {
   try {
     const params = getDateParams();
     if (!params) {
@@ -92,7 +92,7 @@ async function updateLoop() {
   await loadStatsFor("НДЗ 2", "report_ndz2");
   await loadStatsFor("Перезвонить", "report_call");
   await loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
-  await loadSummaryVV(); // 🎯 Добавлено сюда
+  await loadSummaryOLD(); // 🎯 Добавлено сюда
   await loadSummaryVV();
 
   hideLoading(true);
