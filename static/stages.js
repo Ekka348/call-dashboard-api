@@ -21,6 +21,19 @@ function getDateParams() {
   return `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
 }
 
+fetch("/api/leads/info-stages-today")
+  .then(res => res.json())
+  .then(data => {
+    const list = document.getElementById("info-list");
+    list.innerHTML = "";
+    data.info.forEach(stage => {
+      const li = document.createElement("li");
+      li.textContent = `${stage.name}: ${stage.count} лидов`;
+      list.appendChild(li);
+    });
+  });
+
+
 async function fetchStageCount(stageCode) {
   const params = getDateParams();
   const res = await fetch(`/summary_stage?stage=${encodeURIComponent(stageCode)}&${params}`);
