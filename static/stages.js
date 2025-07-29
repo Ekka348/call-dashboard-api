@@ -1,3 +1,4 @@
+<script>
 const STAGES = {
   "НДЗ": "5",
   "НДЗ 2": "9",
@@ -7,6 +8,8 @@ const STAGES = {
   "OLD": "11",
   "База ВВ": "UC_VTOOIM"
 };
+
+const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
 
 function getDateParams() {
   const now = new Date();
@@ -25,39 +28,7 @@ async function fetchStageCount(stageCode) {
   return data.count ?? 0;
 }
 
-function groupLeadsByStageAndUser(leads) {
-  const workStages = ['НДЗ', 'НДЗ 2', 'Перезвонить', 'Приглашен к рекрутеру'];
-  const stageByCode = Object.entries(STAGES).reduce((acc, [name, code]) => {
-    acc[code] = name;
-    return acc;
-  }, {});
-
-  const result = {};
-
-  leads.forEach(lead => {
-    const stageName = stageByCode[lead.STAGE_ID];
-    const userId = lead.ASSIGNED_BY_ID;
-
-    if (workStages.includes(stageName)) {
-      if (!result[stageName]) result[stageName] = {};
-      if (!result[stageName][userId]) result[stageName][userId] = 0;
-
-      result[stageName][userId]++;
-    }
-  });
-
-  return result;
-}
-
-function renderOperatorTables(data) {
-  const container = document.getElementById('operator_stage_tables');
-  container.innerHTML = '';
-
-  for (const stage in data) {
-    const operators = data[stage];
-    if (!operators || Object
-
- async function loadFixedStages() {
+async function loadFixedStages() {
   const stages = Object.entries(STAGES);
   const list = document.getElementById("fixed_stage_list");
   list.innerHTML = ""; // очищаем "⏳ Загрузка данных..."
@@ -69,7 +40,66 @@ function renderOperatorTables(data) {
     list.appendChild(item);
   }
 }
-       
+
+function groupLeadsByStageAndUser(leads) {
+  const stageByCode = Object.entries(STAGES).reduce((acc, [name, code]) => {
+    acc[code] = name;
+    return acc;
+  }, {});
+
+  const result = {};
+
+  leads.forEach(lead => {
+    const stageName = stageByCode[lead.STAGE_ID];
+    const userId = lead.ASSIGNED_BY_ID;
+
+    if (WORK_STAGES.includes(stageName)) {
+      if (!result[stageName]) result[stageName] = {};
+      if (!result[stageName][userId]) result[stageName][userId] = 0;
+      result[stageName][userId]++;
+    }
+  });
+
+  return result;
+}
+
+function renderOperatorTables(data) {
+  const container = document.getElementById("operator_stage_tables");
+  container.innerHTML = "";
+
+  for (const stage in data) {
+    const operators = data[stage];
+    if (!operators || Object.keys(operators).length === 0) continue;
+
+    const block = document.createElement("div");
+    block.className = "stage-block";
+
+    const table = document.createElement("table");
+
+    const header = document.createElement("tr");
+    header.innerHTML = `<th>${stage}</th><th>Лидов</th>`;
+    table.appendChild(header);
+
+    for (const [uid, count] of Object.entries(operators)) {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${uid}</td><td>${count}</td>`;
+      table.appendChild(row);
+    }
+
+    block.appendChild(table);
+    container.appendChild(block);
+  }
+}
+
+async function loadOperatorTables() {
+  const res = await fetch("/api/leads/all");
+  const data = await res.json();
+  const grouped = groupLeadsByStageAndUser(data.leads);
+  renderOperatorTables(grouped);
+}
+
 window.onload = () => {
   loadFixedStages();
+  loadOperatorTables();
 };
+</script>
