@@ -4,13 +4,11 @@ from datetime import datetime, timedelta
 from collections import Counter
 from pytz import timezone
 from bitrix_utils import get_leads_by_status, get_total_leads_from_bitrix
-from bitrix24 import Bitrix24
 import sys
 print(sys.path)
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
-bx24 = Bitrix24(HOOK)
 
 STAGE_LABELS = {
     "НДЗ": "5",
@@ -148,7 +146,7 @@ def daily_json():
 def leads_by_status_today():
     stats = get_leads_by_status(HOOK, TRACKED_STATUSES)
     return jsonify(stats)
-)
+
 # 🔑 Вебхук Bitrix24: замени на свой
 url = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
