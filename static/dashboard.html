@@ -18,13 +18,11 @@
       margin-bottom: 30px;
       max-width: 600px;
     }
-
     .stage-columns {
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
     }
-
     .stage-table {
       border: 1px solid #ccc;
       border-radius: 8px;
@@ -33,29 +31,24 @@
       min-width: 250px;
       flex: 1;
     }
-
     .stage-table h2 {
       font-size: 16px;
       margin-bottom: 10px;
       text-align: center;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
     }
-
     th, td {
       border-bottom: 1px solid #ddd;
       padding: 6px;
       text-align: left;
       font-size: 14px;
     }
-
     th {
       background-color: #f1f1f1;
     }
-
     .empty-message {
       font-style: italic;
       color: #888;
@@ -71,78 +64,79 @@
     <p><strong>Загрузка инфо-стадий...</strong></p>
   </div>
 
-  <div class="stage-columns" id="content"></div>
+  <div class="stage-columns" id="content">
+    <div class="stage-table"><h2>Стадия: НДЗ</h2></div>
+    <div class="stage-table"><h2>Стадия: НДЗ 2</h2></div>
+    <div class="stage-table"><h2>Стадия: Перезвонить</h2></div>
+    <div class="stage-table"><h2>Стадия: Приглашен к рекрутеру</h2></div>
+  </div>
 
   <script>
-    const STAGES = {
-      "НДЗ": "5",
-      "НДЗ 2": "9",
-      "Перезвонить": "IN_PROCESS",
-      "Приглашен к рекрутеру": "CONVERTED",
-      "NEW": "NEW",
-      "OLD": "11",
-      "База ВВ": "UC_VTOOIM"
-    };
-
-    const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
+    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру", "INFO"];
     const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+    let stageIndex = 0;
 
-    fetch("/api/leads/by-stage")
-      .then(res => res.json())
-      .then(data => {
-        // 📁 Инфо-стадии
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/leads/by-stage");
+        return await res.json();
+      } catch (e) {
+        console.error("Ошибка при загрузке by-stage", e);
+        return null;
+      }
+    }
+
+    async function updateStageCycle() {
+      const current = STAGE_CYCLE[stageIndex];
+      const data = await fetchData();
+      if (!data || !data.data) return;
+
+      if (current === "INFO") {
         const statsContainer = document.getElementById("stats");
         statsContainer.innerHTML = "";
         INFO_STAGES.forEach(stage => {
-          const info = data.data[stage];
-          const value = info?.count ?? 0;
-          const statLine = document.createElement("p");
-          statLine.innerHTML = `<strong>${stage}:</strong> ${value}`;
-          statsContainer.appendChild(statLine);
+          const value = data.data[stage]?.count ?? 0;
+          const line = document.createElement("p");
+          line.innerHTML = `<strong>${stage}:</strong> ${value}`;
+          statsContainer.appendChild(line);
         });
+      } else {
+        const stage = current;
+        const info = data.data[stage];
+        const block = Array.from(document.getElementById("content").children)
+          .find(el => el.querySelector("h2")?.textContent?.includes(stage));
 
-        // 📋 Вертикальные таблицы по стадиям
-        const content = document.getElementById("content");
-        content.innerHTML = "";
+        if (!block) return;
+        block.innerHTML = `<h2>Стадия: ${stage}</h2>`;
 
-        WORK_STAGES.forEach(stage => {
-          const info = data.data[stage];
-          const block = document.createElement("div");
-          block.className = "stage-table";
+        if (!info?.details || info.details.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "empty-message";
+          empty.textContent = "Нет лидов.";
+          block.appendChild(empty);
+        } else {
+          const table = document.createElement("table");
+          const header = document.createElement("thead");
+          header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
+          table.appendChild(header);
 
-          const heading = document.createElement("h2");
-          heading.textContent = `Стадия: ${stage}`;
-          block.appendChild(heading);
+          const body = document.createElement("tbody");
+          info.details.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
+            body.appendChild(tr);
+          });
 
-          if (!info?.details || info.details.length === 0) {
-            const empty = document.createElement("p");
-            empty.className = "empty-message";
-            empty.textContent = "Нет лидов.";
-            block.appendChild(empty);
-          } else {
-            const table = document.createElement("table");
-            const header = document.createElement("thead");
-            header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-            table.appendChild(header);
+          table.appendChild(body);
+          block.appendChild(table);
+        }
+      }
 
-            const body = document.createElement("tbody");
-            info.details.forEach(row => {
-              const tr = document.createElement("tr");
-              tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
-              body.appendChild(tr);
-            });
+      stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
+      setTimeout(updateStageCycle, 3000); // ⏱ 3 секунды между шагами
+    }
 
-            table.appendChild(body);
-            block.appendChild(table);
-          }
-
-          content.appendChild(block);
-        });
-      })
-      .catch(err => {
-        document.getElementById("stats").innerHTML = `<p>Ошибка загрузки: ${err}</p>`;
-        document.getElementById("content").innerHTML = `<p>Ошибка загрузки данных: ${err}</p>`;
-      });
+    updateStageCycle(); // 🚀 старт цикла
   </script>
 
 </body>
