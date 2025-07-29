@@ -140,11 +140,23 @@ function renderOperatorTables(data) {
 }
 
 async function loadOperatorTables() {
-  const res = await fetch("/api/leads/all");
+  const res = await fetch("/api/leads/by-stage");
   const data = await res.json();
-  const grouped = groupLeadsByStageAndUser(data.leads);
+
+  const grouped = {};
+  for (const stage of WORK_STAGES) {
+    const info = data.data[stage];
+    if (!info || !info.details || info.details.length === 0) continue;
+
+    grouped[stage] = {};
+    info.details.forEach(({ operator, count }) => {
+      grouped[stage][operator] = count;
+    });
+  }
+
   renderOperatorTables(grouped);
 }
+
 
 window.onload = () => {
   loadFixedStages();
