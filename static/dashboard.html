@@ -39,72 +39,55 @@
       background: #fff;
     }
 
-    .stage-block.blue     { border-color: #007bff; }
-    .stage-block.purple   { border-color: #6f42c1; }
-    .stage-block.orange   { border-color: #fd7e14; }
-    .stage-block.green    { border-color: #28a745; }
-    .stage-block.gray     { border-color: #6c757d; }
+    .stage-block.blue   { border-color: #007bff; }
+    .stage-block.purple { border-color: #6f42c1; }
+    .stage-block.orange { border-color: #fd7e14; }
+    .stage-block.green  { border-color: #28a745; }
+    .stage-block.gray   { border-color: #6c757d; }
 
     .stage-block h4 { margin-top: 0; }
 
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      background: #fff;
+    #vv_count.loading {
+      color: gray;
+      font-style: italic;
     }
 
-    th, td {
-      border: 1px solid #ccc;
-      padding: 6px;
-      text-align: left;
+    .spinner-svg {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      vertical-align: middle;
+      margin-left: 6px;
     }
 
-    #status_summary {
-      margin-top: 30px;
-      background: #fff;
-      border: 2px solid #444;
-      padding: 10px;
-      border-radius: 8px;
+    .spinner-svg circle {
+      fill: none;
+      stroke: #999;
+      stroke-width: 3;
+      stroke-linecap: round;
+      animation: rotate 1s linear infinite;
     }
 
-    #status_list {
-      list-style: none;
-      padding-left: 0;
-      font-size: 15px;
-    }
-
-    #status_list li {
-      margin: 4px 0;
+    @keyframes rotate {
+      0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+      50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+      100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
     }
 
     @media screen and (max-width: 768px) {
-      .stage-block {
-        flex: 1 1 100%;
-      }
-
-      body {
-        margin: 10px;
-      }
-
-      h2, h3 {
-        font-size: 20px;
-      }
-
+      .stage-block { flex: 1 1 100%; }
+      body { margin: 10px; }
+      h2, h3 { font-size: 20px; }
       select, input[type="date"] {
         font-size: 15px;
         width: 100%;
         margin: 5px 0;
       }
-
-      #statusbar {
-        font-size: 13px;
-      }
-
+      #statusbar { font-size: 13px; }
       #status_summary {
         padding: 10px;
         font-size: 14px;
       }
-
       #status_list li {
         font-size: 14px;
       }
@@ -140,15 +123,25 @@
     <div class="stage-block green" id="report_recruiter"></div>
     <div class="stage-block gray" id="report_vv">
       <h4>📦 База ВВ</h4>
-      <p id="vv_count">Загрузка...</p>
+      <p id="vv_count" class="loading">Загрузка...
+        <svg class="spinner-svg" viewBox="0 0 50 50">
+          <circle cx="25" cy="25" r="20"></circle>
+        </svg>
+      </p>
     </div>
   </div>
 
   <script src="/static/stages.js"></script>
   <script src="/static/daily_status.js"></script>
   <script>
-    // Автозагрузка количества лидов из "База ВВ"
     function loadVVCount() {
+      const vvCountEl = document.getElementById("vv_count");
+      vvCountEl.innerHTML = `Загрузка...
+        <svg class="spinner-svg" viewBox="0 0 50 50">
+          <circle cx="25" cy="25" r="20"></circle>
+        </svg>`;
+      vvCountEl.classList.add("loading");
+
       const range = document.getElementById("range").value || "today";
       fetch("/summary_vv?range=" + range)
         .then(r => r.text())
@@ -156,12 +149,12 @@
           const temp = document.createElement("div");
           temp.innerHTML = html;
           const countText = temp.querySelector("strong");
-          document.getElementById("vv_count").innerText = countText
-            ? countText.innerText
-            : "Нет данных";
+          vvCountEl.textContent = countText ? countText.innerText : "Нет данных";
+          vvCountEl.classList.remove("loading");
         })
         .catch(() => {
-          document.getElementById("vv_count").innerText = "Ошибка загрузки";
+          vvCountEl.textContent = "Ошибка загрузки";
+          vvCountEl.classList.remove("loading");
         });
     }
 
@@ -170,6 +163,3 @@
   </script>
 </body>
 </html>
-
-
-
