@@ -49,14 +49,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderStages(stages) {
-    stagesContainer.innerHTML = '';
-    stages.forEach(stage => {
-      const li = document.createElement('li');
-      li.innerHTML = `<span class="stage-name">${stage.name}</span>: ${stage.count}`;
-      stagesContainer.appendChild(li);
-    });
-  }
+ function renderStages(stages) {
+  const stagesContainer = document.getElementById('fixed_stage_list');
+  stagesContainer.innerHTML = '';
+
+  const infoStages = ['NEW', 'OLD', 'База ВВ'];
+  const workStages = ['НДЗ', 'НДЗ 2', 'Перезвонить', 'Приглашен к рекрутеру'];
+
+  // 🔷 Верхний блок — “информационные”
+  const infoBlock = document.createElement('div');
+  infoBlock.classList.add('block');
+  infoBlock.innerHTML = '<h3>🗂️ Инфо-стадии</h3><ul></ul>';
+  const infoList = infoBlock.querySelector('ul');
+
+  // 🔶 Нижний блок — “рабочие”
+  const workBlock = document.createElement('div');
+  workBlock.classList.add('block');
+  workBlock.innerHTML = '<h3>⚙️ Рабочие стадии</h3><ul></ul>';
+  const workList = workBlock.querySelector('ul');
+
+  stages.forEach(stage => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="stage-name">${stage.name}</span>: ${stage.count}`;
+
+    if (infoStages.includes(stage.name)) {
+      infoList.appendChild(li);
+    } else if (workStages.includes(stage.name)) {
+      workList.appendChild(li);
+    }
+  });
+
+  stagesContainer.appendChild(infoBlock);
+  stagesContainer.appendChild(workBlock);
+}
+
 
   fetchStages();
 });
