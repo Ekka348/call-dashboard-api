@@ -106,45 +106,6 @@ def daily():
     <p>Всего лидов: {sum(stats.values())}</p></body></html>
     """)
 
-@app.route("/compare")
-def compare():
-    label = request.args.get("label", "НДЗ")
-    stage = STAGE_LABELS.get(label, label)
-    tz = timezone("Europe/Moscow")
-    now = datetime.now(tz)
-    today_s, today_e = get_range_dates("today")
-    yesterday = now - timedelta(days=1)
-    y_start = yesterday.strftime("%Y-%m-%d 00:00:00")
-    y_end = yesterday.strftime("%Y-%m-%d 23:59:59")
-    users = load_users()
-
-    today_stats = Counter()
-    for l in fetch_leads(stage, today_s, today_e):
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: today_stats[int(uid)] += 1
-
-    y_stats = Counter()
-    for l in fetch_leads(stage, y_start, y_end):
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: y_stats[int(uid)] += 1
-
-    rows = []
-    for uid in set(today_stats) | set(y_stats):
-        t, y = today_stats.get(uid, 0), y_stats.get(uid, 0)
-        diff = t - y
-        emoji = "📈" if diff > 0 else ("📉" if diff < 0 else "➖")
-        name = users.get(uid, uid)
-        rows.append(f"<tr><td>{name}</td><td>{y}</td><td>{t}</td><td>{diff}</td><td>{emoji}</td></tr>")
-    return render_template_string(f"""
-    <html><body>
-    <h2>🔁 Сравнение: {label}</h2>
-    <table border="1" cellpadding="6">
-    <tr><th>Сотрудник</th><th>Вчера</th><th>Сегодня</th><th>Разница</th><th></th></tr>{''.join(rows)}</table>
-    </body></html>
-    """)
-
-
-
 @app.route("/stats_data")
 def stats_data():
     label = request.args.get("label", "НДЗ")
