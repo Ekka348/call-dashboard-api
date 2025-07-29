@@ -270,6 +270,10 @@ def export_csv():
     fname = f"{label}_{rtype}_stats.csv"
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
 
+@app.route("/api/leads/by-operator-today")
+def leads_by_operator_today():
+    ...
+    return {"range": "today", "data": result}
 
 
 @app.route("/")
