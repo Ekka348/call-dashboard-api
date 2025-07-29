@@ -29,20 +29,46 @@
     li {
       margin-bottom: 6px;
     }
+
+    #operator_stage_tables {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .stage-block {
+      flex: 1 1 200px;
+      background: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stage-block table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .stage-block th, .stage-block td {
+      padding: 6px;
+      border-bottom: 1px solid #eee;
+    }
   </style>
   <script src="{{ url_for('static', filename='stages.js') }}" defer></script>
 </head>
 <body>
   <h1>📊 Лиды по стадиям Bitrix24</h1>
 
+  <!-- блок для стадий -->
   <div class="block">
     <ul id="fixed_stage_list">
       <li>⏳ Загрузка данных...</li>
     </ul>
   </div>
 
+  <!-- 📌 добавляем блок для таблиц по операторам -->
+  <div id="operator_stage_tables"></div>
+
   <footer style="color:#888;">
     <p>Источник: Bitrix24 через заданный хук. Стадии — динамически загружаются через API.</p>
   </footer>
 </body>
 </html>
+
