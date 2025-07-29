@@ -1,5 +1,4 @@
 from flask import Flask, request, render_template_string, send_file, jsonify
-
 import requests, os
 from datetime import datetime, timedelta
 from collections import Counter
@@ -9,6 +8,7 @@ from pytz import timezone  # 🕒 для московского времени
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+
 STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
@@ -47,12 +47,15 @@ def load_users():
     user_cache["data"], user_cache["last"] = users, time.time()
     return users
 
-def fetch_leads(stage, start, end):
+def fetch_leads(stage, start=None, end=None):
     leads, offset = [], 0
     try:
         while True:
+            filter = {"STATUS_ID": stage}
+            if start and end:
+                filter.update({">=DATE_MODIFY": start, "<=DATE_MODIFY": end})
             r = requests.post(HOOK + "crm.lead.list.json", json={
-                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
+                "filter": filter,
                 "select": ["ID", "ASSIGNED_BY_ID", "DATE_CREATE", "DATE_MODIFY", "STATUS_ID"],
                 "start": offset
             }, timeout=10).json()
@@ -149,7 +152,6 @@ def debug():
     rtype = request.args.get("range", "today")
     stage = STAGE_LABELS.get(label, label)
     start, end = get_range_dates(rtype)
-
     leads = fetch_leads(stage, start, end)
     chunk = leads[:10]
 
@@ -199,22 +201,6 @@ def stats_data():
         "labels": labels,
         "values": values,
         "total": sum(values),
-        "stage": label,
-        "range": rtype
-    }
-
-
-
-@app.route("/summary_vv")
-def summary_vv():
-    stage = STAGE_LABELS.get("База ВВ", "UC_VTOOIM")
-    leads = fetch_all_leads(stage)  # без фильтра по дате
-    return jsonify({"count": len(leads)})
-
-
-
-@app.route("/")
-def home(): return app.send_static_file("dashboard.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
