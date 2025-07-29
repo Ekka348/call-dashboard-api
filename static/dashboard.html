@@ -4,9 +4,13 @@
   <meta charset="UTF-8" />
   <title>Dashboard</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { margin-bottom: 20px; }
-
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
     .info-box {
       background-color: #e8f4ff;
       padding: 15px;
@@ -63,16 +67,83 @@
 
   <h1>📊 Статистика по стадиям — сегодня</h1>
 
-  <div class="info-box">
-    <div id="stats"><p><strong>Загрузка инфо-стадий...</strong></p></div>
-    <p id="log" style="margin-top:20px; font-size:13px; color:#555;">
-      🔄 Последнее обновление: <span id="last-update">никогда</span>
-    </p>
+  <div class="info-box" id="stats">
+    <p><strong>Загрузка инфо-стадий...</strong></p>
   </div>
 
   <div class="stage-columns" id="content"></div>
 
-  <!-- Подключаем основной скрипт -->
-  <script src="/static/stages.js"></script>
+  <script>
+    const STAGES = {
+      "НДЗ": "5",
+      "НДЗ 2": "9",
+      "Перезвонить": "IN_PROCESS",
+      "Приглашен к рекрутеру": "CONVERTED",
+      "NEW": "NEW",
+      "OLD": "UC_VTOOIM",
+      "База ВВ": 11"
+    };
+
+    const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
+    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+
+    fetch("/api/leads/by-stage")
+      .then(res => res.json())
+      .then(data => {
+        // 📁 Инфо-стадии
+        const statsContainer = document.getElementById("stats");
+        statsContainer.innerHTML = "";
+        INFO_STAGES.forEach(stage => {
+          const info = data.data[stage];
+          const value = info?.count ?? 0;
+          const statLine = document.createElement("p");
+          statLine.innerHTML = `<strong>${stage}:</strong> ${value}`;
+          statsContainer.appendChild(statLine);
+        });
+
+        // 📋 Вертикальные таблицы по стадиям
+        const content = document.getElementById("content");
+        content.innerHTML = "";
+
+        WORK_STAGES.forEach(stage => {
+          const info = data.data[stage];
+          const block = document.createElement("div");
+          block.className = "stage-table";
+
+          const heading = document.createElement("h2");
+          heading.textContent = `Стадия: ${stage}`;
+          block.appendChild(heading);
+
+          if (!info?.details || info.details.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "empty-message";
+            empty.textContent = "Нет лидов.";
+            block.appendChild(empty);
+          } else {
+            const table = document.createElement("table");
+            const header = document.createElement("thead");
+            header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
+            table.appendChild(header);
+
+            const body = document.createElement("tbody");
+            info.details.forEach(row => {
+              const tr = document.createElement("tr");
+              tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
+              body.appendChild(tr);
+            });
+
+            table.appendChild(body);
+            block.appendChild(table);
+          }
+
+          content.appendChild(block);
+        });
+      })
+      .catch(err => {
+        document.getElementById("stats").innerHTML = `<p>Ошибка загрузки: ${err}</p>`;
+        document.getElementById("content").innerHTML = `<p>Ошибка загрузки данных: ${err}</p>`;
+      });
+  </script>
+
 </body>
 </html>
