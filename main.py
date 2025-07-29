@@ -138,6 +138,15 @@ def summary_old():
 
     return jsonify({"count": len(leads)})
 
+@app.route("/summary_stage")
+def summary_stage():
+    stage = request.args.get("stage")
+    start = request.args.get("start", "2020-01-01 00:00:00")
+    end = request.args.get("end", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    if not stage:
+        return jsonify({"count": 0})
+    leads = fetch_leads(stage, start, end)
+    return jsonify({"count": len(leads)})
 
 
 @app.route("/")
