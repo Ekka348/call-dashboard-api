@@ -150,14 +150,10 @@ def summary_stage():
 
 @app.route("/api/leads/stages")
 def api_leads_stages():
-    start = "2020-01-01 00:00:00"
-    end = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     results = []
-
     for name, stage in STAGE_LABELS.items():
         leads = fetch_leads(stage, start, end)
         results.append({"name": name, "count": len(leads)})
-
     return jsonify({"stages": results})
 
 
