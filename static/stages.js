@@ -57,6 +57,19 @@ function renderOperatorTables(data) {
     const operators = data[stage];
     if (!operators || Object
 
+ async function loadFixedStages() {
+  const stages = Object.entries(STAGES);
+  const list = document.getElementById("fixed_stage_list");
+  list.innerHTML = ""; // очищаем "⏳ Загрузка данных..."
+
+  for (const [name, code] of stages) {
+    const count = await fetchStageCount(code);
+    const item = document.createElement("li");
+    item.textContent = `${name}: ${count} лидов`;
+    list.appendChild(item);
+  }
+}
+       
 window.onload = () => {
   loadFixedStages();
 };
