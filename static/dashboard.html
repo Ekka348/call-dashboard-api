@@ -1,63 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Статистика лидов по стадиям</title>
+  <meta charset="UTF-8" />
+  <title>Dashboard</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    h2 { margin-top: 40px; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background-color: #f4f4f4; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1, h2 {
+      margin-top: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f3f3f3;
+    }
+    .info-box {
+      background-color: #e8f4ff;
+      padding: 15px;
+      border: 1px solid #b3d8ff;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
-  <h1>📊 Статистика по стадиям — сегодня</h1>
-  <div id="content">Загрузка...</div>
 
- <div id="info-block">
-  <h2>📁 Инфо-стадии (суммарно)</h2>
-  <ul id="info-list"><li>Загрузка...</li></ul>
-</div>
+  <h1>📁 Инфо-стадии (суммарно)</h1>
+  <div class="info-box">
+    <p><strong>NEW:</strong> 0</p>
+    <p><strong>OLD:</strong> 734</p>
+    <p><strong>База ВВ:</strong> 876</p>
+  </div>
 
-<script>
-fetch("/api/leads/info-stages-today")
-  .then(res => res.json())
-  .then(data => {
-    const list = document.getElementById("info-list");
-    list.innerHTML = "";
-    data.info.forEach(stage => {
-      const li = document.createElement("li");
-      li.textContent = `${stage.name}: ${stage.count}`;
-      list.appendChild(li);
-    });
-  })
-  .catch(err => {
-    document.getElementById("info-list").innerHTML =
-      `<li>Ошибка загрузки: ${err}</li>`;
-  });
-</script>
-
+  <div id="content"></div>
 
   <script>
+    const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
+
     fetch("/api/leads/by-operator-today")
       .then(res => res.json())
       .then(data => {
         const container = document.getElementById("content");
         container.innerHTML = "";
-        Object.entries(data.data).forEach(([stage, rows]) => {
+
+        WORK_STAGES.forEach(stage => {
+          const rows = data.data[stage];
           const section = document.createElement("div");
           const title = document.createElement("h2");
           title.textContent = `Стадия: ${stage}`;
           section.appendChild(title);
 
-          if (rows.length === 0) {
+          if (!rows || rows.length === 0) {
             section.innerHTML += "<p>Нет лидов по этой стадии сегодня.</p>";
           } else {
             const table = document.createElement("table");
-            const header = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-            const body = rows.map(row => `<tr><td>${row.name}</td><td>${row.count}</td></tr>`).join("");
-            table.innerHTML = header + body;
+            table.innerHTML = `
+              <thead><tr><th>Оператор</th><th>Количество</th></tr></thead>
+              <tbody>${rows.map(row => `<tr><td>${row.name}</td><td>${row.count}</td></tr>`).join("")}</tbody>
+            `;
             section.appendChild(table);
           }
 
@@ -68,5 +77,7 @@ fetch("/api/leads/info-stages-today")
         document.getElementById("content").innerHTML = `<p>Ошибка загрузки данных: ${err}</p>`;
       });
   </script>
+
 </body>
 </html>
+
