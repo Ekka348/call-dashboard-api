@@ -199,6 +199,16 @@ def stats_data():
         "range": rtype
     }
 
+@app.route("/daily")
+def get_daily():
+    label = request.args.get("label")
+    range = request.args.get("range")
+
+    if label == "total":
+        # Получаем общее количество лидов из Bitrix
+        total = get_total_leads_from_bitrix(range)
+        return jsonify({"total": total})
+    
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
