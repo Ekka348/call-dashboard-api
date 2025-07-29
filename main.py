@@ -197,7 +197,7 @@ def stats_data():
     labels = [users.get(uid, str(uid)) for uid, _ in stats.items()]
     values = [cnt for _, cnt in stats.items()]
 
-    return {
+    return 
         "labels": labels,
         "values": values,
         "total": sum(values),
