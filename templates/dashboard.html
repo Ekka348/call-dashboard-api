@@ -2,73 +2,36 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>📊 Статистика лидов Bitrix</title>
+  <title>📊 Статистика лидов Bitrix24</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-      background: #f0f0f0;
-    }
-    h1 {
-      margin-bottom: 20px;
-    }
-    .block {
-      background: #fff;
-      padding: 15px 20px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .stage-name {
-      font-weight: bold;
-    }
-    ul {
-      padding-left: 0;
-      list-style: none;
-    }
-    li {
-      margin-bottom: 6px;
-    }
-
-    #operator_stage_tables {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    .stage-block {
-      flex: 1 1 200px;
-      background: #fff;
-      padding: 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .stage-block table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .stage-block th, .stage-block td {
-      padding: 6px;
-      border-bottom: 1px solid #eee;
-    }
+    body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
+    h1 { margin-bottom: 20px; }
+    ul { list-style: none; padding: 0; }
+    li { background: #fff; padding: 10px; margin-bottom: 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
   </style>
-  <script src="{{ url_for('static', filename='stages.js') }}" defer></script>
 </head>
 <body>
   <h1>📊 Лиды по стадиям Bitrix24</h1>
+  <ul id="stage_list">
+    <li>⏳ Загрузка данных...</li>
+  </ul>
 
-  <!-- блок для стадий -->
-  <div class="block">
-    <ul id="fixed_stage_list">
-      <li>⏳ Загрузка данных...</li>
-    </ul>
-  </div>
+  <script>
+    async function loadStageStats() {
+      const res = await fetch("/api/leads/stages");
+      const data = await res.json();
+      const list = document.getElementById("stage_list");
+      list.innerHTML = "";
 
-  <!-- 📌 добавляем блок для таблиц по операторам -->
-  <div id="operator_stage_tables"></div>
+      for (const stage of data.stages) {
+        const li = document.createElement("li");
+        li.textContent = `${stage.name}: ${stage.count} лидов`;
+        list.appendChild(li);
+      }
+    }
 
-  <footer style="color:#888;">
-    <p>Источник: Bitrix24 через заданный хук. Стадии — динамически загружаются через API.</p>
-  </footer>
+    window.onload = loadStageStats;
+  </script>
 </body>
 </html>
 
