@@ -15,6 +15,11 @@
   <h1>📊 Статистика по стадиям — сегодня</h1>
   <div id="content">Загрузка...</div>
 
+  <div id="info-block">
+  <h2>📁 Инфо-стадии (суммарно)</h2>
+  <ul id="info-list"><li>Загрузка...</li></ul>
+</div>
+
   <script>
     fetch("/api/leads/by-operator-today")
       .then(res => res.json())
