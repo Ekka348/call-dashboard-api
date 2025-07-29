@@ -80,7 +80,6 @@ async function loadSummaryVV() {
   }
 }
 
-
 async function updateLoop() {
   const params = getDateParams();
   if (!params) {
@@ -92,7 +91,7 @@ async function updateLoop() {
   await loadStatsFor("НДЗ 2", "report_ndz2");
   await loadStatsFor("Перезвонить", "report_call");
   await loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
-  await loadSummaryVV(); // 🎯 Добавлено сюда
+  await loadSummaryVV();
 
   hideLoading(true);
   requestAnimationFrame(() => setTimeout(updateLoop, 100));
@@ -108,3 +107,4 @@ window.onload = () => {
   attachReactiveListeners();
   updateLoop();
 };
+
