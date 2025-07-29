@@ -203,8 +203,8 @@ def stats_data():
         "range": rtype
     }
 
-@app.route("/summary_vv")
-def summary_vv():
+@app.route("/summary_old")
+def summary_old():
     stage = STAGE_LABELS.get("База ВВ", "UC_VTOOIM")
     leads = fetch_leads(stage, "2020-01-01 00:00:00", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
