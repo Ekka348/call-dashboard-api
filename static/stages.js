@@ -4,8 +4,8 @@ const STAGES = {
   "Перезвонить": "IN_PROCESS",
   "Приглашен к рекрутеру": "CONVERTED",
   "NEW": "NEW",
-  "OLD": "11",
-  "База ВВ": "UC_VTOOIM"
+  "OLD": "UC_VTOOIM",
+  "База ВВ": "11"
 };
 
 const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
