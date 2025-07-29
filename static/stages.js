@@ -9,6 +9,33 @@ const STAGES = {
   "База ВВ": "UC_VTOOIM"
 };
 
+fetch("/api/leads/by-stage")
+  .then(res => res.json())
+  .then(data => {
+    const container = document.getElementById("stats");
+    container.innerHTML = "";
+
+    for (const [stage, info] of Object.entries(data.data)) {
+      const block = document.createElement("div");
+      block.className = "stage-block";
+
+      if (info.grouped) {
+        block.innerHTML = `<h3>Стадия: ${stage}</h3><p>Всего: ${info.count}</p>`;
+      } else {
+        const rows = info.details
+          .map(x => `<tr><td>${x.operator}</td><td>${x.count}</td></tr>`)
+          .join("");
+        block.innerHTML = `
+          <h3>Стадия: ${stage}</h3>
+          <table><thead><tr><th>Оператор</th><th>Количество</th></tr></thead>
+          <tbody>${rows}</tbody></table>`;
+      }
+
+      container.appendChild(block);
+    }
+  });
+
+
 const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
 
 function getDateParams() {
