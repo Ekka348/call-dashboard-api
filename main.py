@@ -202,6 +202,21 @@ def stats_data():
         "range": rtype
     }
 
+@app.route("/summary_vv")
+def summary_vv():
+    rtype = request.args.get("range", "today")
+    stage = STAGE_LABELS.get("База ВВ", "UC_VTOOIM")
+    start, end = get_range_dates(rtype)
+    leads = fetch_leads(stage, start, end)
+
+    return render_template_string(f"""
+    <html><body>
+    <h2>📦 База ВВ — всего лидов за {rtype.upper()}</h2>
+    <p>Диапазон: {start} — {end}</p>
+    <p><strong>Количество лидов:</strong> {len(leads)}</p>
+    </body></html>
+    """)
+
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
