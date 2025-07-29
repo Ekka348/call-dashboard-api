@@ -207,12 +207,8 @@ def summary_vv():
     stage = STAGE_LABELS.get("База ВВ", "UC_VTOOIM")
     leads = fetch_leads(stage, "2020-01-01 00:00:00", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-    return render_template_string(f"""
-    <html><body>
-    <h2>📦 Общее количество лидов в База ВВ</h2>
-    <p><strong>Всего лидов:</strong> {len(leads)}</p>
-    </body></html>
-    """)
+    return jsonify({"count": len(leads)})
+
 
 
 @app.route("/")
