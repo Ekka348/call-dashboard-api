@@ -173,6 +173,25 @@ def leads_by_status_today():
     stats = get_leads_by_status(bx24, TRACKED_STATUSES)
     return jsonify(stats)
 
+# 🔑 Вебхук Bitrix24: замени на свой
+url = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+
+# 📦 Параметры запроса
+payload = {
+    "filter": {},  # пустой фильтр
+    "select": ["ID", "TITLE", "STATUS_ID"]
+}
+
+# 🚀 Отправка запроса
+response = requests.post(url, json=payload)
+
+# 🧾 Обработка ответа
+if response.status_code == 200:
+    data = response.json()
+    print("Лиды:", data["result"])
+else:
+    print(f"Ошибка: {response.status_code}")
+
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
