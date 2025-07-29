@@ -69,8 +69,8 @@
     }
 
     @keyframes rotate {
-      0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
-      50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+      0%   { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+      50%  { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
       100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
     }
 
@@ -84,13 +84,6 @@
         margin: 5px 0;
       }
       #statusbar { font-size: 13px; }
-      #status_summary {
-        padding: 10px;
-        font-size: 14px;
-      }
-      #status_list li {
-        font-size: 14px;
-      }
     }
   </style>
 </head>
@@ -144,12 +137,11 @@
 
       const range = document.getElementById("range").value || "today";
       fetch("/summary_vv?range=" + range)
-        .then(r => r.text())
-        .then(html => {
-          const temp = document.createElement("div");
-          temp.innerHTML = html;
-          const countText = temp.querySelector("strong");
-          vvCountEl.textContent = countText ? countText.innerText : "Нет данных";
+        .then(r => r.json())
+        .then(data => {
+          vvCountEl.textContent = data.count !== undefined
+            ? `Всего лидов: ${data.count}`
+            : "Нет данных";
           vvCountEl.classList.remove("loading");
         })
         .catch(() => {
@@ -163,3 +155,4 @@
   </script>
 </body>
 </html>
+
