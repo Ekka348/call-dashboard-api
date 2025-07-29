@@ -1,19 +1,23 @@
-from flask import Flask, request, render_template_string, send_file
-import requests, os
+from flask import Flask, request, render_template_string, jsonify
+import requests, os, time
 from datetime import datetime, timedelta
 from collections import Counter
-import pandas as pd
-import time
-from pytz import timezone  # 🕒 для московского времени
+from pytz import timezone
+from bitrix_utils import get_leads_by_status, get_total_leads_from_bitrix
+from bitrix24 import Bitrix24
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+bx24 = Bitrix24(HOOK)
+
 STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
     "Перезвонить": "IN_PROCESS",
     "Приглашен к рекрутеру": "CONVERTED"
 }
+
+TRACKED_STATUSES = ["NEW", "11", "UC_VTOOIM"]
 
 user_cache = {"data": {}, "last": 0}
 
@@ -66,41 +70,10 @@ def ping(): return {"status": "ok"}
 @app.route("/clock")
 def clock():
     tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
     return {
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
+        "moscow": datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S"),
+        "utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     }
-
-@app.route("/daily")
-def daily():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
-
-    if not leads:
-        return render_template_string(f"""
-        <html><body>
-        <h2>📭 Нет лидов по стадии: {label} за {rtype.upper()}</h2>
-        <p>Фильтр: c {start} по {end} (московское время)</p>
-        </body></html>
-        """)
-
-    stats = Counter()
-    for l in leads:
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
-    rows = [f"<tr><td>{users.get(uid, uid)}</td><td>{cnt}</td></tr>" for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])]
-    return render_template_string(f"""
-    <html><body>
-    <h2>📊 Стадия: {label} — {rtype.upper()}</h2>
-    <table border="1" cellpadding="6"><tr><th>Сотрудник</th><th>Количество</th></tr>{''.join(rows)}</table>
-    <p>Всего лидов: {sum(stats.values())}</p></body></html>
-    """)
 
 @app.route("/compare")
 def compare():
@@ -109,9 +82,8 @@ def compare():
     tz = timezone("Europe/Moscow")
     now = datetime.now(tz)
     today_s, today_e = get_range_dates("today")
-    yesterday = now - timedelta(days=1)
-    y_start = yesterday.strftime("%Y-%m-%d 00:00:00")
-    y_end = yesterday.strftime("%Y-%m-%d 23:59:59")
+    y_start = (now - timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
+    y_end = (now - timedelta(days=1)).strftime("%Y-%m-%d 23:59:59")
     users = load_users()
 
     today_stats = Counter()
@@ -146,33 +118,22 @@ def debug():
     stage = STAGE_LABELS.get(label, label)
     start, end = get_range_dates(rtype)
 
-    leads = fetch_leads(stage, start, end)
-    chunk = leads[:10]
-
-    rows = []
-    for l in chunk:
-        rows.append(f"""
-        <tr>
-          <td>{l.get("ID")}</td>
-          <td>{l.get("STATUS_ID")}</td>
-          <td>{l.get("ASSIGNED_BY_ID", "Нет")}</td>
-          <td>{l.get("DATE_CREATE", "—")}</td>
-          <td>{l.get("DATE_MODIFY", "—")}</td>
-        </tr>
-        """)
-
-    html = f"""
+    leads = fetch_leads(stage, start, end)[:10]
+    rows = [
+        f"<tr><td>{l.get('ID')}</td><td>{l.get('STATUS_ID')}</td><td>{l.get('ASSIGNED_BY_ID', 'Нет')}</td><td>{l.get('DATE_CREATE', '—')}</td><td>{l.get('DATE_MODIFY', '—')}</td></tr>"
+        for l in leads
+    ]
+    return render_template_string(f"""
     <html><body>
     <h2>🔍 DEBUG: первые лиды со стадии {label}</h2>
-    <p>Фильтр: c {start} по {end} (московское время)</p>
+    <p>Фильтр: c {start} по {end}</p>
     <table border="1" cellpadding="6">
       <tr><th>ID</th><th>STATUS_ID</th><th>Сотрудник</th><th>Создан</th><th>Изменён</th></tr>
       {''.join(rows)}
     </table>
     <p>Всего лидов: {len(leads)}</p>
     </body></html>
-    """
-    return render_template_string(html)
+    """)
 
 @app.route("/stats_data")
 def stats_data():
@@ -188,31 +149,33 @@ def stats_data():
         uid = lead.get("ASSIGNED_BY_ID")
         if uid: stats[int(uid)] += 1
 
-    labels = [users.get(uid, str(uid)) for uid, _ in stats.items()]
-    values = [cnt for _, cnt in stats.items()]
-
     return {
-        "labels": labels,
-        "values": values,
-        "total": sum(values),
+        "labels": [users.get(uid, str(uid)) for uid in stats],
+        "values": [stats[uid] for uid in stats],
+        "total": sum(stats.values()),
         "stage": label,
         "range": rtype
     }
 
-@app.route("/daily")
-def get_daily():
-    label = request.args.get("label")
-    range = request.args.get("range")
+@app.route("/daily_json")
+def daily_json():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "today")
+    start, end = get_range_dates(rtype)
+    stage = STAGE_LABELS.get(label, label)
+    leads = fetch_leads(stage, start, end)
+    return jsonify({"count": len(leads)})
 
-    if label == "total":
-        # Получаем общее количество лидов из Bitrix
-        total = get_total_leads_from_bitrix(range)
-        return jsonify({"total": total})
-    
+@app.route("/leads_by_status_today")
+def leads_by_status_today():
+    stats = get_leads_by_status(bx24, TRACKED_STATUSES)
+    return jsonify(stats)
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
 
