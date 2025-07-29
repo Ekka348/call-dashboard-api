@@ -157,7 +157,57 @@ def api_leads_stages():
         results.append({"name": name, "count": len(leads)})
     return jsonify({"stages": results})
 
+@app.route("/api/leads/ndz-by-operator")
+def api_ndz_by_operator():
+    rtype = request.args.get("range", "today")
+    start, end = get_range_dates(rtype)
+    users = load_users()
+    leads = fetch_leads(STAGE_LABELS["НДЗ"], start, end)
 
+    stats = Counter()
+    for lead in leads:
+        uid = lead.get("ASSIGNED_BY_ID")
+        if uid: stats[int(uid)] += 1
+
+    result = [
+        {"name": users.get(uid, f"ID {uid}"), "count": cnt}
+        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+    ]
+    return jsonify({"range": rtype, "total": sum(stats.values()), "items": result})
+
+@app.route("/ndz-table")
+def ndz_table():
+    rtype = request.args.get("range", "today")
+    start, end = get_range_dates(rtype)
+    users = load_users()
+    leads = fetch_leads(STAGE_LABELS["НДЗ"], start, end)
+
+    if not leads:
+        return render_template_string(f"""
+        <html><body>
+        <h2>📭 Нет лидов в НДЗ за {rtype.upper()}</h2>
+        </body></html>
+        """)
+
+    stats = Counter()
+    for l in leads:
+        uid = l.get("ASSIGNED_BY_ID")
+        if uid: stats[int(uid)] += 1
+
+    rows = "".join([
+        f"<tr><td>{users.get(uid, uid)}</td><td>{cnt}</td></tr>"
+        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+    ])
+    return render_template_string(f"""
+    <html><body>
+    <h2>📊 Лиды в стадии НДЗ — {rtype.upper()}</h2>
+    <p>Период: с {start} по {end} (MSK)</p>
+    <table border="1" cellpadding="6">
+      <tr><th>Оператор</th><th>Количество лидов</th></tr>
+      {rows}
+    </table>
+    </body></html>
+    """)
 
 
 @app.route("/")
