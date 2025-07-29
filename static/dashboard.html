@@ -1,149 +1,50 @@
-<!-- 🔶 HTML-информационный блок для OLD лидов -->
-<div id="info_old" style="padding:10px; background:#ffeeba; border-radius:6px; font-weight:bold; margin-bottom:10px;">
-  👴 OLD лиды: <span id="old_count">⏳ Загрузка...</span>
-</div>
-
-<!-- 🔷 Таблицы для отчётов -->
-<div id="report_ndz"></div>
-<div id="report_ndz2"></div>
-<div id="report_call"></div>
-<div id="report_recruiter"></div>
-
-<!-- 🔻 Статус загрузки -->
-<div id="spinner" style="display:none;"></div>
-<div id="lastupdate"></div>
-
-<script>
-function showStageLoading(stage) {
-  const spinner = document.getElementById("spinner");
-  spinner.style.display = "block";
-  spinner.innerText = `🔄 Обновляем: ${stage}`;
-}
-
-function showWarning(msg = "⚠️ Выберите период") {
-  const spinner = document.getElementById("spinner");
-  spinner.style.display = "block";
-  spinner.innerText = msg;
-}
-
-function hideLoading(success = true) {
-  const now = new Date().toLocaleTimeString();
-  const update = document.getElementById("lastupdate");
-  update.style.color = success ? "#28a745" : "red";
-  update.innerText = success
-    ? `✅ Последнее обновление: ${now}`
-    : `❌ Ошибка обновления`;
-  document.getElementById("spinner").style.display = "none";
-}
-
-function getDateParams() {
-  const range = document.getElementById("range").value;
-  let params = `range=${range}`;
-  if (range === "custom") {
-    const start = document.getElementById("startdate").value;
-    const end = document.getElementById("enddate").value;
-    if (start && end) {
-      params += `&start=${start}&end=${end}`;
-    } else {
-      return null;
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Лиды по стадиям</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f6f6f6;
+      padding: 20px;
     }
-  }
-  return params;
-}
-
-async function loadStatsFor(stage, targetId) {
-  try {
-    showStageLoading(stage);
-    const params = getDateParams();
-    if (!params) {
-      showWarning();
-      return;
+    h1 {
+      margin-bottom: 20px;
     }
-    const res = await fetch(`/stats_data?label=${encodeURIComponent(stage)}&${params}`);
-    const data = await res.json();
-    renderMiniTable(data, targetId);
-  } catch {
-    document.getElementById(targetId).innerHTML =
-      `<p>❌ Ошибка загрузки для стадии "${stage}"</p>`;
-  }
-}
-
-function renderMiniTable(data, targetId) {
-  if (!data.labels || !data.values) {
-    document.getElementById(targetId).innerHTML = "<p>Нет данных для отображения</p>";
-    return;
-  }
-
-  const sorted = data.labels.map((name, i) => ({
-    name,
-    count: data.values[i]
-  })).sort((a, b) => b.count - a.count);
-
-  let html = `<h4>📋 ${data.stage}</h4>`;
-  html += `<p>Всего лидов: ${data.total}</p><table><tr><th>Сотрудник</th><th>Лидов</th></tr>`;
-  for (const row of sorted) {
-    html += `<tr><td>${row.name}</td><td>${row.count}</td></tr>`;
-  }
-  html += `</table>`;
-  document.getElementById(targetId).innerHTML = html;
-}
-
-async function loadSummaryVV() {
-  try {
-    const params = getDateParams();
-    if (!params) {
-      return;
+    .block {
+      background: #fff;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.08);
     }
-    const res = await fetch("/summary_vv?" + params);
-    const data = await res.json();
-    console.log("База ВВ:", data.count); // можно вывести в консоль или добавить блок
-  } catch {
-    console.error("Ошибка загрузки summary_vv");
-  }
-}
-
-async function loadSummaryOLD() {
-  try {
-    const params = getDateParams();
-    if (!params) {
-      document.getElementById("old_count").innerText = "⏳ Укажите период";
-      return;
+    .block span {
+      font-weight: bold;
+      color: #444;
     }
-    const res = await fetch("/summary_old?" + params);
-    const data = await res.json();
-    document.getElementById("old_count").innerText = data.count ?? "Нет данных";
-  } catch {
-    document.getElementById("old_count").innerText = "❌ Ошибка загрузки";
-  }
-}
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+  </style>
+  <script src="stages.js" defer></script>
+</head>
+<body>
+  <h1>📊 Дашборд лидов Bitrix24</h1>
 
-async function updateLoop() {
-  const params = getDateParams();
-  if (!params) {
-    showWarning();
-    return setTimeout(updateLoop, 1000);
-  }
+  <div class="block">👴 OLD лиды: <span id="old_count">⏳</span></div>
 
-  await loadStatsFor("НДЗ", "report_ndz");
-  await loadStatsFor("НДЗ 2", "report_ndz2");
-  await loadStatsFor("Перезвонить", "report_call");
-  await loadStatsFor("Приглашен к рекрутеру", "report_recruiter");
-  await loadSummaryVV();
-  await loadSummaryOLD(); // ✅ исправлено
+  <div class="block">
+    <h2>📋 Все стадии из Bitrix</h2>
+    <ul id="stage_list">⏳ Загрузка...</ul>
+  </div>
 
-  hideLoading(true);
-  requestAnimationFrame(() => setTimeout(updateLoop, 100));
-}
-
-function attachReactiveListeners() {
-  ["range", "startdate", "enddate"].forEach(id => {
-    document.getElementById(id).onchange = () => updateLoop();
-  });
-}
-
-window.onload = () => {
-  attachReactiveListeners();
-  updateLoop();
-};
-</script>
-
+  <footer style="color:#888;">
+    <p>Данные обновляются при загрузке страницы. Таймзона — Москва.</p>
+  </footer>
+</body>
+</html>
