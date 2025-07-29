@@ -62,14 +62,13 @@ fetch("/api/leads/info-stages-today")
 
 
 async function fetchStageCount(stageCode) {
-  const params = getDateParams();
   const res = await fetch("/api/leads/by-stage");
-const data = await res.json();
-return data.data?.[stageCode]?.count ?? 0;
-
   const data = await res.json();
-  return data.count ?? 0;
+
+  const stageLabel = STAGE_LABELS[stageCode];
+  return data.data?.[stageLabel]?.count ?? 0;
 }
+
 
 async function loadFixedStages() {
   const stages = Object.entries(STAGES);
