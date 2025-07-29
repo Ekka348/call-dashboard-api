@@ -1,4 +1,5 @@
-from flask import Flask, request, render_template_string, send_file
+from flask import Flask, request, render_template_string, send_file, jsonify
+
 import requests, os
 from datetime import datetime, timedelta
 from collections import Counter
