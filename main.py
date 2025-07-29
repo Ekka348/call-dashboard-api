@@ -113,30 +113,6 @@ def compare():
     </body></html>
     """)
 
-@app.route("/debug")
-def debug():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-
-    leads = fetch_leads(stage, start, end)[:10]
-    rows = [
-        f"<tr><td>{l.get('ID')}</td><td>{l.get('STATUS_ID')}</td><td>{l.get('ASSIGNED_BY_ID', 'Нет')}</td><td>{l.get('DATE_CREATE', '—')}</td><td>{l.get('DATE_MODIFY', '—')}</td></tr>"
-        for l in leads
-    ]
-    return render_template_string(f"""
-    <html><body>
-    <h2>🔍 DEBUG: первые лиды со стадии {label}</h2>
-    <p>Фильтр: c {start} по {end}</p>
-    <table border="1" cellpadding="6">
-      <tr><th>ID</th><th>STATUS_ID</th><th>Сотрудник</th><th>Создан</th><th>Изменён</th></tr>
-      {''.join(rows)}
-    </table>
-    <p>Всего лидов: {len(leads)}</p>
-    </body></html>
-    """)
-
 @app.route("/stats_data")
 def stats_data():
     label = request.args.get("label", "НДЗ")
@@ -170,9 +146,9 @@ def daily_json():
 
 @app.route("/leads_by_status_today")
 def leads_by_status_today():
-    stats = get_leads_by_status(bx24, TRACKED_STATUSES)
+    stats = get_leads_by_status(HOOK, TRACKED_STATUSES)
     return jsonify(stats)
-
+)
 # 🔑 Вебхук Bitrix24: замени на свой
 url = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
