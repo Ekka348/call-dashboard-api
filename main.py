@@ -272,8 +272,26 @@ def export_csv():
 
 @app.route("/api/leads/by-operator-today")
 def leads_by_operator_today():
-    ...
+    start, end = get_range_dates("today")
+    users = load_users()
+    result = {}
+
+    for label, stage in STAGE_LABELS.items():
+        leads = fetch_leads(stage, start, end)
+        stats = Counter()
+        for l in leads:
+            uid = l.get("ASSIGNED_BY_ID")
+            if uid: stats[int(uid)] += 1
+
+        operators = [
+            {"name": users.get(uid, f"ID {uid}"), "count": cnt}
+            for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+        ]
+
+        result[label] = operators
+
     return {"range": "today", "data": result}
+
 
 
 @app.route("/")
