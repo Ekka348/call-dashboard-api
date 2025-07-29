@@ -5,7 +5,7 @@ from collections import Counter
 import pandas as pd
 import time
 from pytz import timezone  # 🕒 для московского времени
-
+from flask import render_template
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
@@ -163,7 +163,8 @@ def api_leads_stages():
 
 
 @app.route("/")
-def home(): return app.send_static_file("dashboard.html")
+def home():
+    return render_template("dashboard.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
