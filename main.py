@@ -296,6 +296,17 @@ def leads_by_operator_today():
 
     return {"range": "today", "data": result}
 
+@app.route("/api/leads/info-stages-today")
+def info_stages_today():
+    start, end = get_range_dates("today")
+    result = []
+
+    for name in ["NEW", "OLD", "База ВВ"]:
+        stage = STAGE_LABELS[name]
+        leads = fetch_leads(stage, start, end)
+        result.append({"name": name, "count": len(leads)})
+
+    return {"range": "today", "info": result}
 
 
 @app.route("/")
