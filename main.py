@@ -143,40 +143,7 @@ def compare():
     </body></html>
     """)
 
-@app.route("/debug")
-def debug():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
 
-    leads = fetch_leads(stage, start, end)
-    chunk = leads[:10]
-
-    rows = []
-    for l in chunk:
-        rows.append(f"""
-        <tr>
-          <td>{l.get("ID")}</td>
-          <td>{l.get("STATUS_ID")}</td>
-          <td>{l.get("ASSIGNED_BY_ID", "Нет")}</td>
-          <td>{l.get("DATE_CREATE", "—")}</td>
-          <td>{l.get("DATE_MODIFY", "—")}</td>
-        </tr>
-        """)
-
-    html = f"""
-    <html><body>
-    <h2>🔍 DEBUG: первые лиды со стадии {label}</h2>
-    <p>Фильтр: c {start} по {end} (московское время)</p>
-    <table border="1" cellpadding="6">
-      <tr><th>ID</th><th>STATUS_ID</th><th>Сотрудник</th><th>Создан</th><th>Изменён</th></tr>
-      {''.join(rows)}
-    </table>
-    <p>Всего лидов: {len(leads)}</p>
-    </body></html>
-    """
-    return render_template_string(html)
 
 @app.route("/stats_data")
 def stats_data():
@@ -205,7 +172,7 @@ def stats_data():
 
 @app.route("/summary_old")
 def summary_old():
-    stage = STAGE_LABELS.get("База ВВ", "UC_VTOOIM")
+    stage = STAGE_LABELS.get("OLD", "UC_VTOOIM")
     leads = fetch_leads(stage, "2020-01-01 00:00:00", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     return jsonify({"count": len(leads)})
