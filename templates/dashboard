@@ -1,1 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Статистика лидов Bitrix</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    .block {
+      background: #fff;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stage-name {
+      font-weight: bold;
+    }
+    ul {
+      padding-left: 0;
+      list-style: none;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+  </style>
+  <script src="stages.js" defer></script>
+</head>
+<body>
+  <h1>📊 Лиды по стадиям Bitrix24</h1>
 
+  <div class="block">
+    <ul id="fixed_stage_list">
+      <li>⏳ Загрузка данных...</li>
+    </ul>
+  </div>
+
+  <footer style="color:#888;">
+    <p>Источник: Bitrix24 через заданный хук. Стадии — динамически загружаются через API.</p>
+  </footer>
+
+  <script>
+    document.addEvent
