@@ -4,7 +4,7 @@ from bitrix24 import Bitrix24  # Предположим, используешь 
 app = Flask(__name__)
 
 # Конфигурация Bitrix
-bx24 = Bitrix24('https://your.bitrix24.ru', 'WEBHOOK_KEY')
+bx24 = Bitrix24('https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/, 'WEBHOOK_KEY')
 
 # Список отслеживаемых статусов
 TRACKED_STATUSES = ['NEW', '11', 'UC_VTOOIM']
