@@ -203,13 +203,15 @@ def stats_data():
         "range": rtype
     }
 
+
+
 @app.route("/summary_vv")
 def summary_vv():
-    rtype = request.args.get("range", "today")
     stage = STAGE_LABELS.get("База ВВ", "UC_VTOOIM")
-    start, end = get_range_dates(rtype)
-    leads = fetch_leads(stage, start, end)
+    leads = fetch_all_leads(stage)  # без фильтра по дате
     return jsonify({"count": len(leads)})
+
+
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
