@@ -50,37 +50,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
  function renderStages(stages) {
-  const stagesContainer = document.getElementById('fixed_stage_list');
-  stagesContainer.innerHTML = '';
+  const container = document.getElementById('fixed_stage_list');
+  container.innerHTML = '';
 
   const infoStages = ['NEW', 'OLD', 'База ВВ'];
   const workStages = ['НДЗ', 'НДЗ 2', 'Перезвонить', 'Приглашен к рекрутеру'];
 
-  // 🔷 Верхний блок — “информационные”
+  // 🔷 Инфо-блок единым списком
   const infoBlock = document.createElement('div');
-  infoBlock.classList.add('block');
+  infoBlock.className = 'block';
   infoBlock.innerHTML = '<h3>🗂️ Инфо-стадии</h3><ul></ul>';
   const infoList = infoBlock.querySelector('ul');
 
-  // 🔶 Нижний блок — “рабочие”
-  const workBlock = document.createElement('div');
-  workBlock.classList.add('block');
-  workBlock.innerHTML = '<h3>⚙️ Рабочие стадии</h3><ul></ul>';
-  const workList = workBlock.querySelector('ul');
+  container.appendChild(infoBlock);
 
+  // 🔶 Рабочие стадии — каждую в отдельный блок
   stages.forEach(stage => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="stage-name">${stage.name}</span>: ${stage.count}`;
-
     if (infoStages.includes(stage.name)) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="stage-name">${stage.name}</span>: ${stage.count}`;
       infoList.appendChild(li);
     } else if (workStages.includes(stage.name)) {
-      workList.appendChild(li);
+      const block = document.createElement('div');
+      block.className = 'block';
+      block.innerHTML = `
+        <h3>📌 ${stage.name}</h3>
+        <p>Количество: <strong>${stage.count}</strong></p>
+      `;
+      container.appendChild(block);
     }
   });
-
-  stagesContainer.appendChild(infoBlock);
-  stagesContainer.appendChild(workBlock);
 }
 
 
