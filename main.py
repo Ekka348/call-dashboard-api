@@ -148,7 +148,7 @@ def daily_json():
 def leads_by_status_today():
     stats = get_leads_by_status(HOOK, TRACKED_STATUSES)
     return jsonify(stats)
-)
+
 
 # 🔑 Вебхук Bitrix24: замени на свой
 url = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
