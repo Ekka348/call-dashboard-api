@@ -6,6 +6,7 @@ from pytz import timezone
 from bitrix_utils import get_leads_by_status, get_total_leads_from_bitrix
 import sys
 print(sys.path)
+from bitrix_utils import get_total_leads_from_bitrix, get_stats_summary, get_leads_data
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
