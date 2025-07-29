@@ -1,11 +1,10 @@
-from flask import Flask, request, render_template_string, send_file, jsonify
+from flask import Flask, request, render_template_string, send_file
 import requests, os
 from datetime import datetime, timedelta
 from collections import Counter
 import pandas as pd
 import time
 from pytz import timezone  # 🕒 для московского времени
-from flask import render_template
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
@@ -13,10 +12,7 @@ STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
     "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED",
-    "NEW": "NEW",
-    "OLD": "11",
-    "База ВВ": "UC_VTOOIM"
+    "Приглашен к рекрутеру": "CONVERTED"
 }
 
 user_cache = {"data": {}, "last": 0}
@@ -106,6 +102,78 @@ def daily():
     <p>Всего лидов: {sum(stats.values())}</p></body></html>
     """)
 
+@app.route("/compare")
+def compare():
+    label = request.args.get("label", "НДЗ")
+    stage = STAGE_LABELS.get(label, label)
+    tz = timezone("Europe/Moscow")
+    now = datetime.now(tz)
+    today_s, today_e = get_range_dates("today")
+    yesterday = now - timedelta(days=1)
+    y_start = yesterday.strftime("%Y-%m-%d 00:00:00")
+    y_end = yesterday.strftime("%Y-%m-%d 23:59:59")
+    users = load_users()
+
+    today_stats = Counter()
+    for l in fetch_leads(stage, today_s, today_e):
+        uid = l.get("ASSIGNED_BY_ID")
+        if uid: today_stats[int(uid)] += 1
+
+    y_stats = Counter()
+    for l in fetch_leads(stage, y_start, y_end):
+        uid = l.get("ASSIGNED_BY_ID")
+        if uid: y_stats[int(uid)] += 1
+
+    rows = []
+    for uid in set(today_stats) | set(y_stats):
+        t, y = today_stats.get(uid, 0), y_stats.get(uid, 0)
+        diff = t - y
+        emoji = "📈" if diff > 0 else ("📉" if diff < 0 else "➖")
+        name = users.get(uid, uid)
+        rows.append(f"<tr><td>{name}</td><td>{y}</td><td>{t}</td><td>{diff}</td><td>{emoji}</td></tr>")
+    return render_template_string(f"""
+    <html><body>
+    <h2>🔁 Сравнение: {label}</h2>
+    <table border="1" cellpadding="6">
+    <tr><th>Сотрудник</th><th>Вчера</th><th>Сегодня</th><th>Разница</th><th></th></tr>{''.join(rows)}</table>
+    </body></html>
+    """)
+
+@app.route("/debug")
+def debug():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "today")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
+
+    leads = fetch_leads(stage, start, end)
+    chunk = leads[:10]
+
+    rows = []
+    for l in chunk:
+        rows.append(f"""
+        <tr>
+          <td>{l.get("ID")}</td>
+          <td>{l.get("STATUS_ID")}</td>
+          <td>{l.get("ASSIGNED_BY_ID", "Нет")}</td>
+          <td>{l.get("DATE_CREATE", "—")}</td>
+          <td>{l.get("DATE_MODIFY", "—")}</td>
+        </tr>
+        """)
+
+    html = f"""
+    <html><body>
+    <h2>🔍 DEBUG: первые лиды со стадии {label}</h2>
+    <p>Фильтр: c {start} по {end} (московское время)</p>
+    <table border="1" cellpadding="6">
+      <tr><th>ID</th><th>STATUS_ID</th><th>Сотрудник</th><th>Создан</th><th>Изменён</th></tr>
+      {''.join(rows)}
+    </table>
+    <p>Всего лидов: {len(leads)}</p>
+    </body></html>
+    """
+    return render_template_string(html)
+
 @app.route("/stats_data")
 def stats_data():
     label = request.args.get("label", "НДЗ")
@@ -131,90 +199,84 @@ def stats_data():
         "range": rtype
     }
 
-@app.route("/summary_old")
-def summary_old():
-    stage = STAGE_LABELS.get("OLD", "UC_VTOOIM")
-    leads = fetch_leads(stage, "2020-01-01 00:00:00", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-    return jsonify({"count": len(leads)})
-
-@app.route("/summary_stage")
-def summary_stage():
-    stage = request.args.get("stage")
-    start = request.args.get("start", "2020-01-01 00:00:00")
-    end = request.args.get("end", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    if not stage:
-        return jsonify({"count": 0})
+@app.route("/trend")
+def trend():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "week")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
     leads = fetch_leads(stage, start, end)
-    return jsonify({"count": len(leads)})
 
-@app.route("/api/leads/stages")
-def api_leads_stages():
-    start, end = get_range_dates("today")  # 💡 используем текущий день
-    results = []
-    for name, stage in STAGE_LABELS.items():
-        leads = fetch_leads(stage, start, end)
-        results.append({"name": name, "count": len(leads)})
-    return jsonify({"stages": results})
-
-@app.route("/api/leads/ndz-by-operator")
-def api_ndz_by_operator():
-    rtype = request.args.get("range", "today")
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(STAGE_LABELS["НДЗ"], start, end)
-
-    stats = Counter()
+    daily = Counter()
     for lead in leads:
-        uid = lead.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
+        date_str = lead.get("DATE_CREATE", "")[:10]
+        if date_str: daily[date_str] += 1
 
-    result = [
-        {"name": users.get(uid, f"ID {uid}"), "count": cnt}
-        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-    ]
-    return jsonify({"range": rtype, "total": sum(stats.values()), "items": result})
+    sorted_days = sorted(daily)
+    values = [daily[d] for d in sorted_days]
 
-@app.route("/ndz-table")
-def ndz_table():
-    rtype = request.args.get("range", "today")
+    return {
+        "stage": label,
+        "range": rtype,
+        "labels": sorted_days,
+        "values": values
+    }
+
+@app.route("/compare_stages")
+def compare_stages():
+    s1 = request.args.get("stage1", "НДЗ")
+    s2 = request.args.get("stage2", "НДЗ 2")
+    rtype = request.args.get("range", "week")
     start, end = get_range_dates(rtype)
     users = load_users()
-    leads = fetch_leads(STAGE_LABELS["НДЗ"], start, end)
 
-    if not leads:
-        return render_template_string(f"""
-        <html><body>
-        <h2>📭 Нет лидов в НДЗ за {rtype.upper()}</h2>
-        </body></html>
-        """)
+    def get_count(stage_label):
+        stage = STAGE_LABELS.get(stage_label, stage_label)
+        leads = fetch_leads(stage, start, end)
+        return sum(1 for l in leads if l.get("ASSIGNED_BY_ID"))
+
+    return {
+        "stage1": s1,
+        "count1": get_count(s1),
+        "stage2": s2,
+        "count2": get_count(s2),
+        "range": rtype
+    }
+
+@app.route("/export_csv")
+def export_csv():
+    label = request.args.get("label", "НДЗ")
+    rtype = request.args.get("range", "week")
+    stage = STAGE_LABELS.get(label, label)
+    start, end = get_range_dates(rtype)
+    users = load_users()
+    leads = fetch_leads(stage, start, end)
 
     stats = Counter()
     for l in leads:
         uid = l.get("ASSIGNED_BY_ID")
         if uid: stats[int(uid)] += 1
 
-    rows = "".join([
-        f"<tr><td>{users.get(uid, uid)}</td><td>{cnt}</td></tr>"
-        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-    ])
-    return render_template_string(f"""
-    <html><body>
-    <h2>📊 Лиды в стадии НДЗ — {rtype.upper()}</h2>
-    <p>Период: с {start} по {end} (MSK)</p>
-    <table border="1" cellpadding="6">
-      <tr><th>Оператор</th><th>Количество лидов</th></tr>
-      {rows}
-    </table>
-    </body></html>
-    """)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Сотрудник", "Количество"])
+    for uid, cnt in stats.items():
+        writer.writerow([users.get(uid, str(uid)), cnt])
+
+    mem = io.BytesIO()
+    mem.write(output.getvalue().encode("utf-8"))
+    mem.seek(0)
+
+    fname = f"{label}_{rtype}_stats.csv"
+    return send_file(mem, mimetype="text/csv", as_attachment=True, download_name=fname)
+
 
 
 @app.route("/")
-def home():
-    return render_template("dashboard.html")
+def home(): return app.send_static_file("dashboard.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
 
 
