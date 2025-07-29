@@ -67,15 +67,19 @@ function renderMiniTable(data, targetId) {
 
 async function loadSummaryVV() {
   try {
-    const res = await fetch("/summary_vv");
+    const params = getDateParams();
+    if (!params) {
+      document.getElementById("vv_count").innerText = "⏳ Укажите период";
+      return;
+    }
+    const res = await fetch("/summary_vv?" + params);
     const data = await res.json();
-    document.getElementById("summary_vv_block").innerHTML =
-      `<h4>📦 База ВВ</h4><p>Всего лидов: <strong>${data.count}</strong></p>`;
+    document.getElementById("vv_count").innerText = data.count ?? "Нет данных";
   } catch {
-    document.getElementById("summary_vv_block").innerHTML =
-      `<p>❌ Ошибка загрузки Базы ВВ</p>`;
+    document.getElementById("vv_count").innerText = "❌ Ошибка загрузки";
   }
 }
+
 
 async function updateLoop() {
   const params = getDateParams();
