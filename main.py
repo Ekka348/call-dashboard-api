@@ -12,8 +12,12 @@ STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
     "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED"
+    "Приглашен к рекрутеру": "CONVERTED",
+    "NEW": "NEW",
+    "OLD": "UC_VTOOIM",
+    "База ВВ": "11"
 }
+
 
 user_cache = {"data": {}, "last": 0}
 
