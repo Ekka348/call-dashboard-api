@@ -8,6 +8,19 @@ const STAGES = {
   "База ВВ": "UC_VTOOIM"
 };
 
+function groupLeadsByStageAndUser(leads) {
+  const workStages = ['НДЗ', 'НДЗ 2', 'Перезвонить', 'Приглашен к рекрутеру'];
+  const result = {};
+
+  workStages.forEach(stage => result[stage] = {});
+
+  leads.forEach(lead => {
+    const stage = lead.STAGE_ID;
+    const user = lead.ASSIGNED_BY_ID;
+
+    if (workStages.includes(stage)) {
+      if (!result[stage]
+
 function getDateParams() {
   const now = new Date().toISOString().slice(0, 19).replace("T", " ");
   return `start=2020-01-01 00:00:00&end=${encodeURIComponent(now)}`;
