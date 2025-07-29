@@ -5,6 +5,8 @@ from collections import Counter
 from pytz import timezone
 from bitrix_utils import get_leads_by_status, get_total_leads_from_bitrix
 from bitrix24 import Bitrix24
+import sys
+print(sys.path)
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
