@@ -1,13 +1,12 @@
-from flask import Flask, request, render_template_string, send_file
-import requests, os
+from flask import Flask, request, render_template_string
+import requests, os, time
 from datetime import datetime, timedelta
 from collections import Counter
-import pandas as pd
-import time
 from pytz import timezone  # 🕒 для московского времени
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+
 STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
@@ -19,33 +18,6 @@ STAGE_LABELS = {
 }
 
 GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
-
-@app.route("/api/leads/by-stage")
-def leads_by_stage():
-    start, end = get_range_dates("today")
-    users = load_users()  # 👈 обязательно добавь эту строку
-    data = {}
-
-    for name, stage_id in STAGE_LABELS.items():
-        leads = fetch_leads(stage_id, start, end)
-
-        if name in GROUPED_STAGES:
-            data[name] = {"grouped": True, "count": len(leads)}
-        else:
-            # 🔧 Вот сюда вставляется фиксированный блок:
-            stats = Counter()
-            for lead in leads:
-                uid = lead.get("ASSIGNED_BY_ID")
-                if uid: stats[int(uid)] += 1
-
-            details = [
-                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-            ]
-
-            data[name] = {"grouped": False, "details": details}
-
-    return {"range": "today", "data": data}
 
 user_cache = {"data": {}, "last": 0}
 
@@ -92,6 +64,58 @@ def fetch_leads(stage, start, end):
     except Exception: pass
     return leads
 
+def fetch_all_leads(stage):
+    leads, offset = [], 0
+    try:
+        while True:
+            r = requests.post(HOOK + "crm.lead.list.json", json={
+                "filter": {"STATUS_ID": stage},
+                "select": ["ID"],
+                "start": offset
+            }, timeout=10).json()
+            page = r.get("result", [])
+            if not page: break
+            leads.extend(page)
+            offset = r.get("next", 0)
+            if not offset: break
+    except Exception: pass
+    return leads
+
+@app.route("/api/leads/by-stage")
+def leads_by_stage():
+    start, end = get_range_dates("today")
+    users = load_users()
+    data = {}
+
+    for name, stage_id in STAGE_LABELS.items():
+        if name in GROUPED_STAGES:
+            leads = fetch_all_leads(stage_id)
+            data[name] = {"grouped": True, "count": len(leads)}
+        else:
+            leads = fetch_leads(stage_id, start, end)
+            stats = Counter()
+            for lead in leads:
+                uid = lead.get("ASSIGNED_BY_ID")
+                if uid: stats[int(uid)] += 1
+
+            details = [
+                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+            ]
+
+            data[name] = {"grouped": False, "details": details}
+
+    return {"range": "today", "data": data}
+
+@app.route("/api/leads/info-stages-today")
+def info_stages_today():
+    result = []
+    for name in GROUPED_STAGES:
+        stage = STAGE_LABELS[name]
+        leads = fetch_all_leads(stage)
+        result.append({"name": name, "count": len(leads)})
+    return {"range": "total", "info": result}
+
 @app.route("/ping")
 def ping(): return {"status": "ok"}
 
@@ -104,95 +128,6 @@ def clock():
         "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
-
-@app.route("/daily")
-def daily():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
-
-    if not leads:
-        return render_template_string(f"""
-        <html><body>
-        <h2>📭 Нет лидов по стадии: {label} за {rtype.upper()}</h2>
-        <p>Фильтр: c {start} по {end} (московское время)</p>
-        </body></html>
-        """)
-
-    stats = Counter()
-    for l in leads:
-        uid = l.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
-    rows = [f"<tr><td>{users.get(uid, uid)}</td><td>{cnt}</td></tr>" for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])]
-    return render_template_string(f"""
-    <html><body>
-    <h2>📊 Стадия: {label} — {rtype.upper()}</h2>
-    <table border="1" cellpadding="6"><tr><th>Сотрудник</th><th>Количество</th></tr>{''.join(rows)}</table>
-    <p>Всего лидов: {sum(stats.values())}</p></body></html>
-    """)
-
-@app.route("/stats_data")
-def stats_data():
-    label = request.args.get("label", "НДЗ")
-    rtype = request.args.get("range", "today")
-    stage = STAGE_LABELS.get(label, label)
-    start, end = get_range_dates(rtype)
-    users = load_users()
-    leads = fetch_leads(stage, start, end)
-
-    stats = Counter()
-    for lead in leads:
-        uid = lead.get("ASSIGNED_BY_ID")
-        if uid: stats[int(uid)] += 1
-
-    labels = [users.get(uid, str(uid)) for uid, _ in stats.items()]
-    values = [cnt for _, cnt in stats.items()]
-
-    return {
-        "labels": labels,
-        "values": values,
-        "total": sum(values),
-        "stage": label,
-        "range": rtype
-    }
-
-@app.route("/api/leads/by-operator-today")
-def leads_by_operator_today():
-    start, end = get_range_dates("today")
-    users = load_users()
-    result = {}
-
-    for label, stage in STAGE_LABELS.items():
-        leads = fetch_leads(stage, start, end)
-        stats = Counter()
-        for l in leads:
-            uid = l.get("ASSIGNED_BY_ID")
-            if uid: stats[int(uid)] += 1
-
-        operators = [
-            {"name": users.get(uid, f"ID {uid}"), "count": cnt}
-            for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-        ]
-
-        result[label] = operators
-
-    return {"range": "today", "data": result}
-
-@app.route("/api/leads/info-stages-today")
-def info_stages_today():
-    start, end = get_range_dates("today")
-    result = []
-
-    for name in ["NEW", "OLD", "База ВВ"]:
-        stage = STAGE_LABELS[name]
-        leads = fetch_leads(stage, start, end)
-        result.append({"name": name, "count": len(leads)})
-
-    return {"range": "today", "info": result}
-
 
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
