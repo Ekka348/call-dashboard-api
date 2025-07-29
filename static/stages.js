@@ -10,24 +10,28 @@ const STAGES = {
 
 function groupLeadsByStageAndUser(leads) {
   const workStages = ['НДЗ', 'НДЗ 2', 'Перезвонить', 'Приглашен к рекрутеру'];
+  const stageByCode = Object.entries(STAGES).reduce((acc, [name, code]) => {
+    acc[code] = name;
+    return acc;
+  }, {});
+
   const result = {};
 
-  workStages.forEach(stage => result[stage] = {});
-
   leads.forEach(lead => {
-    // переводим stageCode обратно в имя стадии
-    const stageName = Object.entries(STAGES).find(([name, code]) => code === lead.STAGE_ID)?.[0];
-    const user = lead.ASSIGNED_BY_ID;
+    const stageName = stageByCode[lead.STAGE_ID];
+    const userId = lead.ASSIGNED_BY_ID;
 
     if (workStages.includes(stageName)) {
-      if (!result[stageName]
+      if (!result[stageName]) result[stageName] = {};
+      if (!result[stageName][userId]) result[stageName][userId] = 0;
 
-async function fetchStageCount(stageCode) {
-  const params = getDateParams();
-  const res = await fetch(`/summary_stage?stage=${encodeURIComponent(stageCode)}&${params}`);
-  const data = await res.json();
-  return data.count ?? 0;
+      result[stageName][userId]++;
+    }
+  });
+
+  return result;
 }
+
 
 async function loadFixedStages() {
   const ul = document.getElementById("fixed_stage_list");
