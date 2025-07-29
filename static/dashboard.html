@@ -15,10 +15,29 @@
   <h1>📊 Статистика по стадиям — сегодня</h1>
   <div id="content">Загрузка...</div>
 
-  <div id="info-block">
+ <div id="info-block">
   <h2>📁 Инфо-стадии (суммарно)</h2>
   <ul id="info-list"><li>Загрузка...</li></ul>
 </div>
+
+<script>
+fetch("/api/leads/info-stages-today")
+  .then(res => res.json())
+  .then(data => {
+    const list = document.getElementById("info-list");
+    list.innerHTML = "";
+    data.info.forEach(stage => {
+      const li = document.createElement("li");
+      li.textContent = `${stage.name}: ${stage.count}`;
+      list.appendChild(li);
+    });
+  })
+  .catch(err => {
+    document.getElementById("info-list").innerHTML =
+      `<li>Ошибка загрузки: ${err}</li>`;
+  });
+</script>
+
 
   <script>
     fetch("/api/leads/by-operator-today")
