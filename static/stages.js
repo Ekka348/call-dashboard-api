@@ -5,8 +5,8 @@ const STAGES = {
   "Перезвонить": "IN_PROCESS",
   "Приглашен к рекрутеру": "CONVERTED",
   "NEW": "NEW",
-  "OLD": "UC_VTOOIM",
-  "База ВВ": "11"
+  "База ВВ": "UC_VTOOIM",
+  "OLD": "11"
 };
 
 const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
