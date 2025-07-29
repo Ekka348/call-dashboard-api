@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, send_file, jsonify
+from flask import Flask, request, render_template_string, jsonify
 import requests, os
 from datetime import datetime, timedelta
 from collections import Counter
@@ -197,10 +197,15 @@ def stats_data():
     labels = [users.get(uid, str(uid)) for uid, _ in stats.items()]
     values = [cnt for _, cnt in stats.items()]
 
-    return 
+    return jsonify({
         "labels": labels,
         "values": values,
-        "total": sum(values),
+        "total": sum(values)
+    })
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
