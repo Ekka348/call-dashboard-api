@@ -23,6 +23,7 @@ GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
     start, end = get_range_dates("today")
+    users = load_users()  # 👈 обязательно добавь эту строку
     data = {}
 
     for name, stage_id in STAGE_LABELS.items():
@@ -31,12 +32,18 @@ def leads_by_stage():
         if name in GROUPED_STAGES:
             data[name] = {"grouped": True, "count": len(leads)}
         else:
-            # Группировка по сотрудникам
-            operators = Counter(lead["ASSIGNED_BY_NAME"] for lead in leads)
-            data[name] = {
-                "grouped": False,
-                "details": [{"operator": op, "count": count} for op, count in operators.items()]
-            }
+            # 🔧 Вот сюда вставляется фиксированный блок:
+            stats = Counter()
+            for lead in leads:
+                uid = lead.get("ASSIGNED_BY_ID")
+                if uid: stats[int(uid)] += 1
+
+            details = [
+                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+            ]
+
+            data[name] = {"grouped": False, "details": details}
 
     return {"range": "today", "data": data}
 
