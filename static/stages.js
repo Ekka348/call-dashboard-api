@@ -9,6 +9,12 @@ const STAGES = {
   "База ВВ": "11"
 };
 
+const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
+  acc[id] = label;
+  return acc;
+}, {});
+
+
 fetch("/api/leads/by-stage")
   .then(res => res.json())
   .then(data => {
