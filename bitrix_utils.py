@@ -19,30 +19,21 @@ def get_range_dates(rtype):
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def get_leads_by_status(bx24, statuses):
-    """
-    Возвращает словарь: статус → количество лидов
-    по каждому из заданных статусных ID
-    """
-    status_counts = {}
-
+def get_leads_by_status(hook_url, statuses):
+    stats = {}
     for status in statuses:
-        try:
-            response = bx24.callMethod("crm.lead.list", {
-                "filter": {
-                    "STATUS_ID": status
-                },
-                "select": ["ID"]
-            })
+        response = requests.post(hook_url + "crm.lead.list.json", json={
+            "filter": {"STATUS_ID": status},
+            "select": ["ID"]
+        }, timeout=10)
 
-            leads = response.get("result", [])
-            status_counts[status] = len(leads)
+        if response.status_code == 200:
+            leads = response.json().get("result", [])
+            stats[status] = len(leads)
+        else:
+            stats[status] = 0
+    return stats
 
-        except Exception as e:
-            print(f"Ошибка при получении лидов по статусу {status}: {e}")
-            status_counts[status] = "error"
-
-    return status_counts
 
 
 def get_total_leads_from_bitrix(bx24, range_type):
