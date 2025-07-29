@@ -33,6 +33,34 @@ async function loadFixedStages() {
   ul.innerHTML = results.join("");
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  const stagesContainer = document.getElementById('fixed_stage_list');
+
+  async function fetchStages() {
+    try {
+      const response = await fetch('/api/leads/stages');
+      if (!response.ok) throw new Error(`Ошибка: ${response.status}`);
+
+      const data = await response.json();
+      renderStages(data.stages);
+    } catch (error) {
+      console.error('Не удалось загрузить стадии:', error);
+      stagesContainer.innerHTML = '<li>⚠️ Ошибка загрузки стадий.</li>';
+    }
+  }
+
+  function renderStages(stages) {
+    stagesContainer.innerHTML = '';
+    stages.forEach(stage => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="stage-name">${stage.name}</span>: ${stage.count}`;
+      stagesContainer.appendChild(li);
+    });
+  }
+
+  fetchStages();
+});
+
 window.onload = () => {
   loadFixedStages();
 };
