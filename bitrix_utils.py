@@ -1,68 +1,82 @@
+import requests
 from datetime import datetime, timedelta
 from pytz import timezone
+from collections import Counter
+
+HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"  # 🔑 Вынеси в .env или передавай извне
+STAGE_LABELS = {
+    "НДЗ": "5",
+    "НДЗ 2": "9",
+    "Перезвонить": "IN_PROCESS",
+    "Приглашен к рекрутеру": "CONVERTED"
+}
 
 def get_range_dates(rtype):
-    """
-    Возвращает временной диапазон (начало и конец) для заданного типа периода:
-    today / week / month
-    """
     tz = timezone("Europe/Moscow")
     now = datetime.now(tz)
-
     if rtype == "week":
         start = now - timedelta(days=now.weekday())
     elif rtype == "month":
         start = now.replace(day=1)
     else:
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
-
-def get_leads_by_status(hook_url, statuses):
-    stats = {}
-    for status in statuses:
-        response = requests.post(hook_url + "crm.lead.list.json", json={
-            "filter": {"STATUS_ID": status},
-            "select": ["ID"]
-        }, timeout=10)
-
-        if response.status_code == 200:
-            leads = response.json().get("result", [])
-            stats[status] = len(leads)
-        else:
-            stats[status] = 0
-    return stats
-
-
-
-def get_total_leads_from_bitrix(bx24, range_type):
-    """
-    Возвращает общее количество лидов за период (today / week / month)
-    """
-    start, end = get_range_dates(range_type)
-    all_leads = []
-    offset = 0
-
+def fetch_leads(stage, start, end):
+    leads, offset = [], 0
     try:
         while True:
-            response = bx24.callMethod("crm.lead.list", {
+            r = requests.post(HOOK + "crm.lead.list.json", json={
                 "filter": {
+                    "STATUS_ID": stage,
                     ">=DATE_MODIFY": start,
                     "<=DATE_MODIFY": end
                 },
-                "select": ["ID"],
+                "select": ["ID", "ASSIGNED_BY_ID", "STATUS_ID", "DATE_MODIFY"],
                 "start": offset
-            })
+            }, timeout=10).json()
+            page = r.get("result", [])
+            if not page: break
+            leads.extend(page)
+            offset = r.get("next", 0)
+            if not offset: break
+    except Exception:
+        pass
+    return leads
 
-            page = response.get("result", [])
-            all_leads.extend(page)
+def get_total_leads_from_bitrix(hook, rtype):
+    start, end = get_range_dates(rtype)
+    stage = STAGE_LABELS.get("НДЗ", "5")  # 💡 можно параметризовать
+    leads = fetch_leads(stage, start, end)
+    return len(leads)
 
-            offset = response.get("next", 0)
-            if not offset:
-                break
+def get_stats_summary(hook, rtype):
+    start, end = get_range_dates(rtype)
+    stage = STAGE_LABELS.get("НДЗ", "5")
+    leads = fetch_leads(stage, start, end)
 
-    except Exception as e:
-        print(f"Ошибка получения общего списка лидов: {e}")
+    stats = Counter()
+    for lead in leads:
+        uid = lead.get("ASSIGNED_BY_ID")
+        if uid: stats[int(uid)] += 1
 
-    return len(all_leads)
+    return {
+        "users": list(stats.keys()),
+        "values": list(stats.values()),
+        "total": sum(stats.values())
+    }
+
+def get_leads_data(hook, rtype):
+    start, end = get_range_dates(rtype)
+    stage = STAGE_LABELS.get("НДЗ", "5")
+    leads = fetch_leads(stage, start, end)
+
+    return [
+        {
+            "id": l.get("ID"),
+            "assigned_to": l.get("ASSIGNED_BY_ID"),
+            "status": l.get("STATUS_ID"),
+            "modified": l.get("DATE_MODIFY")
+        }
+        for l in leads
+    ]
