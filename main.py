@@ -132,5 +132,12 @@ def clock():
 @app.route("/")
 def home(): return app.send_static_file("dashboard.html")
 
+@app.route("/active_operators_list")
+def active_operators_list():
+    operators = get_active_operators()
+    return jsonify(operators)
+
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
