@@ -14,6 +14,18 @@ const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
   return acc;
 }, {});
 
+fetch("/active_operators_list")
+  .then(r => r.json())
+  .then(data => {
+    const box = document.getElementById("active_operators_box");
+    box.innerHTML = "";
+    data.forEach(name => {
+      const item = document.createElement("div");
+      item.textContent = `🟢 ${name}`;
+      box.appendChild(item);
+    });
+  });
+
 
 fetch("/api/leads/by-stage")
   .then(res => res.json())
