@@ -31,7 +31,27 @@ async function updateStage(stageName) {
   }
 }
 
-fetch("/update_stage/Перезвонить?range=week")
+fetch("/update_stage/Перезвонить?range=custom:2025-07-01:2025-07-31")
+
+function fetchStats() {
+  const start = document.getElementById("startDate").value;
+  const end = document.getElementById("endDate").value;
+  if (!start || !end) {
+    alert("Заполни обе даты");
+    return;
+  }
+
+  const rangeParam = `custom:${start}:${end}`;
+  fetch(`/update_stage/Перезвонить?range=${rangeParam}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+    })
+    .catch(err => {
+      document.getElementById("output").textContent = `Ошибка: ${err}`;
+    });
+}
+
 
 window.onload = () => {
   STAGE_LABELS.forEach(updateStage);
