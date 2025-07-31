@@ -1,4 +1,5 @@
 [
-  { "login": "admin", "password": "qwerty123", "role": "admin" },
-  { "login": "operator1", "password": "123456", "role": "operator" }
+  { "login": "admin", "password": "qwerty123", "role": "admin", "name": "Администратор" },
+  { "login": "operator1", "password": "123456", "role": "operator", "name": "Оператор 1" },
+  { "login": "еее", "password": "1675", "role": "operator", "name": "Лидия Лукьянова" }
 ]
