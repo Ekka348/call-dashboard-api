@@ -10,8 +10,9 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev_key")
 
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+GROUPED_STAGES = []  # ⛔ если не используешь агрегированные
 
-# 🔒 Авторизация
+# 🔐 Авторизация
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -70,7 +71,8 @@ def load_users():
                 users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
             if "next" not in r: break
             start = r.get("next")
-    except Exception: pass
+    except Exception as e:
+        print("Ошибка загрузки пользователей:", e)
     user_cache["data"], user_cache["last"] = users, time.time()
     return users
 
@@ -79,7 +81,6 @@ STAGE_LABELS = {
     "Перезвонить": "IN_PROCESS",
     "Приглашен к рекрутеру": "CONVERTED",
 }
-
 
 def fetch_leads(stage, start, end):
     leads, offset = [], 0
@@ -95,7 +96,8 @@ def fetch_leads(stage, start, end):
             leads.extend(page)
             offset = r.get("next", 0)
             if not offset: break
-    except Exception: pass
+    except Exception as e:
+        print("Ошибка загрузки лидов:", e)
     return leads
 
 def fetch_all_leads(stage):
@@ -112,10 +114,10 @@ def fetch_all_leads(stage):
             leads.extend(page)
             offset = r.get("next", 0)
             if not offset: break
-    except Exception: pass
+    except Exception as e:
+        print("Ошибка загрузки всех лидов:", e)
     return leads
 
-# 🔄 Кэш для grouped стадий
 group_cache = {"data": {}, "last": 0}
 def cached_group_count(name, stage_id):
     now = time.time()
@@ -127,19 +129,45 @@ def cached_group_count(name, stage_id):
     return count
 
 def process_stage(name, stage_id, start, end, users):
-    if name in GROUPED_STAGES:
-        return name, {"grouped": True, "count": cached_group_count(name, stage_id)}
-    leads = fetch_leads(stage_id, start, end)
-    stats = Counter()
-    for lead in leads:
-        uid = lead.get("ASSIGNED_BY_ID")
-        if uid:
-            stats[int(uid)] += 1
-    details = [
-        {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-    ]
-    return name, {"grouped": False, "details": details}
+    try:
+        if name in GROUPED_STAGES:
+            return name, {"grouped": True, "count": cached_group_count(name, stage_id)}
+
+        leads = fetch_leads(stage_id, start, end)
+        stats = Counter()
+
+        for lead in leads:
+            uid = lead.get("ASSIGNED_BY_ID")
+            if not uid: continue
+            try:
+                stats[int(uid)] += 1
+            except Exception as e:
+                print("Ошибка при подсчёте UID:", e)
+
+        details = [
+            {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+            for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+        ]
+        return name, {"grouped": False, "details": details}
+    except Exception as e:
+        print(f"Ошибка при обработке стадии '{name}':", e)
+        return name, {"grouped": False, "details": []}
+
+@app.route("/update_stage/<stage_name>")
+@login_required
+def update_stage(stage_name):
+    if stage_name not in STAGE_LABELS:
+        return "Стадия не найдена", 404
+
+    try:
+        start, end = get_range_dates("today")
+        users = load_users()
+        stage_id = STAGE_LABELS[stage_name]
+        name, stage_data = process_stage(stage_name, stage_id, start, end, users)
+        return jsonify({name: stage_data})
+    except Exception as e:
+        print("Ошибка в update_stage:", e)
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
@@ -159,7 +187,8 @@ def leads_by_stage():
     return {"range": "today", "data": data}
 
 @app.route("/ping")
-def ping(): return {"status": "ok"}
+def ping():
+    return {"status": "ok"}
 
 @app.route("/clock")
 def clock():
@@ -170,19 +199,6 @@ def clock():
         "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
-
-@app.route("/update_stage/<stage_name>")
-@login_required
-def update_stage(stage_name):
-    if stage_name not in STAGE_LABELS:
-        return "Стадия не найдена", 404
-
-    start, end = get_range_dates("today")
-    users = load_users()
-    stage_id = STAGE_LABELS[stage_name]
-    name, stage_data = process_stage(stage_name, stage_id, start, end, users)
-    return jsonify({name: stage_data})
-
 
 # 🚀 Старт
 if __name__ == "__main__":
