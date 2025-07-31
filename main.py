@@ -219,7 +219,9 @@ def clock():
     moscow_now = datetime.now(tz)
     utc_now = datetime.utcnow()
     return {
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%
+        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
+        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
+    }
 
 # 🚀 Старт
 if __name__ == "__main__":
