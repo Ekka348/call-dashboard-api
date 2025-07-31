@@ -35,6 +35,7 @@
       margin-bottom: 30px;
       width: 100%;
       max-width: 600px;
+      transition: opacity 0.5s ease;
     }
 
     .stage-columns {
@@ -43,6 +44,7 @@
       gap: 20px;
       justify-content: center;
       width: 100%;
+      transition: opacity 0.5s ease;
     }
 
     .stage-table {
@@ -94,6 +96,10 @@
     strong {
       color: #007bff;
     }
+
+    .fade-out {
+      opacity: 0.3;
+    }
   </style>
 </head>
 <body>
@@ -106,7 +112,7 @@
   
   <h1>📊 Статистика по стадиям — сегодня</h1>
 
-  <p id="update-log">Обновления ещё не начались.</p>
+  <p id="update-log">Обновление ещё не запущено</p>
 
   <div class="info-box" id="stats">
     <p><strong>Загрузка инфо-стадий...</strong></p>
@@ -120,50 +126,53 @@
   </div>
 
   <script>
-    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру", "INFO"];
+    const STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
     const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
-    let stageIndex = 0;
 
     async function fetchData() {
       try {
         const res = await fetch("/api/leads/by-stage");
         return await res.json();
       } catch (e) {
-        console.error("Ошибка при загрузке by-stage", e);
+        console.error("Ошибка при загрузке", e);
         return null;
       }
     }
 
-    function showUpdateStatus(label) {
-      const ts = new Date().toLocaleTimeString("ru-RU");
-      const statusText = `Обновляется: ${label} • ${ts}`;
-      document.getElementById("update-log").textContent = statusText;
+    function fadeOut(targets) {
+      targets.forEach(el => el.classList.add("fade-out"));
     }
 
-    async function updateStageCycle() {
-      const current = STAGE_CYCLE[stageIndex];
-      showUpdateStatus(current);
+    function fadeIn(targets) {
+      targets.forEach(el => el.classList.remove("fade-out"));
+    }
+
+    async function updateDashboard() {
+      const statsBox = document.getElementById("stats");
+      const contentBox = document.getElementById("content");
+
+      fadeOut([statsBox, contentBox]);
 
       const data = await fetchData();
       if (!data || !data.data) return;
 
-      if (current === "INFO") {
-        const statsContainer = document.getElementById("stats");
-        statsContainer.innerHTML = "";
-        INFO_STAGES.forEach(stage => {
-          const value = data.data[stage]?.count ?? 0;
-          const line = document.createElement("p");
-          line.innerHTML = `<strong>${stage}:</strong> ${value}`;
-          statsContainer.appendChild(line);
-        });
-      } else {
-        const info = data.data[current];
-        const block = Array.from(document.getElementById("content").children)
-          .find(el => el.querySelector("h2")?.textContent?.includes(current));
+      // Info stages
+      statsBox.innerHTML = "";
+      INFO_STAGES.forEach(stage => {
+        const value = data.data[stage]?.count ?? 0;
+        const line = document.createElement("p");
+        line.innerHTML = `<strong>${stage}:</strong> ${value}`;
+        statsBox.appendChild(line);
+      });
 
+      // Work stages
+      STAGES.forEach(stage => {
+        const block = Array.from(contentBox.children)
+          .find(el => el.querySelector("h2")?.textContent?.includes(stage));
         if (!block) return;
-        block.innerHTML = `<h2>Стадия: ${current}</h2>`;
 
+        block.innerHTML = `<h2>Стадия: ${stage}</h2>`;
+        const info = data.data[stage];
         if (!info?.details || info.details.length === 0) {
           const empty = document.createElement("p");
           empty.className = "empty-message";
@@ -185,14 +194,16 @@
           table.appendChild(body);
           block.appendChild(table);
         }
-      }
+      });
 
-      stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
-      setTimeout(updateStageCycle, 3000);
+      const ts = new Date().toLocaleTimeString("ru-RU");
+      document.getElementById("update-log").textContent = `Обновлено: ${ts}`;
+
+      fadeIn([statsBox, contentBox]);
     }
 
-    updateStageCycle();
+    updateDashboard();
+    setInterval(updateDashboard, 120000); // 2 мин
   </script>
-
 </body>
 </html>
