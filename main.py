@@ -75,11 +75,11 @@ def load_users():
     return users
 
 STAGE_LABELS = {
-    "НДЗ": "5", "НДЗ 2": "9", "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED", "NEW": "NEW",
-    "OLD": "UC_VTOOIM", "База ВВ": "11"
+    "На согласовании": "UC_A2DF81",
+    "Перезвонить": "IN_PROCESS",
+    "Приглашен к рекрутеру": "CONVERTED",
 }
-GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
+
 
 def fetch_leads(stage, start, end):
     leads, offset = [], 0
