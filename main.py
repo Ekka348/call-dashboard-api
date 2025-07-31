@@ -171,6 +171,19 @@ def clock():
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
 
+@app.route("/update_stage/<stage_name>")
+@login_required
+def update_stage(stage_name):
+    if stage_name not in STAGE_LABELS:
+        return "Стадия не найдена", 404
+
+    start, end = get_range_dates("today")
+    users = load_users()
+    stage_id = STAGE_LABELS[stage_name]
+    name, stage_data = process_stage(stage_name, stage_id, start, end, users)
+    return jsonify({name: stage_data})
+
+
 # 🚀 Старт
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
