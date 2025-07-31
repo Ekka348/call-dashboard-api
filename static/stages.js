@@ -31,6 +31,8 @@ async function updateStage(stageName) {
   }
 }
 
+fetch("/update_stage/Перезвонить?range=week")
+
 window.onload = () => {
   STAGE_LABELS.forEach(updateStage);
 };
