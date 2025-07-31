@@ -2,44 +2,127 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Кандидаты по стадиям</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <script>
-    const STAGES = ["На согласовании", "Перезвонить", "Приглашен к рекрутеру"];
-
-    async function updateStage(stage) {
-      try {
-        const response = await fetch(`/update_stage/${stage}`);
-        if (response.ok) {
-          location.reload();
-        } else {
-          alert("Ошибка при обновлении стадии: " + stage);
-        }
-      } catch (error) {
-        console.error("Ошибка запроса:", error);
-      }
+  <title>ERS: Дашборд лидов</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f9fc;
+      margin: 30px;
     }
-  </script>
+    h2 {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .stage-block {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stage-block h3 {
+      margin-top: 0;
+      font-size: 1.3em;
+    }
+    .refresh-btn {
+      margin-top: 5px;
+      padding: 6px 12px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .refresh-btn:hover {
+      background: #0056b3;
+    }
+    .stage-table {
+      margin-top: 15px;
+      transition: opacity 0.3s;
+    }
+    .stage-table ul {
+      padding-left: 18px;
+      list-style-type: disc;
+    }
+    .stage-table li {
+      margin-bottom: 4px;
+    }
+    .error-msg {
+      color: crimson;
+      font-weight: bold;
+    }
+    .loading {
+      font-style: italic;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-  <h1>📋 Панель кандидатов</h1>
-  <div class="stage-columns" id="content">
-    <div class="stage-table" data-stage="На согласовании">
-      <h2>Стадия: На согласовании</h2>
-      <button class="refresh-btn" onclick="updateStage('На согласовании')">🔄 Обновить</button>
-      <div id="table-На согласовании"></div>
-    </div>
-    <div class="stage-table" data-stage="Перезвонить">
-      <h2>Стадия: Перезвонить</h2>
-      <button class="refresh-btn" onclick="updateStage('Перезвонить')">🔄 Обновить</button>
-      <div id="table-Перезвонить"></div>
-    </div>
-    <div class="stage-table" data-stage="Приглашен к рекрутеру">
-      <h2>Стадия: Приглашен к рекрутеру</h2>
-      <button class="refresh-btn" onclick="updateStage('Приглашен к рекрутеру')">🔄 Обновить</button>
-      <div id="table-Приглашен к рекрутеру"></div>
-    </div>
+
+  <h2>Дашборд по стадиям</h2>
+
+  <div class="stage-block">
+    <h3>Стадия: На согласовании</h3>
+    <button class="refresh-btn" onclick="updateStage('На согласовании')">🔄 Обновить</button>
+    <div id="table-На согласовании" class="stage-table loading">⏳ Загружаем...</div>
   </div>
+
+  <div class="stage-block">
+    <h3>Стадия: Перезвонить</h3>
+    <button class="refresh-btn" onclick="updateStage('Перезвонить')">🔄 Обновить</button>
+    <div id="table-Перезвонить" class="stage-table loading">⏳ Загружаем...</div>
+  </div>
+
+  <div class="stage-block">
+    <h3>Стадия: Приглашен к рекрутеру</h3>
+    <button class="refresh-btn" onclick="updateStage('Приглашен к рекрутеру')">🔄 Обновить</button>
+    <div id="table-Приглашен к рекрутеру" class="stage-table loading">⏳ Загружаем...</div>
+  </div>
+
+  <script>
+    function updateStage(stageName) {
+      const el = document.getElementById("table-" + stageName);
+      el.classList.add("loading");
+      el.innerHTML = "⏳ Обновляем...";
+      el.style.opacity = 0.5;
+
+      fetch("/update_stage/" + encodeURIComponent(stageName))
+        .then(res => {
+          if (!res.ok) throw new Error("Ошибка сервера: " + res.status);
+          return res.json();
+        })
+        .then(data => {
+          const name = Object.keys(data)[0];
+          const stage = data[name];
+          let html = "";
+
+          if (stage.grouped) {
+            html = `<p>Всего лидов: <b>${stage.count}</b></p>`;
+          } else if (!stage.details || stage.details.length === 0) {
+            html = `<p class="error-msg">Нет данных</p>`;
+          } else {
+            html = "<ul>" + stage.details.map(d =>
+              `<li><b>${d.operator}</b>: ${d.count}</li>`
+            ).join("") + "</ul>";
+          }
+
+          el.innerHTML = html;
+          el.classList.remove("loading");
+          el.style.opacity = 1;
+        })
+        .catch(err => {
+          el.innerHTML = `<p class="error-msg">⛔ Ошибка загрузки</p>`;
+          el.classList.remove("loading");
+          el.style.opacity = 1;
+          console.error("Ошибка при обновлении стадии", stageName, err);
+        });
+    }
+
+    // 🚀 Автообновление при загрузке страницы
+    ["На согласовании", "Перезвонить", "Приглашен к рекрутеру"].forEach(updateStage);
+  </script>
+
 </body>
 </html>
 
