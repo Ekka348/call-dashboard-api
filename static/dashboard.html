@@ -74,27 +74,34 @@
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
 
     async function updateStage(stageName) {
-      const response = await fetch(`/update_stage/${stageName}`);
-      const leads = await response.json();
-      const tableDiv = document.getElementById(`table-${stageName}`);
-      tableDiv.innerHTML = '';
+      try {
+        const response = await fetch(`/update_stage/${stageName}`);
+        if (!response.ok) throw new Error(`Ошибка запроса: ${response.status}`);
+        const data = await response.json();
+        const stageData = data[stageName];
+        const tableDiv = document.getElementById(`table-${stageName}`);
+        tableDiv.innerHTML = '';
 
-      if (leads.length === 0) {
-        tableDiv.innerHTML = '<p>Нет данных.</p>';
-        return;
+        if (stageData.grouped) {
+          tableDiv.innerHTML = `<p>Всего лидов: ${stageData.count}</p>`;
+        } else if (stageData.details && stageData.details.length > 0) {
+          const ul = document.createElement('ul');
+          stageData.details.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = `${item.operator} — ${item.count}`;
+            ul.appendChild(li);
+          });
+          tableDiv.appendChild(ul);
+        } else {
+          tableDiv.innerHTML = `<p>Нет данных по кандидатам</p>`;
+        }
+      } catch (err) {
+        console.error(`Ошибка при загрузке стадии "${stageName}":`, err);
+        const tableDiv = document.getElementById(`table-${stageName}`);
+        tableDiv.innerHTML = `<p>Ошибка загрузки данных</p>`;
       }
-
-      const ul = document.createElement('ul');
-      leads.forEach(lead => {
-        const li = document.createElement('li');
-        li.textContent = `${lead.name} (${lead.phone})`;
-        ul.appendChild(li);
-      });
-
-      tableDiv.appendChild(ul);
     }
 
-    // Загрузка данных при старте
     window.onload = () => {
       STAGE_LABELS.forEach(updateStage);
     };
