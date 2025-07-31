@@ -1,163 +1,93 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <title>Dashboard</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    h1 {
-      margin-bottom: 20px;
-    }
-    #update-log {
-      font-style: italic;
-      color: #555;
-      margin-bottom: 10px;
-    }
-    .info-box {
-      background-color: #e8f4ff;
-      padding: 15px;
-      border: 1px solid #b3d8ff;
-      margin-bottom: 30px;
-      max-width: 600px;
-    }
-    .stage-columns {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-    .stage-table {
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 10px;
-      background-color: #f9f9f9;
-      min-width: 250px;
-      flex: 1;
-    }
-    .stage-table h2 {
-      font-size: 16px;
-      margin-bottom: 10px;
-      text-align: center;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      border-bottom: 1px solid #ddd;
-      padding: 6px;
-      text-align: left;
-      font-size: 14px;
-    }
-    th {
-      background-color: #f1f1f1;
-    }
-    .empty-message {
-      font-style: italic;
-      color: #888;
-      text-align: center;
-    }
-  </style>
-</head>
-<body>
+<style>
+  body {
+    background: #f0f2f5;
+    font-family: "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 
-<div id="active_operators_box">
-  <!-- список прилетит сюда -->
-</div>
+  h1 {
+    font-size: 26px;
+    margin-bottom: 25px;
+    color: #333;
+  }
 
-  <div>🟢 Операторов на линии: <strong>5</strong></div>
-  
-  <h1>📊 Статистика по стадиям — сегодня</h1>
+  #update-log {
+    font-style: italic;
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
 
-  <p id="update-log">Обновления ещё не начались.</p>
+  .info-box {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    margin-bottom: 30px;
+    width: 100%;
+    max-width: 600px;
+  }
 
-  <div class="info-box" id="stats">
-    <p><strong>Загрузка инфо-стадий...</strong></p>
-  </div>
+  .stage-columns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    width: 100%;
+  }
 
-  <div class="stage-columns" id="content">
-    <div class="stage-table"><h2>Стадия: НДЗ</h2></div>
-    <div class="stage-table"><h2>Стадия: НДЗ 2</h2></div>
-    <div class="stage-table"><h2>Стадия: Перезвонить</h2></div>
-    <div class="stage-table"><h2>Стадия: Приглашен к рекрутеру</h2></div>
-  </div>
+  .stage-table {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    min-width: 250px;
+    flex: 1 1 300px;
+  }
 
-  <script>
-    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру", "INFO"];
-    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
-    let stageIndex = 0;
+  .stage-table h2 {
+    font-size: 18px;
+    margin-bottom: 12px;
+    text-align: center;
+    color: #0057e7;
+  }
 
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/leads/by-stage");
-        return await res.json();
-      } catch (e) {
-        console.error("Ошибка при загрузке by-stage", e);
-        return null;
-      }
-    }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-    function showUpdateStatus(label) {
-      const ts = new Date().toLocaleTimeString("ru-RU");
-      const statusText = `Обновляется: ${label} • ${ts}`;
-      document.getElementById("update-log").textContent = statusText;
-    }
+  th, td {
+    padding: 8px;
+    text-align: left;
+    font-size: 14px;
+    border-bottom: 1px solid #eee;
+  }
 
-    async function updateStageCycle() {
-      const current = STAGE_CYCLE[stageIndex];
-      showUpdateStatus(current); // ⏳ Обновление стадии
+  th {
+    background-color: #f8f8f8;
+    color: #333;
+  }
 
-      const data = await fetchData();
-      if (!data || !data.data) return;
+  .empty-message {
+    font-style: italic;
+    color: #888;
+    text-align: center;
+    font-size: 14px;
+  }
 
-      if (current === "INFO") {
-        const statsContainer = document.getElementById("stats");
-        statsContainer.innerHTML = "";
-        INFO_STAGES.forEach(stage => {
-          const value = data.data[stage]?.count ?? 0;
-          const line = document.createElement("p");
-          line.innerHTML = `<strong>${stage}:</strong> ${value}`;
-          statsContainer.appendChild(line);
-        });
-      } else {
-        const info = data.data[current];
-        const block = Array.from(document.getElementById("content").children)
-          .find(el => el.querySelector("h2")?.textContent?.includes(current));
+  #active_operators_box {
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #333;
+  }
 
-        if (!block) return;
-        block.innerHTML = `<h2>Стадия: ${current}</h2>`;
+  strong {
+    color: #007bff;
+  }
+</style>
 
-        if (!info?.details || info.details.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "empty-message";
-          empty.textContent = "Нет лидов.";
-          block.appendChild(empty);
-        } else {
-          const table = document.createElement("table");
-          const header = document.createElement("thead");
-          header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-          table.appendChild(header);
-
-          const body = document.createElement("tbody");
-          info.details.forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
-            body.appendChild(tr);
-          });
-
-          table.appendChild(body);
-          block.appendChild(table);
-        }
-      }
-
-      stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
-      setTimeout(updateStageCycle, 3000);
-    }
-
-    updateStageCycle(); // 🚀 запуск
-  </script>
-
-</body>
-</html>
