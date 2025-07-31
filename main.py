@@ -161,12 +161,14 @@ def update_stage(stage_name):
         return "Стадия не найдена", 404
 
     try:
-        start, end = get_range_dates("today")
+        # 💡 Новый параметр из строки запроса: ?range=week
+        rtype = request.args.get("range", "today")  # today/week/month/custom
+        start, end = get_range_dates(rtype)
+
         users = load_users()
         stage_id = STAGE_LABELS[stage_name]
         name, stage_data = process_stage(stage_name, stage_id, start, end, users)
 
-        # 🔒 Показывать только свою строку оператору
         if session.get("role") == "operator":
             operator_name = session.get("name")
             stage_data["details"] = [
