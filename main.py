@@ -3,10 +3,23 @@ import requests, os, time
 from datetime import datetime, timedelta
 from collections import Counter
 from pytz import timezone  # 🕒 для московского времени
+from flask import session, redirect
 
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "login" not in session:
+            return redirect("/auth")
+        return f(*args, **kwargs)
+    return wrapper
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template("dashboard.html")
 import json
 
 def load_users():
