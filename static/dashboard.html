@@ -141,6 +141,15 @@
       }
     }
 
+<div style="margin: 1em 0">
+  <label>Начало: <input type="date" id="startDate"></label>
+  <label>Конец: <input type="date" id="endDate"></label>
+  <button onclick="fetchStats()">Показать статистику</button>
+</div>
+
+<div id="output" style="margin-top: 1em; white-space: pre-wrap; font-family: monospace"></div>
+
+    
     window.onload = () => {
       STAGE_LABELS.forEach(updateStage);
     };
