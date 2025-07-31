@@ -1,228 +1,45 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Dashboard</title>
-  <style>
-    body {
-      background: #f0f2f5;
-      font-family: "Segoe UI", sans-serif;
-      margin: 0;
-      padding: 40px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+  <meta charset="UTF-8">
+  <title>Кандидаты по стадиям</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    const STAGES = ["На согласовании", "Перезвонить", "Приглашен к рекрутеру"];
 
-    h1 {
-      font-size: 26px;
-      margin-bottom: 25px;
-      color: #333;
+    async function updateStage(stage) {
+      try {
+        const response = await fetch(`/update_stage/${stage}`);
+        if (response.ok) {
+          location.reload();
+        } else {
+          alert("Ошибка при обновлении стадии: " + stage);
+        }
+      } catch (error) {
+        console.error("Ошибка запроса:", error);
+      }
     }
-
-    #update-log {
-      font-style: italic;
-      color: #666;
-      margin-bottom: 20px;
-      font-size: 14px;
-    }
-
-    .info-box {
-      background-color: #ffffff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-      margin-bottom: 30px;
-      width: 100%;
-      max-width: 600px;
-      transition: opacity 0.5s ease;
-    }
-
-    .stage-columns {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: center;
-      width: 100%;
-      transition: opacity 0.5s ease;
-    }
-
-    .stage-table {
-      background-color: #ffffff;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-      min-width: 250px;
-      flex: 1 1 300px;
-    }
-
-    .stage-table h2 {
-      font-size: 18px;
-      margin-bottom: 12px;
-      text-align: center;
-      color: #0057e7;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    th, td {
-      padding: 8px;
-      text-align: left;
-      font-size: 14px;
-      border-bottom: 1px solid #eee;
-    }
-
-    th {
-      background-color: #f8f8f8;
-      color: #333;
-    }
-
-    .empty-message {
-      font-style: italic;
-      color: #888;
-      text-align: center;
-      font-size: 14px;
-    }
-
-    #active_operators_box {
-      margin-bottom: 10px;
-      font-size: 14px;
-      color: #333;
-    }
-
-    strong {
-      color: #007bff;
-    }
-
-    .fade-out {
-      opacity: 0.3;
-    }
-
-    .refresh-btn {
-      background-color: #e1e5ea;
-      border: none;
-      border-radius: 5px;
-      padding: 5px 8px;
-      font-size: 13px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      float: right;
-    }
-
-    .refresh-btn:hover {
-      background-color: #d0d7de;
-    }
-  </style>
+  </script>
 </head>
 <body>
-
-  <div id="active_operators_box">
-    <!-- список прилетит сюда -->
-  </div>
-
-  <div>🟢 Операторов на линии: <strong>5</strong></div>
-
-  <h1>📊 Статистика по стадиям — сегодня</h1>
-
-  <p id="update-log">Обновление ещё не запущено</p>
-
-  <div class="info-box" id="stats">
-    <button class="refresh-btn" onclick="updateInfoBox()">🔄</button>
-    <p><strong>Загрузка инфо-стадий...</strong></p>
-  </div>
-
+  <h1>📋 Панель кандидатов</h1>
   <div class="stage-columns" id="content">
-    <div class="stage-table" data-stage="НДЗ"><h2>Стадия: НДЗ</h2><button class="refresh-btn" onclick="updateStage('НДЗ')">🔄</button></div>
-    <div class="stage-table" data-stage="НДЗ 2"><h2>Стадия: НДЗ 2</h2><button class="refresh-btn" onclick="updateStage('НДЗ 2')">🔄</button></div>
-    <div class="stage-table" data-stage="Перезвонить"><h2>Стадия: Перезвонить</h2><button class="refresh-btn" onclick="updateStage('Перезвонить')">🔄</button></div>
-    <div class="stage-table" data-stage="Приглашен к рекрутеру"><h2>Стадия: Приглашен к рекрутеру</h2><button class="refresh-btn" onclick="updateStage('Приглашен к рекрутеру')">🔄</button></div>
+    <div class="stage-table" data-stage="На согласовании">
+      <h2>Стадия: На согласовании</h2>
+      <button class="refresh-btn" onclick="updateStage('На согласовании')">🔄 Обновить</button>
+      <div id="table-На согласовании"></div>
+    </div>
+    <div class="stage-table" data-stage="Перезвонить">
+      <h2>Стадия: Перезвонить</h2>
+      <button class="refresh-btn" onclick="updateStage('Перезвонить')">🔄 Обновить</button>
+      <div id="table-Перезвонить"></div>
+    </div>
+    <div class="stage-table" data-stage="Приглашен к рекрутеру">
+      <h2>Стадия: Приглашен к рекрутеру</h2>
+      <button class="refresh-btn" onclick="updateStage('Приглашен к рекрутеру')">🔄 Обновить</button>
+      <div id="table-Приглашен к рекрутеру"></div>
+    </div>
   </div>
-
-  <script>
-    const STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
-    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
-
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/leads/by-stage");
-        return await res.json();
-      } catch (e) {
-        console.error("Ошибка при загрузке", e);
-        return null;
-      }
-    }
-
-    function fadeOut(targets) {
-      targets.forEach(el => el.classList.add("fade-out"));
-    }
-
-    function fadeIn(targets) {
-      targets.forEach(el => el.classList.remove("fade-out"));
-    }
-
-    async function updateDashboard() {
-      updateInfoBox();
-      STAGES.forEach(stage => updateStage(stage));
-      const ts = new Date().toLocaleTimeString("ru-RU");
-      document.getElementById("update-log").textContent = `Обновлено: ${ts}`;
-    }
-
-    async function updateInfoBox() {
-      const statsBox = document.getElementById("stats");
-      fadeOut([statsBox]);
-      const data = await fetchData();
-      if (!data || !data.data) return;
-
-      statsBox.innerHTML = '<button class="refresh-btn" onclick="updateInfoBox()">🔄</button>';
-      INFO_STAGES.forEach(stage => {
-        const value = data.data[stage]?.count ?? 0;
-        const line = document.createElement("p");
-        line.innerHTML = `<strong>${stage}:</strong> ${value}`;
-        statsBox.appendChild(line);
-      });
-      fadeIn([statsBox]);
-    }
-
-    async function updateStage(stageName) {
-      const contentBox = document.getElementById("content");
-      const block = Array.from(contentBox.children)
-        .find(el => el.dataset.stage === stageName);
-      if (!block) return;
-
-      fadeOut([block]);
-      const data = await fetchData();
-      if (!data || !data.data || !data.data[stageName]) return;
-
-      block.innerHTML = `<h2>Стадия: ${stageName}</h2><button class="refresh-btn" onclick="updateStage('${stageName}')">🔄</button>`;
-
-      const info = data.data[stageName];
-      if (!info.details || info.details.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "empty-message";
-        empty.textContent = "Нет лидов.";
-        block.appendChild(empty);
-      } else {
-        const table = document.createElement("table");
-        const header = document.createElement("thead");
-        header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-        table.appendChild(header);
-        const body = document.createElement("tbody");
-        info.details.forEach(row => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
-          body.appendChild(tr);
-        });
-        table.appendChild(body);
-        block.appendChild(table);
-      }
-      fadeIn([block]);
-    }
-
-    updateDashboard();
-    setInterval(updateDashboard, 600000); // 2 мин
-  </script>
 </body>
 </html>
+
