@@ -52,13 +52,23 @@ def find_user(login):
 def get_range_dates(rtype):
     tz = timezone("Europe/Moscow")
     now = datetime.now(tz)
+
     if rtype == "week":
         start = now - timedelta(days=now.weekday())
     elif rtype == "month":
         start = now.replace(day=1)
-    else:
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif rtype.startswith("custom:"):
+        try:
+            parts = rtype.split(":")
+            start = datetime.strptime(parts[1], "%Y-%m-%d")
+            end = datetime.strptime(parts[2], "%Y-%m-%d")
+            return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            print("Ошибка в custom-дате")
+    # today — по умолчанию
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
+
 
 user_cache = {"data": {}, "last": 0}
 def load_users():
