@@ -74,7 +74,7 @@
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
 
     async function updateStage(stageName) {
-      const response = await fetch(`/get_leads/${stageName}`);
+      const response = await fetch(`/update_stage/${stageName}`);
       const leads = await response.json();
       const tableDiv = document.getElementById(`table-${stageName}`);
       tableDiv.innerHTML = '';
