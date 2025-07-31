@@ -17,12 +17,20 @@
       margin-bottom: 30px;
     }
 
+    .stage-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+
     .stage-block {
       background: white;
       box-shadow: 0 4px 8px rgba(0,0,0,0.05);
       border-radius: 8px;
       padding: 20px;
-      margin-bottom: 20px;
+      min-width: 280px;
+      flex: 1;
     }
 
     .stage-block h2 {
@@ -73,19 +81,21 @@
 <body>
   <h1>📊 Статистика по стадиям</h1>
 
-  <div class="stage-block">
-    <h2>Перезвонить</h2>
-    <div id="table-Перезвонить" class="stage-table"></div>
-  </div>
+  <div class="stage-container">
+    <div class="stage-block">
+      <h2>Перезвонить</h2>
+      <div id="table-Перезвонить" class="stage-table"></div>
+    </div>
 
-  <div class="stage-block">
-    <h2>На согласовании</h2>
-    <div id="table-На согласовании" class="stage-table"></div>
-  </div>
+    <div class="stage-block">
+      <h2>На согласовании</h2>
+      <div id="table-На согласовании" class="stage-table"></div>
+    </div>
 
-  <div class="stage-block">
-    <h2>Приглашен к рекрутеру</h2>
-    <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
+    <div class="stage-block">
+      <h2>Приглашен к рекрутеру</h2>
+      <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
+    </div>
   </div>
 
   <script>
@@ -137,3 +147,4 @@
   </script>
 </body>
 </html>
+
