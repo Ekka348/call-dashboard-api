@@ -6,6 +6,7 @@ const STAGES = {
   "NEW": "NEW",
   "База ВВ": "UC_VTOOIM",
   "OLD": "11"
+  "На согласовании": "UC_A2DF81"
 };
 
 const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
@@ -13,8 +14,8 @@ const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
   return acc;
 }, {});
 
-const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
-const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+const WORK_STAGES = ["Перезвонить", "На согласовании": "UC_A2DF81" , "Приглашен к рекрутеру"];
+
 
 function renderStageBlock(stage, info) {
   const container = document.getElementById("stats");
