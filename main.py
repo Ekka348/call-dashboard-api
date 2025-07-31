@@ -4,6 +4,7 @@ import requests, os, time, json
 from datetime import datetime, timedelta
 from collections import Counter
 from pytz import timezone
+from flask import render_template
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev_key")
@@ -30,9 +31,9 @@ def auth():
             session["login"] = user["login"]
             session["role"] = user["role"]
             return redirect("/dashboard")
-        return app.send_static_file("auth_error.html")  # Альтернатива шаблону
-    return app.send_static_file("auth.html")
-
+        return render_template("auth.html", error="Неверный логин или пароль")  # ошибка в шаблоне
+    return render_template("auth.html")  # базовый рендер
+    
 @app.route("/")
 def index(): return redirect("/auth")
 
