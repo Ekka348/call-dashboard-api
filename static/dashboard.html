@@ -1,73 +1,91 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Кандидаты по стадиям</title>
+  <meta charset="UTF-8">
+  <title>CRM Dashboard</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f9f9f9;
+      font-family: "Segoe UI", sans-serif;
+      background: #f9fafc;
       margin: 0;
       padding: 20px;
-    }
-    h1 {
-      text-align: center;
       color: #333;
     }
-    .stage-columns {
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      margin-top: 30px;
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
     }
-    .stage-table {
-      background-color: #fff;
+
+    .stage-block {
+      background: white;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      padding: 15px;
-      flex: 1;
+      padding: 20px;
+      margin-bottom: 20px;
     }
-    .stage-table h2 {
-      font-size: 18px;
-      margin-bottom: 10px;
-      color: #2a2a2a;
+
+    .stage-block h2 {
+      margin-top: 0;
+      font-size: 1.2em;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 6px;
     }
-    .refresh-btn {
-      background-color: #0078D7;
-      color: #fff;
-      border: none;
+
+    .stage-table table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    .stage-table th, .stage-table td {
       padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
     }
-    .refresh-btn:hover {
-      background-color: #005EA6;
+
+    .stage-table th {
+      background-color: #f1f1f1;
+      font-weight: bold;
+    }
+
+    .stage-table tr:hover {
+      background-color: #f9f9f9;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #0078D7;
+      color: white;
+      font-size: 12px;
+      margin-left: 6px;
+    }
+
+    .error-message {
+      color: crimson;
+      font-weight: bold;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>📋 Панель кандидатов</h1>
+  <h1>📊 Статистика по стадиям</h1>
 
-  <div class="stage-columns" id="content">
-    <div class="stage-table" data-stage="Перезвонить">
-      <h2>Стадия: Перезвонить</h2>
-      <button class="refresh-btn" onclick="updateStage('Перезвонить')">🔄 Обновить</button>
-      <div id="table-Перезвонить"></div>
-    </div>
+  <div class="stage-block">
+    <h2>Перезвонить</h2>
+    <div id="table-Перезвонить" class="stage-table"></div>
+  </div>
 
-    <div class="stage-table" data-stage="На согласовании">
-      <h2>Стадия: На согласовании</h2>
-      <button class="refresh-btn" onclick="updateStage('На согласовании')">🔄 Обновить</button>
-      <div id="table-На согласовании"></div>
-    </div>
+  <div class="stage-block">
+    <h2>На согласовании</h2>
+    <div id="table-На согласовании" class="stage-table"></div>
+  </div>
 
-    <div class="stage-table" data-stage="Приглашен к рекрутеру">
-      <h2>Стадия: Приглашен к рекрутеру</h2>
-      <button class="refresh-btn" onclick="updateStage('Приглашен к рекрутеру')">🔄 Обновить</button>
-      <div id="table-Приглашен к рекрутеру"></div>
-    </div>
+  <div class="stage-block">
+    <h2>Приглашен к рекрутеру</h2>
+    <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
   </div>
 
   <script>
@@ -76,29 +94,40 @@
     async function updateStage(stageName) {
       try {
         const response = await fetch(`/update_stage/${stageName}`);
-        if (!response.ok) throw new Error(`Ошибка запроса: ${response.status}`);
+        if (!response.ok) throw new Error(`Ошибка: ${response.status}`);
         const data = await response.json();
         const stageData = data[stageName];
-        const tableDiv = document.getElementById(`table-${stageName}`);
-        tableDiv.innerHTML = '';
+        const container = document.getElementById(`table-${stageName}`);
+        container.innerHTML = '';
 
         if (stageData.grouped) {
-          tableDiv.innerHTML = `<p>Всего лидов: ${stageData.count}</p>`;
-        } else if (stageData.details && stageData.details.length > 0) {
-          const ul = document.createElement('ul');
-          stageData.details.forEach(item => {
-            const li = document.createElement('li');
-            li.textContent = `${item.operator} — ${item.count}`;
-            ul.appendChild(li);
-          });
-          tableDiv.appendChild(ul);
-        } else {
-          tableDiv.innerHTML = `<p>Нет данных по кандидатам</p>`;
+          container.innerHTML = `<p>Всего лидов: <span class="badge">${stageData.count}</span></p>`;
+          return;
         }
+
+        if (!stageData.details || stageData.details.length === 0) {
+          container.innerHTML = `<p>Нет данных</p>`;
+          return;
+        }
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        stageData.details.forEach(item => {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+          tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        container.appendChild(table);
       } catch (err) {
-        console.error(`Ошибка при загрузке стадии "${stageName}":`, err);
-        const tableDiv = document.getElementById(`table-${stageName}`);
-        tableDiv.innerHTML = `<p>Ошибка загрузки данных</p>`;
+        console.error(`Ошибка стадии "${stageName}":`, err);
+        const container = document.getElementById(`table-${stageName}`);
+        container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
       }
     }
 
