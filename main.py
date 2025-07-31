@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev_key")
 
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
-GROUPED_STAGES = []  # ⛔ если не используешь агрегированные
+GROUPED_STAGES = []
 
 # 🔐 Авторизация
 def login_required(f):
@@ -30,6 +30,7 @@ def auth():
         if user and user["password"] == password:
             session["login"] = user["login"]
             session["role"] = user["role"]
+            session["name"] = user["name"]
             return redirect("/dashboard")
         return render_template("auth.html", error="Неверный логин или пароль")
     return render_template("auth.html")
@@ -44,7 +45,7 @@ def dashboard():
     return app.send_static_file("dashboard.html")
 
 def find_user(login):
-    with open("whitelist.json", "r") as f:
+    with open("whitelist.json", "r", encoding="utf-8") as f:
         users = json.load(f)
     return next((u for u in users if u["login"] == login), None)
 
@@ -106,7 +107,7 @@ def fetch_all_leads(stage):
         while True:
             r = requests.post(HOOK + "crm.lead.list.json", json={
                 "filter": {"STATUS_ID": stage},
-                "select": ["ID"],
+                "select": ["ID", "ASSIGNED_BY_ID"],
                 "start": offset
             }, timeout=10).json()
             page = r.get("result", [])
@@ -169,6 +170,28 @@ def update_stage(stage_name):
         print("Ошибка в update_stage:", e)
         return jsonify({"error": str(e)}), 500
 
+@app.route("/personal_stats")
+@login_required
+def personal_stats():
+    operator_name = session.get("name", None)
+    if not operator_name:
+        return jsonify({"error": "Оператор не найден"}), 403
+
+    start, end = get_range_dates("today")
+    users = load_users()
+    stats = {}
+
+    for name, stage_id in STAGE_LABELS.items():
+        leads = fetch_leads(stage_id, start, end)
+        count = 0
+        for lead in leads:
+            uid = lead.get("ASSIGNED_BY_ID")
+            if users.get(uid) == operator_name:
+                count += 1
+        stats[name] = count
+
+    return jsonify({"operator": operator_name, "stats": stats})
+
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
     start, end = get_range_dates("today")
@@ -196,9 +219,7 @@ def clock():
     moscow_now = datetime.now(tz)
     utc_now = datetime.utcnow()
     return {
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    }
+        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%
 
 # 🚀 Старт
 if __name__ == "__main__":
