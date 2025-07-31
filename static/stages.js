@@ -1,66 +1,44 @@
-const STAGES = {
-  "НДЗ": "5",
-  "НДЗ 2": "9",
-  "Перезвонить": "IN_PROCESS",
-  "Приглашен к рекрутеру": "CONVERTED",
-  "NEW": "NEW",
-  "База ВВ": "UC_VTOOIM",
-  "OLD": "11"
-  "На согласовании": "UC_A2DF81"
-};
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Кандидаты по стадиям</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    const STAGES = ["На согласовании", "Перезвонить", "Приглашен к рекрутеру"];
 
-const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
-  acc[id] = label;
-  return acc;
-}, {});
-
-const WORK_STAGES = ["Перезвонить", "На согласовании": "UC_A2DF81" , "Приглашен к рекрутеру"];
-
-
-function renderStageBlock(stage, info) {
-  const container = document.getElementById("stats");
-  const block = document.createElement("div");
-  block.className = "stage-block";
-
-  if (info.grouped) {
-    block.innerHTML = `<h3>Стадия: ${stage}</h3><p>Всего: ${info.count}</p>`;
-  } else {
-    const rows = info.details
-      .map(x => `<tr><td>${x.operator}</td><td>${x.count}</td></tr>`)
-      .join("");
-    block.innerHTML = `
-      <h3>Стадия: ${stage}</h3>
-      <table><thead><tr><th>Оператор</th><th>Количество</th></tr></thead>
-      <tbody>${rows}</tbody></table>`;
-  }
-
-  return block;
-}
-
-async function fetchStages() {
-  try {
-    const res = await fetch("/api/leads/by-stage");
-    const data = await res.json();
-    if (!data || !data.data) return;
-
-    const container = document.getElementById("stats");
-    container.innerHTML = "";
-
-    for (const [stage, info] of Object.entries(data.data)) {
-      container.appendChild(renderStageBlock(stage, info));
+    async function updateStage(stage) {
+      try {
+        const response = await fetch(`/update_stage/${stage}`);
+        if (response.ok) {
+          location.reload();
+        } else {
+          alert("Ошибка при обновлении стадии: " + stage);
+        }
+      } catch (error) {
+        console.error("Ошибка запроса:", error);
+      }
     }
-
-    document.getElementById("update-log").textContent =
-      `Обновлено: ${new Date().toLocaleTimeString("ru-RU")}`;
-
-  } catch (err) {
-    console.error("Ошибка при загрузке стадий:", err);
-  }
-}
-
-// ⏱️ Запуск при загрузке и каждые 2 минуты
-window.onload = () => {
-  fetchStages();
-  setInterval(fetchStages, 120000); // 2 мин = 120 000 мс
-};
-
+  </script>
+</head>
+<body>
+  <h1>📋 Панель кандидатов</h1>
+  <div class="stage-columns" id="content">
+    <div class="stage-table" data-stage="На согласовании">
+      <h2>Стадия: На согласовании</h2>
+      <button class="refresh-btn" onclick="updateStage('На согласовании')">🔄 Обновить</button>
+      <div id="table-На согласовании"></div>
+    </div>
+    <div class="stage-table" data-stage="Перезвонить">
+      <h2>Стадия: Перезвонить</h2>
+      <button class="refresh-btn" onclick="updateStage('Перезвонить')">🔄 Обновить</button>
+      <div id="table-Перезвонить"></div>
+    </div>
+    <div class="stage-table" data-stage="Приглашен к рекрутеру">
+      <h2>Стадия: Приглашен к рекрутеру</h2>
+      <button class="refresh-btn" onclick="updateStage('Приглашен к рекрутеру')">🔄 Обновить</button>
+      <div id="table-Приглашен к рекрутеру"></div>
+    </div>
+  </div>
+</body>
+</html>
