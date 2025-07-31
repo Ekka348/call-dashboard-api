@@ -1,6 +1,76 @@
-<form method="post">
-  <input name="login" placeholder="Логин">
-  <input name="password" type="password" placeholder="Пароль">
-  <button>Войти</button>
-  {% if error %}<p style="color: red;">{{ error }}</p>{% endif %}
-</form>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Авторизация</title>
+  <style>
+    body {
+      background: #f0f2f5;
+      font-family: "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .auth-box {
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      width: 320px;
+    }
+
+    .auth-box h2 {
+      margin-bottom: 20px;
+      font-size: 22px;
+      text-align: center;
+      color: #333;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      background-color: #0057e7;
+      color: white;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0041b3;
+    }
+
+    .error {
+      margin-top: 10px;
+      color: red;
+      text-align: center;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-box">
+    <h2>Вход в систему</h2>
+    <form method="post">
+      <input name="login" placeholder="Логин" type="text" required>
+      <input name="password" type="password" placeholder="Пароль" required>
+      <button type="submit">Войти</button>
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    </form>
+  </div>
+</body>
+</html>
