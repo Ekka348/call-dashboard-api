@@ -1,0 +1,4 @@
+[
+  { "login": "admin", "password": "qwerty123", "role": "admin" },
+  { "login": "operator1", "password": "123456", "role": "operator" }
+]
