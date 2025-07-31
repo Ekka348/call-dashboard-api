@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, session, jsonify, render_template
+from flask import Flask, request, redirect, session, jsonify, appcontext_pushed
 from functools import wraps
 import requests, os, time, json
 from datetime import datetime, timedelta
@@ -6,11 +6,11 @@ from collections import Counter
 from pytz import timezone
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev_key")  # 🔑 секрет для сессий
+app.secret_key = os.environ.get("SECRET_KEY", "dev_key")
 
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
-# 🎯 Авторизация
+# 🔒 Декоратор авторизации
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -19,6 +19,7 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+# 🚪 Авторизация
 @app.route("/auth", methods=["GET", "POST"])
 def auth():
     if request.method == "POST":
@@ -29,8 +30,8 @@ def auth():
             session["login"] = user["login"]
             session["role"] = user["role"]
             return redirect("/dashboard")
-        return render_template("auth.html", error="Неверный логин или пароль")
-    return render_template("auth.html")
+        return app.send_static_file("auth_error.html")  # Альтернатива шаблону
+    return app.send_static_file("auth.html")
 
 @app.route("/")
 def index(): return redirect("/auth")
@@ -38,10 +39,9 @@ def index(): return redirect("/auth")
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    return app.send_static_file("dashboard.html")
 
-
-# 👥 Загрузка списка пользователей
+# 🔍 Проверка пользователя
 def find_user(login):
     with open("whitelist.json", "r") as f:
         users = json.load(f)
@@ -49,21 +49,6 @@ def find_user(login):
         if user["login"] == login:
             return user
     return None
-
-
-# 🎯 Константы
-STAGE_LABELS = {
-    "НДЗ": "5",
-    "НДЗ 2": "9",
-    "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED",
-    "NEW": "NEW",
-    "OLD": "UC_VTOOIM",
-    "База ВВ": "11"
-}
-GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
-
-user_cache = {"data": {}, "last": 0}
 
 # 🕒 Диапазон дат
 def get_range_dates(rtype):
@@ -77,7 +62,8 @@ def get_range_dates(rtype):
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
-# 📦 Загрузка пользователей Bitrix
+# 👥 Кэш пользователей Bitrix24
+user_cache = {"data": {}, "last": 0}
 def load_users():
     if time.time() - user_cache["last"] < 300:
         return user_cache["data"]
@@ -93,7 +79,15 @@ def load_users():
     user_cache["data"], user_cache["last"] = users, time.time()
     return users
 
-# 📥 Получение лидов
+# 📊 Статусы лидов
+STAGE_LABELS = {
+    "НДЗ": "5", "НДЗ 2": "9", "Перезвонить": "IN_PROCESS",
+    "Приглашен к рекрутеру": "CONVERTED", "NEW": "NEW",
+    "OLD": "UC_VTOOIM", "База ВВ": "11"
+}
+GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
+
+# 📥 Лиды по статусу
 def fetch_leads(stage, start, end):
     leads, offset = [], 0
     try:
@@ -128,13 +122,13 @@ def fetch_all_leads(stage):
     except Exception: pass
     return leads
 
-
-# 🔍 API ручки
+# 📡 API ручки
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
     start, end = get_range_dates("today")
     users = load_users()
     data = {}
+
     for name, stage_id in STAGE_LABELS.items():
         if name in GROUPED_STAGES:
             leads = fetch_all_leads(stage_id)
@@ -161,6 +155,7 @@ def info_stages_today():
         result.append({"name": name, "count": len(leads)})
     return {"range": "total", "info": result}
 
+# 🧪 Утилиты
 @app.route("/ping")
 def ping(): return {"status": "ok"}
 
@@ -174,8 +169,6 @@ def clock():
         "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
     }
 
-
-# 🔥 Запуск
+# 🚀 Запуск
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-
