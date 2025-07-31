@@ -165,10 +165,20 @@ def update_stage(stage_name):
         users = load_users()
         stage_id = STAGE_LABELS[stage_name]
         name, stage_data = process_stage(stage_name, stage_id, start, end, users)
+
+        # 🔒 Показывать только свою строку оператору
+        if session.get("role") == "operator":
+            operator_name = session.get("name")
+            stage_data["details"] = [
+                d for d in stage_data.get("details", [])
+                if d.get("operator") == operator_name
+            ]
+
         return jsonify({name: stage_data})
     except Exception as e:
         print("Ошибка в update_stage:", e)
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/personal_stats")
 @login_required
