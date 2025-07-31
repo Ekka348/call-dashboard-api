@@ -55,19 +55,25 @@ def get_range_dates(rtype):
 
     if rtype == "week":
         start = now - timedelta(days=now.weekday())
+        end = now
     elif rtype == "month":
         start = now.replace(day=1)
+        end = now
     elif rtype.startswith("custom:"):
         try:
-            parts = rtype.split(":")
-            start = datetime.strptime(parts[1], "%Y-%m-%d")
-            end = datetime.strptime(parts[2], "%Y-%m-%d")
-            return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
-        except:
-            print("Ошибка в custom-дате")
-    # today — по умолчанию
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
+            _, start_raw, end_raw = rtype.split(":")
+            start = datetime.strptime(start_raw, "%Y-%m-%d")
+            end = datetime.strptime(end_raw, "%Y-%m-%d") + timedelta(days=1)
+        except Exception as e:
+            print("Ошибка парсинга custom-периода:", e)
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+    else:  # today
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = now
+
+    return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
+
 
 
 user_cache = {"data": {}, "last": 0}
