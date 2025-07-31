@@ -7,6 +7,34 @@ from pytz import timezone  # 🕒 для московского времени
 app = Flask(__name__)
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
+import json
+
+def load_users():
+    with open("whitelist.json", "r") as f:
+        return json.load(f)
+
+def find_user(login):
+    users = load_users()
+    for user in users:
+        if user["login"] == login:
+            return user
+    return None
+
+
+@app.route("/", methods=["POST"])
+def login():
+    login = request.form["login"]
+    password = request.form["password"]
+    user = find_user(login)
+    
+    if user and user["password"] == password:
+        session["login"] = user["login"]
+        session["role"] = user["role"]
+        return redirect("/dashboard")
+    
+    return "Неверный логин или пароль"
+
+
 STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
