@@ -6,7 +6,7 @@
   <style>
     body {
       font-family: "Segoe UI", sans-serif;
-      background: #f9fafc;
+      background: #f4f6f8;
       margin: 0;
       padding: 20px;
       color: #333;
@@ -15,6 +15,15 @@
     h1 {
       text-align: center;
       margin-bottom: 30px;
+    }
+
+    .filter {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .filter label {
+      margin: 0 10px;
     }
 
     .stage-container {
@@ -81,6 +90,12 @@
 <body>
   <h1>📊 Статистика по стадиям</h1>
 
+  <div class="filter">
+    <label>Начало: <input type="date" id="startDate"></label>
+    <label>Конец: <input type="date" id="endDate"></label>
+    <button onclick="fetchStats()">Показать статистику</button>
+  </div>
+
   <div class="stage-container">
     <div class="stage-block">
       <h2>Перезвонить</h2>
@@ -101,57 +116,77 @@
   <script>
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
 
-    async function updateStage(stageName) {
-      try {
-        const response = await fetch(`/update_stage/${stageName}`);
-        if (!response.ok) throw new Error(`Ошибка: ${response.status}`);
-        const data = await response.json();
-        const stageData = data[stageName];
-        const container = document.getElementById(`table-${stageName}`);
-        container.innerHTML = '';
-
-        if (stageData.grouped) {
-          container.innerHTML = `<p>Всего лидов: <span class="badge">${stageData.count}</span></p>`;
-          return;
-        }
-
-        if (!stageData.details || stageData.details.length === 0) {
-          container.innerHTML = `<p>Нет данных</p>`;
-          return;
-        }
-
-        const table = document.createElement('table');
-        const thead = document.createElement('thead');
-        thead.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        stageData.details.forEach(item => {
-          const row = document.createElement('tr');
-          row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
-          tbody.appendChild(row);
-        });
-
-        table.appendChild(tbody);
-        container.appendChild(table);
-      } catch (err) {
-        console.error(`Ошибка стадии "${stageName}":`, err);
-        const container = document.getElementById(`table-${stageName}`);
-        container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+    function fetchStats() {
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      if (!start || !end) {
+        alert("Заполни обе даты");
+        return;
       }
+
+      const rangeParam = `custom:${start}:${end}`;
+      STAGE_LABELS.forEach(stage => {
+        fetch(`/update_stage/${stage}?range=${rangeParam}`)
+          .then(r => r.json())
+          .then(data => {
+            const stageData = data[stage];
+            const container = document.getElementById(`table-${stage}`);
+            container.innerHTML = '';
+
+            if (!stageData.details || stageData.details.length === 0) {
+              container.innerHTML = `<p>Нет данных</p>`;
+              return;
+            }
+
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+            const tbody = document.createElement('tbody');
+
+            stageData.details.forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+              tbody.appendChild(row);
+            });
+
+            table.appendChild(tbody);
+            container.appendChild(table);
+          })
+          .catch(err => {
+            document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            console.error(`Ошибка стадии "${stage}":`, err);
+          });
+      });
     }
 
-<div style="margin: 1em 0">
-  <label>Начало: <input type="date" id="startDate"></label>
-  <label>Конец: <input type="date" id="endDate"></label>
-  <button onclick="fetchStats()">Показать статистику</button>
-</div>
-
-<div id="output" style="margin-top: 1em; white-space: pre-wrap; font-family: monospace"></div>
-
-    
+    // initial load without filter
     window.onload = () => {
-      STAGE_LABELS.forEach(updateStage);
+      STAGE_LABELS.forEach(stage => {
+        fetch(`/update_stage/${stage}`)
+          .then(r => r.json())
+          .then(data => {
+            const stageData = data[stage];
+            const container = document.getElementById(`table-${stage}`);
+            container.innerHTML = '';
+
+            if (!stageData.details || stageData.details.length === 0) {
+              container.innerHTML = `<p>Нет данных</p>`;
+              return;
+            }
+
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+            const tbody = document.createElement('tbody');
+
+            stageData.details.forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+              tbody.appendChild(row);
+            });
+
+            table.appendChild(tbody);
+            container.appendChild(table);
+          });
+      });
     };
   </script>
 </body>
