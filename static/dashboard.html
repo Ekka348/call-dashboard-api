@@ -69,7 +69,6 @@
       100% { transform: rotate(360deg);}
     }
 
-    /* Фильтр выбора периода */
     .filter {
       display: flex;
       flex-wrap: wrap;
@@ -141,7 +140,29 @@
       transform: translateY(-1px) scale(1.04);
     }
 
-    /* Карточки стадий */
+    /* Оператор фильтр */
+    #operator-filter {
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    #operator-filter label {
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 16px;
+      margin-right: 4px;
+    }
+    #operators {
+      min-width: 180px;
+      background: var(--dark-bg);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text-main);
+      font-size: 15px;
+      padding: 5px 7px;
+      height: 38px;
+    }
+
     .stage-container {
       display: flex;
       flex-wrap: wrap;
@@ -172,7 +193,6 @@
       letter-spacing: 0.01em;
     }
 
-    /* Таблица */
     .stage-table table {
       width: 100%;
       border-collapse: collapse;
@@ -213,7 +233,6 @@
       letter-spacing: 0.02em;
       box-shadow: 0 1.5px 6px rgba(59,130,246,0.07);
     }
-
     .error-message {
       color: var(--error);
       font-weight: bold;
@@ -221,7 +240,6 @@
       font-size: 1.03em;
     }
 
-    /* Adaptive styles */
     @media (max-width: 900px) {
       .stage-container {
         flex-direction: column;
@@ -255,6 +273,15 @@
       h1 {
         font-size: 1.23em;
       }
+      #operator-filter {
+        flex-direction: column;
+        gap: 4px;
+        align-items: flex-start;
+      }
+      #operators {
+        width: 100%;
+        min-width: 0;
+      }
     }
   </style>
 </head>
@@ -262,7 +289,6 @@
   <form class="filter" onsubmit="fetchStats(); return false;">
     <span class="period-label">Период:</span>
     <div class="period-input-group">
-      <!-- Календарик SVG -->
       <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
       <input type="date" id="startDate" required>
     </div>
@@ -270,6 +296,10 @@
     <div class="period-input-group">
       <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
       <input type="date" id="endDate" required>
+    </div>
+    <div id="operator-filter">
+      <label for="operators">Операторы:</label>
+      <select id="operators" multiple></select>
     </div>
     <button type="submit">Показать статистику</button>
   </form>
@@ -303,6 +333,35 @@
 
   <script>
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
+    let userRole = null;
+
+    async function loadUserInfoAndOperators() {
+      try {
+        const user = await fetch('/api/userinfo').then(r=>r.json());
+        userRole = user.role;
+        if (userRole === 'admin') {
+          document.getElementById('operator-filter').style.display = 'flex';
+          const ops = await fetch('/api/operators').then(r=>r.json());
+          const sel = document.getElementById('operators');
+          sel.innerHTML = '';
+          ops.forEach(op=>{
+            let o = document.createElement('option');
+            o.value = op.id;
+            o.textContent = op.name;
+            sel.appendChild(o);
+          });
+        }
+      } catch (e) {
+        console.error('Ошибка получения данных пользователя или операторов', e);
+      }
+    }
+
+    function getSelectedOperators() {
+      if (userRole !== 'admin') return '';
+      const sel = document.getElementById('operators');
+      const selected = Array.from(sel.selectedOptions).map(o=>o.value);
+      return selected.join(',');
+    }
 
     function showMiniLoader(stage) {
       document.getElementById(`loader-${stage}`).style.display = 'flex';
@@ -318,7 +377,7 @@
         alert("Заполни обе даты");
         return;
       }
-
+      const operators = getSelectedOperators();
       STAGE_LABELS.forEach(stage => {
         const container = document.getElementById(`table-${stage}`);
         container.innerHTML = `
@@ -326,7 +385,9 @@
             <div class="mini-spinner"></div>
           </div>
         `;
-        fetch(`/update_stage/${stage}?range=custom:${start}:${end}`)
+        let url = `/update_stage/${stage}?range=custom:${start}:${end}`;
+        if (operators) url += `&operators=${operators}`;
+        fetch(url)
           .then(r => r.json())
           .then(data => {
             const stageData = data[stage];
@@ -353,8 +414,9 @@
       });
     }
 
-    // initial load without filter
-    window.onload = () => {
+    window.onload = async () => {
+      await loadUserInfoAndOperators();
+      const operators = getSelectedOperators();
       STAGE_LABELS.forEach(stage => {
         const container = document.getElementById(`table-${stage}`);
         container.innerHTML = `
@@ -362,7 +424,9 @@
             <div class="mini-spinner"></div>
           </div>
         `;
-        fetch(`/update_stage/${stage}`)
+        let url = `/update_stage/${stage}`;
+        if (operators) url += `?operators=${operators}`;
+        fetch(url)
           .then(r => r.json())
           .then(data => {
             const stageData = data[stage];
