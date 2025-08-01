@@ -186,5 +186,85 @@
 
     <div class="stage-block">
       <h2>Приглашен к рекрутеру</h2>
-      <div id="table-Приглашен к рекрутер*
-
+      <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
+    </div>
+  </div>
+
+  <script>
+    const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
+
+    function fetchStats() {
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      if (!start || !end) {
+        alert("Заполни обе даты");
+        return;
+      }
+
+      const rangeParam = `custom:${start}:${end}`;
+      STAGE_LABELS.forEach(stage => {
+        fetch(`/update_stage/${stage}?range=${rangeParam}`)
+          .then(r => r.json())
+          .then(data => {
+            const stageData = data[stage];
+            const container = document.getElementById(`table-${stage}`);
+            container.innerHTML = '';
+
+            if (!stageData.details || stageData.details.length === 0) {
+              container.innerHTML = `<p>Нет данных</p>`;
+              return;
+            }
+
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+            const tbody = document.createElement('tbody');
+
+            stageData.details.forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+              tbody.appendChild(row);
+            });
+
+            table.appendChild(tbody);
+            container.appendChild(table);
+          })
+          .catch(err => {
+            document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            console.error(`Ошибка стадии "${stage}":`, err);
+          });
+      });
+    }
+
+    // initial load without filter
+    window.onload = () => {
+      STAGE_LABELS.forEach(stage => {
+        fetch(`/update_stage/${stage}`)
+          .then(r => r.json())
+          .then(data => {
+            const stageData = data[stage];
+            const container = document.getElementById(`table-${stage}`);
+            container.innerHTML = '';
+
+            if (!stageData.details || stageData.details.length === 0) {
+              container.innerHTML = `<p>Нет данных</p>`;
+              return;
+            }
+
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+            const tbody = document.createElement('tbody');
+
+            stageData.details.forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+              tbody.appendChild(row);
+            });
+
+            table.appendChild(tbody);
+            container.appendChild(table);
+          });
+      });
+    };
+  </script>
+</body>
+</html>
