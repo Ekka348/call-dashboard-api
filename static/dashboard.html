@@ -17,22 +17,97 @@
       margin-bottom: 30px;
     }
 
+    /* Новый стиль для выбора периода */
     .filter {
-      text-align: center;
-      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: #1e293b;
+      padding: 18px 28px;
+      border-radius: 14px;
+      box-shadow: 0 2px 16px rgba(30,41,59,0.13);
+      width: fit-content;
+      margin: 0 auto 28px auto;
+      margin-top: 10px;
+    }
+    .period-label {
+      color: #e0e7ef;
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+    }
+    .period-input-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #334155;
+      border-radius: 6px;
+      padding: 3px 10px 3px 6px;
+      border: 1px solid #64748b;
+      transition: border 0.2s;
+    }
+    .period-input-group:focus-within {
+      border: 1.5px solid #60a5fa;
+    }
+    .period-input-group svg {
+      width: 18px;
+      height: 18px;
+      fill: #7dd3fc;
+    }
+    .filter input[type="date"] {
+      background: transparent;
+      border: none;
+      color: #e0e7ef;
+      padding: 6px 4px;
+      font-size: 15px;
+      outline: none;
+      width: 120px;
+      font-family: inherit;
+    }
+    .filter input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.7);
+    }
+    .filter button {
+      background: linear-gradient(90deg, #3b82f6 0%, #9333ea 100%);
+      border: none;
+      color: #fff;
+      padding: 9px 22px;
+      border-radius: 7px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(59,130,246,0.12);
+      transition: background 0.2s, transform 0.1s;
+      margin-left: 14px;
+    }
+    .filter button:hover {
+      background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
+      transform: translateY(-1px) scale(1.04);
+    }
+    @media (max-width: 600px) {
+      .filter {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 14px;
+        width: 100%;
+      }
+      .filter button {
+        margin-left: 0;
+        margin-top: 8px;
+      }
     }
 
-    .filter label {
-      margin: 0 10px;
-    }
-
+    /* Остальной стиль */
     .stage-container {
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
       justify-content: center;
     }
-
     .stage-block {
       background: white;
       box-shadow: 0 4px 8px rgba(0,0,0,0.05);
@@ -41,35 +116,29 @@
       min-width: 280px;
       flex: 1;
     }
-
     .stage-block h2 {
       margin-top: 0;
       font-size: 1.2em;
       border-bottom: 1px solid #eee;
       padding-bottom: 6px;
     }
-
     .stage-table table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
     }
-
     .stage-table th, .stage-table td {
       padding: 8px 12px;
       border-bottom: 1px solid #ddd;
       text-align: left;
     }
-
     .stage-table th {
       background-color: #f1f1f1;
       font-weight: bold;
     }
-
     .stage-table tr:hover {
       background-color: #f9f9f9;
     }
-
     .badge {
       display: inline-block;
       padding: 4px 8px;
@@ -79,7 +148,6 @@
       font-size: 12px;
       margin-left: 6px;
     }
-
     .error-message {
       color: crimson;
       font-weight: bold;
@@ -90,11 +158,20 @@
 <body>
   <h1>📊 Статистика по стадиям</h1>
 
-  <div class="filter">
-    <label>Начало: <input type="date" id="startDate"></label>
-    <label>Конец: <input type="date" id="endDate"></label>
-    <button onclick="fetchStats()">Показать статистику</button>
-  </div>
+  <form class="filter" onsubmit="fetchStats(); return false;">
+    <span class="period-label">Период:</span>
+    <div class="period-input-group">
+      <!-- Календарик SVG -->
+      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
+      <input type="date" id="startDate" required>
+    </div>
+    <span class="period-label">—</span>
+    <div class="period-input-group">
+      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
+      <input type="date" id="endDate" required>
+    </div>
+    <button type="submit">Показать статистику</button>
+  </form>
 
   <div class="stage-container">
     <div class="stage-block">
@@ -109,86 +186,5 @@
 
     <div class="stage-block">
       <h2>Приглашен к рекрутеру</h2>
-      <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
-    </div>
-  </div>
-
-  <script>
-    const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
-
-    function fetchStats() {
-      const start = document.getElementById("startDate").value;
-      const end = document.getElementById("endDate").value;
-      if (!start || !end) {
-        alert("Заполни обе даты");
-        return;
-      }
-
-      const rangeParam = `custom:${start}:${end}`;
-      STAGE_LABELS.forEach(stage => {
-        fetch(`/update_stage/${stage}?range=${rangeParam}`)
-          .then(r => r.json())
-          .then(data => {
-            const stageData = data[stage];
-            const container = document.getElementById(`table-${stage}`);
-            container.innerHTML = '';
-
-            if (!stageData.details || stageData.details.length === 0) {
-              container.innerHTML = `<p>Нет данных</p>`;
-              return;
-            }
-
-            const table = document.createElement('table');
-            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
-            const tbody = document.createElement('tbody');
-
-            stageData.details.forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
-              tbody.appendChild(row);
-            });
-
-            table.appendChild(tbody);
-            container.appendChild(table);
-          })
-          .catch(err => {
-            document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
-            console.error(`Ошибка стадии "${stage}":`, err);
-          });
-      });
-    }
-
-    // initial load without filter
-    window.onload = () => {
-      STAGE_LABELS.forEach(stage => {
-        fetch(`/update_stage/${stage}`)
-          .then(r => r.json())
-          .then(data => {
-            const stageData = data[stage];
-            const container = document.getElementById(`table-${stage}`);
-            container.innerHTML = '';
-
-            if (!stageData.details || stageData.details.length === 0) {
-              container.innerHTML = `<p>Нет данных</p>`;
-              return;
-            }
-
-            const table = document.createElement('table');
-            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
-            const tbody = document.createElement('tbody');
-
-            stageData.details.forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
-              tbody.appendChild(row);
-            });
-
-            table.appendChild(tbody);
-            container.appendChild(table);
-          });
-      });
-    };
-  </script>
-</body>
-</html>
-
+      <div id="table-Приглашен к рекрутер*
+
