@@ -27,7 +27,6 @@
       font-family: "Segoe UI", "Inter", Arial, sans-serif;
       min-height: 100vh;
     }
-
     body {
       min-height: 100vh;
       margin: 0;
@@ -36,7 +35,6 @@
       flex-direction: column;
       background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
     }
-
     h1 {
       text-align: center;
       margin: 32px 0 28px 0;
@@ -46,8 +44,6 @@
       color: var(--accent);
       text-shadow: 0 2px 20px rgba(59,130,246,0.14);
     }
-
-    /* Фильтр выбора периода + операторов */
     .filter {
       display: flex;
       flex-wrap: wrap;
@@ -61,6 +57,8 @@
       width: fit-content;
       margin: 0 auto 34px auto;
       margin-top: 6px;
+      position: relative;
+      z-index: 10;
     }
     .period-label {
       color: var(--text-main);
@@ -119,20 +117,14 @@
       transform: translateY(-1px) scale(1.04);
     }
 
-    /* Оператор фильтр — в стиле остальных */
+    /* Кастомный выпадающий фильтр операторов */
     #operator-filter {
       display: none;
       align-items: center;
       gap: 8px;
-      background: var(--dark-bg);
-      border-radius: 7px;
-      padding: 3.5px 10px 3.5px 6px;
-      border: 1px solid var(--border);
-      transition: border 0.2s;
-      height: 44px;
-    }
-    #operator-filter:focus-within {
-      border: 1.5px solid var(--accent);
+      position: relative;
+      min-width: 190px;
+      z-index: 20;
     }
     #operator-filter label {
       color: var(--text-main);
@@ -140,30 +132,65 @@
       font-size: 15px;
       margin-right: 3px;
       letter-spacing: 0.01em;
+      white-space: nowrap;
     }
-    #operators {
-      min-width: 160px;
-      max-width: 260px;
+    .dropdown-selected {
       background: var(--block-bg);
-      border: none;
       border-radius: 7px;
+      padding: 7px 12px;
+      color: var(--text-main);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      user-select: none;
+      min-width: 140px;
+      min-height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+    }
+    .dropdown-selected .arrow {
+      font-size: 13px;
+      margin-left: 7px;
+      color: var(--accent);
+    }
+    .dropdown-list {
+      position: absolute;
+      left: 0; right: 0;
+      top: 38px;
+      background: var(--block-bg);
+      border: 1.5px solid var(--accent);
+      border-radius: 7px;
+      margin-top: 2px;
+      z-index: 40;
+      display: none;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(30,41,59,0.17);
+      min-width: 170px;
+    }
+    .dropdown-list label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      cursor: pointer;
       color: var(--text-main);
       font-size: 15px;
-      padding: 6px 7px;
-      height: 32px;
-      outline: none;
-      font-family: inherit;
-      box-shadow: 0 1px 6px rgba(30,41,59,0.09);
-      cursor: pointer;
+      transition: background 0.15s;
+      border-radius: 5px;
     }
-    #operators:focus {
+    .dropdown-list label:hover {
       background: var(--dark-bg);
     }
-    #operators option {
-      background: var(--block-bg);
-      color: var(--text-main);
-      font-size: 15px;
-      padding: 4px 8px;
+    .dropdown-list input[type="checkbox"] {
+      accent-color: var(--accent);
+      margin-right: 5px;
+      transform: scale(1.07);
+    }
+    .dropdown-list label.all-ops {
+      font-weight: 700;
+      color: var(--accent);
     }
 
     /* Мини-лоадер для каждого блока */
@@ -305,10 +332,13 @@
         padding: 6px 4px;
         margin-top: 7px;
       }
-      #operators {
-        width: 100%;
-        min-width: 0;
-        margin-top: 4px;
+      .dropdown-selected {
+        min-width: 100px;
+        font-size: 0.97em;
+        padding: 8px 10px;
+      }
+      .dropdown-list {
+        min-width: 100px;
       }
     }
   </style>
@@ -326,8 +356,12 @@
       <input type="date" id="endDate" required>
     </div>
     <div id="operator-filter">
-      <label for="operators">Оператор(ы):</label>
-      <select id="operators" multiple></select>
+      <label>Оператор(ы):</label>
+      <div class="dropdown-selected" onclick="toggleDropdown(event)">
+        <span id="selected-ops-label">Все</span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="dropdown-list" id="dropdown-list"></div>
     </div>
     <button type="submit">Показать статистику</button>
   </form>
@@ -362,6 +396,32 @@
   <script>
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
     let userRole = null;
+    let operatorList = [];
+    let selectedOperators = new Set();
+
+    function toggleDropdown(event) {
+      event.stopPropagation();
+      const list = document.getElementById('dropdown-list');
+      list.style.display = (list.style.display === 'block') ? 'none' : 'block';
+    }
+    document.addEventListener('click', function(e) {
+      const list = document.getElementById('dropdown-list');
+      if (list && list.style.display === 'block' && !document.getElementById('operator-filter').contains(e.target)) {
+        list.style.display = 'none';
+      }
+    });
+
+    function updateSelectedLabel() {
+      const label = document.getElementById('selected-ops-label');
+      if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
+        label.textContent = 'Все';
+      } else {
+        label.textContent = Array.from(selectedOperators).map(id => {
+          const op = operatorList.find(o => o.id == id);
+          return op ? op.name : id;
+        }).join(', ');
+      }
+    }
 
     async function loadUserInfoAndOperators() {
       try {
@@ -369,15 +429,10 @@
         userRole = user.role;
         if (userRole === 'admin') {
           document.getElementById('operator-filter').style.display = 'flex';
-          const ops = await fetch('/api/operators').then(r=>r.json());
-          const sel = document.getElementById('operators');
-          sel.innerHTML = '';
-          ops.forEach(op=>{
-            let o = document.createElement('option');
-            o.value = op.id;
-            o.textContent = op.name;
-            sel.appendChild(o);
-          });
+          operatorList = await fetch('/api/operators').then(r=>r.json());
+          selectedOperators = new Set(operatorList.map(o => o.id)); // по умолчанию все
+          renderOperatorDropdown();
+          updateSelectedLabel();
         } else {
           document.getElementById('operator-filter').style.display = 'none';
         }
@@ -386,11 +441,46 @@
       }
     }
 
+    function renderOperatorDropdown() {
+      const list = document.getElementById('dropdown-list');
+      list.innerHTML = '';
+      // "выбрать всех"
+      let allChecked = selectedOperators.size === operatorList.length;
+      list.innerHTML += `<label class="all-ops">
+        <input type="checkbox" onchange="toggleAllOperators(this)" ${allChecked?'checked':''}> Все операторы
+      </label>`;
+      operatorList.forEach(op => {
+        list.innerHTML += `<label>
+          <input type="checkbox" value="${op.id}" ${selectedOperators.has(op.id+'' )?'checked':''} onchange="toggleOperator(this)">
+          ${op.name}
+        </label>`;
+      });
+    }
+
+    function toggleOperator(checkbox) {
+      if (checkbox.checked) {
+        selectedOperators.add(checkbox.value);
+      } else {
+        selectedOperators.delete(checkbox.value);
+      }
+      renderOperatorDropdown();
+      updateSelectedLabel();
+    }
+
+    function toggleAllOperators(checkbox) {
+      if (checkbox.checked) {
+        operatorList.forEach(o => selectedOperators.add(o.id));
+      } else {
+        selectedOperators.clear();
+      }
+      renderOperatorDropdown();
+      updateSelectedLabel();
+    }
+
     function getSelectedOperators() {
       if (userRole !== 'admin') return '';
-      const sel = document.getElementById('operators');
-      const selected = Array.from(sel.selectedOptions).map(o=>o.value);
-      return selected.join(',');
+      if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
+      return Array.from(selectedOperators).join(',');
     }
 
     function showMiniLoader(stage) {
