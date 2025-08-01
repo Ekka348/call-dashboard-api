@@ -3,37 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <title>CRM Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {
-      font-family: "Segoe UI", sans-serif;
-      background: #f4f6f8;
+    :root {
+      --dark-bg: #1e293b;
+      --block-bg: #232e41;
+      --primary: #3b82f6;
+      --secondary: #9333ea;
+      --accent: #7dd3fc;
+      --border: #334155;
+      --text-main: #e0e7ef;
+      --text-light: #cbd5e1;
+      --badge-bg: #3b82f6;
+      --badge-bg2: #9333ea;
+      --error: #f87171;
+    }
+    html, body {
+      height: 100%;
       margin: 0;
-      padding: 20px;
-      color: #333;
+      padding: 0;
+      background: var(--dark-bg);
+      color: var(--text-main);
+      font-family: "Segoe UI", "Inter", Arial, sans-serif;
+      min-height: 100vh;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
     }
 
     h1 {
       text-align: center;
-      margin-bottom: 30px;
+      margin: 32px 0 28px 0;
+      font-size: 2.1em;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--accent);
+      text-shadow: 0 2px 20px rgba(59,130,246,0.14);
     }
 
-    /* Новый стиль для выбора периода */
+    /* Фильтр выбора периода */
     .filter {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: center;
       gap: 14px;
-      background: #1e293b;
+      background: var(--block-bg);
       padding: 18px 28px;
-      border-radius: 14px;
-      box-shadow: 0 2px 16px rgba(30,41,59,0.13);
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(30,41,59,0.12);
       width: fit-content;
-      margin: 0 auto 28px auto;
-      margin-top: 10px;
+      margin: 0 auto 34px auto;
+      margin-top: 6px;
     }
     .period-label {
-      color: #e0e7ef;
+      color: var(--text-main);
       font-weight: 600;
       font-size: 16px;
       display: flex;
@@ -43,24 +73,24 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: #334155;
-      border-radius: 6px;
+      background: var(--dark-bg);
+      border-radius: 7px;
       padding: 3px 10px 3px 6px;
-      border: 1px solid #64748b;
+      border: 1px solid var(--border);
       transition: border 0.2s;
     }
     .period-input-group:focus-within {
-      border: 1.5px solid #60a5fa;
+      border: 1.5px solid var(--accent);
     }
     .period-input-group svg {
       width: 18px;
       height: 18px;
-      fill: #7dd3fc;
+      fill: var(--accent);
     }
     .filter input[type="date"] {
       background: transparent;
       border: none;
-      color: #e0e7ef;
+      color: var(--text-main);
       padding: 6px 4px;
       font-size: 15px;
       outline: none;
@@ -71,91 +101,144 @@
       filter: invert(0.7);
     }
     .filter button {
-      background: linear-gradient(90deg, #3b82f6 0%, #9333ea 100%);
+      background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
       border: none;
       color: #fff;
       padding: 9px 22px;
-      border-radius: 7px;
+      border-radius: 8px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 1px 4px rgba(59,130,246,0.12);
+      box-shadow: 0 1px 14px rgba(59,130,246,0.10);
       transition: background 0.2s, transform 0.1s;
       margin-left: 14px;
+      letter-spacing: 0.01em;
     }
     .filter button:hover {
       background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
       transform: translateY(-1px) scale(1.04);
     }
+
+    /* Карточки стадий */
+    .stage-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 40px;
+      width: 100%;
+    }
+    .stage-block {
+      background: var(--block-bg);
+      box-shadow: 0 4px 32px rgba(30,41,59,0.14);
+      border-radius: 14px;
+      padding: 26px 22px 20px 22px;
+      min-width: 280px;
+      max-width: 340px;
+      flex: 1 1 320px;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 18px;
+    }
+    .stage-block h2 {
+      margin: 0 0 16px 0;
+      font-size: 1.17em;
+      color: var(--accent);
+      font-weight: 700;
+      border-bottom: 1.5px solid var(--border);
+      padding-bottom: 8px;
+      letter-spacing: 0.01em;
+    }
+
+    /* Таблица */
+    .stage-table table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      background: transparent;
+    }
+    .stage-table th, .stage-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      color: var(--text-main);
+    }
+    .stage-table th {
+      background-color: #22304b;
+      font-weight: bold;
+      color: var(--accent);
+      font-size: 1em;
+      border-top-left-radius: 5px;
+      border-top-right-radius: 5px;
+    }
+    .stage-table tr:hover {
+      background-color: #25334c;
+    }
+    .stage-table p {
+      color: var(--text-light);
+      margin: 10px 0 0 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: linear-gradient(90deg, var(--badge-bg) 0%, var(--badge-bg2) 100%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      margin-left: 4px;
+      letter-spacing: 0.02em;
+      box-shadow: 0 1.5px 6px rgba(59,130,246,0.07);
+    }
+
+    .error-message {
+      color: var(--error);
+      font-weight: bold;
+      margin-top: 14px;
+      font-size: 1.03em;
+    }
+
+    /* Adaptive styles */
+    @media (max-width: 900px) {
+      .stage-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .stage-block {
+        max-width: 95vw;
+        margin: 0 auto 18px auto;
+      }
+      .filter {
+        width: 98vw;
+        min-width: unset;
+        padding: 12px 6px;
+      }
+    }
     @media (max-width: 600px) {
+      .stage-block {
+        padding: 14px 6px 14px 8px;
+      }
       .filter {
         flex-direction: column;
         align-items: stretch;
         gap: 10px;
-        padding: 14px;
+        padding: 10px 2px;
         width: 100%;
       }
       .filter button {
         margin-left: 0;
         margin-top: 8px;
       }
-    }
-
-    /* Остальной стиль */
-    .stage-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: center;
-    }
-    .stage-block {
-      background: white;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      border-radius: 8px;
-      padding: 20px;
-      min-width: 280px;
-      flex: 1;
-    }
-    .stage-block h2 {
-      margin-top: 0;
-      font-size: 1.2em;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 6px;
-    }
-    .stage-table table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    .stage-table th, .stage-table td {
-      padding: 8px 12px;
-      border-bottom: 1px solid #ddd;
-      text-align: left;
-    }
-    .stage-table th {
-      background-color: #f1f1f1;
-      font-weight: bold;
-    }
-    .stage-table tr:hover {
-      background-color: #f9f9f9;
-    }
-    .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 6px;
-      background: #0078D7;
-      color: white;
-      font-size: 12px;
-      margin-left: 6px;
-    }
-    .error-message {
-      color: crimson;
-      font-weight: bold;
-      margin-top: 10px;
+      h1 {
+        font-size: 1.23em;
+      }
     }
   </style>
 </head>
 <body>
+  <h1>📊 Статистика по стадиям</h1>
+
   <form class="filter" onsubmit="fetchStats(); return false;">
     <span class="period-label">Период:</span>
     <div class="period-input-group">
@@ -176,12 +259,10 @@
       <h2>Перезвонить</h2>
       <div id="table-Перезвонить" class="stage-table"></div>
     </div>
-
     <div class="stage-block">
       <h2>На согласовании</h2>
       <div id="table-На согласовании" class="stage-table"></div>
     </div>
-
     <div class="stage-block">
       <h2>Приглашен к рекрутеру</h2>
       <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
