@@ -74,8 +74,6 @@ def get_range_dates(rtype):
 
     return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
 
-
-
 user_cache = {"data": {}, "last": 0}
 def load_users():
     if time.time() - user_cache["last"] < 300:
@@ -145,7 +143,7 @@ def cached_group_count(name, stage_id):
     group_cache["last"] = now
     return count
 
-def process_stage(name, stage_id, start, end, users):
+def process_stage(name, stage_id, start, end, users, operator_filter=None):
     try:
         if name in GROUPED_STAGES:
             return name, {"grouped": True, "count": cached_group_count(name, stage_id)}
@@ -156,6 +154,10 @@ def process_stage(name, stage_id, start, end, users):
         for lead in leads:
             uid = lead.get("ASSIGNED_BY_ID")
             if not uid: continue
+            # фильтрация по операторам (для админа)
+            if operator_filter:
+                if str(uid) not in operator_filter:
+                    continue
             try:
                 stats[int(uid)] += 1
             except Exception as e:
@@ -177,13 +179,19 @@ def update_stage(stage_name):
         return "Стадия не найдена", 404
 
     try:
-        # 💡 Новый параметр из строки запроса: ?range=week
         rtype = request.args.get("range", "today")  # today/week/month/custom
         start, end = get_range_dates(rtype)
 
         users = load_users()
         stage_id = STAGE_LABELS[stage_name]
-        name, stage_data = process_stage(stage_name, stage_id, start, end, users)
+
+        # Новый: фильтр по операторам для админа
+        operator_ids = request.args.get("operators")
+        operator_filter = None
+        if operator_ids:
+            operator_filter = set(operator_ids.split(","))
+
+        name, stage_data = process_stage(stage_name, stage_id, start, end, users, operator_filter)
 
         if session.get("role") == "operator":
             operator_name = session.get("name")
@@ -196,7 +204,6 @@ def update_stage(stage_name):
     except Exception as e:
         print("Ошибка в update_stage:", e)
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/personal_stats")
 @login_required
@@ -221,14 +228,21 @@ def personal_stats():
     return jsonify({"operator": operator_name, "stats": stats})
 
 @app.route("/api/leads/by-stage")
+@login_required
 def leads_by_stage():
     start, end = get_range_dates("today")
     users = load_users()
     data = {}
 
+    # Новый: фильтр по операторам для админа
+    operator_ids = request.args.get("operators")
+    operator_filter = None
+    if operator_ids:
+        operator_filter = set(operator_ids.split(","))
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
-            executor.submit(process_stage, name, stage_id, start, end, users)
+            executor.submit(process_stage, name, stage_id, start, end, users, operator_filter)
             for name, stage_id in STAGE_LABELS.items()
         ]
         for future in futures:
@@ -236,6 +250,25 @@ def leads_by_stage():
             data[name] = stage_data
 
     return {"range": "today", "data": data}
+
+@app.route("/api/userinfo")
+@login_required
+def api_userinfo():
+    return jsonify({
+        "name": session.get("name"),
+        "role": session.get("role")
+    })
+
+@app.route("/api/operators")
+@login_required
+def api_operators():
+    users = load_users()
+    # Можно фильтровать только операторов, если у вас есть поле role
+    # Сейчас возвращает всех
+    return jsonify([
+        {"id": uid, "name": name}
+        for uid, name in users.items()
+    ])
 
 @app.route("/ping")
 def ping():
