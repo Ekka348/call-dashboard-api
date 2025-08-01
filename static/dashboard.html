@@ -47,26 +47,22 @@
       text-shadow: 0 2px 20px rgba(59,130,246,0.14);
     }
 
-    /* Loader styles */
-    #loader {
-      display: none;
-      position: fixed;
-      z-index: 9999;
-      left: 0; top: 0; right: 0; bottom: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(30,41,59,0.66);
+    /* Мини-лоадер для каждого блока */
+    .mini-loader {
+      display: flex;
       align-items: center;
       justify-content: center;
+      min-height: 52px;
+      width: 100%;
     }
-    .spinner {
-      border: 7px solid #22304b;
-      border-top: 7px solid var(--accent);
+    .mini-spinner {
+      border: 5px solid #22304b;
+      border-top: 5px solid var(--accent);
       border-radius: 50%;
-      width: 54px;
-      height: 54px;
-      animation: spin 0.82s linear infinite;
-      box-shadow: 0 2px 16px rgba(59,130,246,0.18);
+      width: 38px;
+      height: 38px;
+      animation: spin 0.8s linear infinite;
+      box-shadow: 0 2px 10px rgba(59,130,246,0.18);
     }
     @keyframes spin {
       0% { transform: rotate(0deg);}
@@ -263,11 +259,6 @@
   </style>
 </head>
 <body>
-  <!-- Loader -->
-  <div id="loader">
-    <div class="spinner"></div>
-  </div>
-
   <form class="filter" onsubmit="fetchStats(); return false;">
     <span class="period-label">Период:</span>
     <div class="period-input-group">
@@ -286,26 +277,38 @@
   <div class="stage-container">
     <div class="stage-block">
       <h2>Перезвонить</h2>
-      <div id="table-Перезвонить" class="stage-table"></div>
+      <div id="table-Перезвонить" class="stage-table">
+        <div class="mini-loader" id="loader-Перезвонить" style="display:none;">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
     </div>
     <div class="stage-block">
       <h2>На согласовании</h2>
-      <div id="table-На согласовании" class="stage-table"></div>
+      <div id="table-На согласовании" class="stage-table">
+        <div class="mini-loader" id="loader-На согласовании" style="display:none;">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
     </div>
     <div class="stage-block">
       <h2>Приглашен к рекрутеру</h2>
-      <div id="table-Приглашен к рекрутеру" class="stage-table"></div>
+      <div id="table-Приглашен к рекрутеру" class="stage-table">
+        <div class="mini-loader" id="loader-Приглашен к рекрутеру" style="display:none;">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
 
-    function showLoader() {
-      document.getElementById('loader').style.display = 'flex';
+    function showMiniLoader(stage) {
+      document.getElementById(`loader-${stage}`).style.display = 'flex';
     }
-    function hideLoader() {
-      document.getElementById('loader').style.display = 'none';
+    function hideMiniLoader(stage) {
+      document.getElementById(`loader-${stage}`).style.display = 'none';
     }
 
     function fetchStats() {
@@ -316,88 +319,72 @@
         return;
       }
 
-      showLoader();
-
-      let completed = 0;
-      const total = STAGE_LABELS.length;
-
       STAGE_LABELS.forEach(stage => {
+        const container = document.getElementById(`table-${stage}`);
+        container.innerHTML = `
+          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
+            <div class="mini-spinner"></div>
+          </div>
+        `;
         fetch(`/update_stage/${stage}?range=custom:${start}:${end}`)
           .then(r => r.json())
           .then(data => {
             const stageData = data[stage];
-            const container = document.getElementById(`table-${stage}`);
             container.innerHTML = '';
-
             if (!stageData.details || stageData.details.length === 0) {
               container.innerHTML = `<p>Нет данных</p>`;
               return;
             }
-
             const table = document.createElement('table');
             table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
             const tbody = document.createElement('tbody');
-
             stageData.details.forEach(item => {
               const row = document.createElement('tr');
               row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
               tbody.appendChild(row);
             });
-
             table.appendChild(tbody);
             container.appendChild(table);
           })
           .catch(err => {
-            document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
             console.error(`Ошибка стадии "${stage}":`, err);
-          })
-          .finally(() => {
-            completed++;
-            if (completed === total) hideLoader();
           });
       });
     }
 
     // initial load without filter
     window.onload = () => {
-      showLoader();
-
-      let completed = 0;
-      const total = STAGE_LABELS.length;
-
       STAGE_LABELS.forEach(stage => {
+        const container = document.getElementById(`table-${stage}`);
+        container.innerHTML = `
+          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
+            <div class="mini-spinner"></div>
+          </div>
+        `;
         fetch(`/update_stage/${stage}`)
           .then(r => r.json())
           .then(data => {
             const stageData = data[stage];
-            const container = document.getElementById(`table-${stage}`);
             container.innerHTML = '';
-
             if (!stageData.details || stageData.details.length === 0) {
               container.innerHTML = `<p>Нет данных</p>`;
               return;
             }
-
             const table = document.createElement('table');
             table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
             const tbody = document.createElement('tbody');
-
             stageData.details.forEach(item => {
               const row = document.createElement('tr');
               row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
               tbody.appendChild(row);
             });
-
             table.appendChild(tbody);
             container.appendChild(table);
           })
           .catch(err => {
-            document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
             console.error(`Ошибка стадии "${stage}":`, err);
-          })
-          .finally(() => {
-            completed++;
-            if (completed === total) hideLoader();
           });
       });
     };
