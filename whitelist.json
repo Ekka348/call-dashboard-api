@@ -1,5 +1,14 @@
 [
-  { "login": "admin", "password": "qwerty123", "role": "admin", "name": "Администратор" },
-  { "login": "operator1", "password": "123456", "role": "operator", "name": "Оператор 1" },
-  { "login": "еее", "password": "1675", "role": "operator", "name": "Лидия Лукьянова" }
+  { "login": "e.p.milyaeva@gmail.com", "password": "79171828202", "role": "admin", "name": "Миляева Екатерина" },
+  { "login": "nastya.ozerova.mikail@gmail.com", "password": "79097525887", "role": "admin", "name": "Озерова Анастасия" },
+  { "login": "zinaidasokolova2702@gmail.com", "password": "79038576834", "role": "admin", "name": "Соколова Зинаида" },
+  { "login": "esbondarenko1@gmail.com", "password": "79225586324", "role": "admin", "name": "Бондаренко Елена" },
+  { "login": "astapenkoaleksandra133@gmail.com", "password": "79183865133", "role": "operator", "name": "Астапенко Александра" },
+  { "login": "morozilkabrn@gmail.com", "password": "79609489448", "role": "operator", "name": "Морозов Андрей" },
+  { "login": "pavlusovaekaterina93@gmail.com", "password": "79210941935", "role": "operator", "name": "Павлушова Екатерина" },
+  { "login": "roszohaan1988@gmail.com", "password": "79643931387", "role": "operator", "name": "Росоха Анастасия" },
+  { "login": "polina1.ceneva@gmail.com", "password": "79110297378", "role": "operator", "name": "Ценёва Полина" },
+  { "login": "Tati.990128D@gmail.com", "password": "79996313277", "role": "operator", "name": "Доманова Татьяна" },
+  { "login": "anast240612@gmail.com", "password": "79228549882", "role": "operator", "name": "Дубровина Валерия" },
+  { "login": "vkosolapova19@gmail.com", "password": "79022635110", "role": "operator", "name": "Косолапова Вероника" },
 ]
