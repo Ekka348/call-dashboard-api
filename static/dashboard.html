@@ -47,6 +47,32 @@
       text-shadow: 0 2px 20px rgba(59,130,246,0.14);
     }
 
+    /* Loader styles */
+    #loader {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0; top: 0; right: 0; bottom: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(30,41,59,0.66);
+      align-items: center;
+      justify-content: center;
+    }
+    .spinner {
+      border: 7px solid #22304b;
+      border-top: 7px solid var(--accent);
+      border-radius: 50%;
+      width: 54px;
+      height: 54px;
+      animation: spin 0.82s linear infinite;
+      box-shadow: 0 2px 16px rgba(59,130,246,0.18);
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+
     /* Фильтр выбора периода */
     .filter {
       display: flex;
@@ -237,6 +263,10 @@
   </style>
 </head>
 <body>
+  <!-- Loader -->
+  <div id="loader">
+    <div class="spinner"></div>
+  </div>
 
   <form class="filter" onsubmit="fetchStats(); return false;">
     <span class="period-label">Период:</span>
@@ -271,6 +301,13 @@
   <script>
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
 
+    function showLoader() {
+      document.getElementById('loader').style.display = 'flex';
+    }
+    function hideLoader() {
+      document.getElementById('loader').style.display = 'none';
+    }
+
     function fetchStats() {
       const start = document.getElementById("startDate").value;
       const end = document.getElementById("endDate").value;
@@ -279,9 +316,13 @@
         return;
       }
 
-      const rangeParam = `custom:${start}:${end}`;
+      showLoader();
+
+      let completed = 0;
+      const total = STAGE_LABELS.length;
+
       STAGE_LABELS.forEach(stage => {
-        fetch(`/update_stage/${stage}?range=${rangeParam}`)
+        fetch(`/update_stage/${stage}?range=custom:${start}:${end}`)
           .then(r => r.json())
           .then(data => {
             const stageData = data[stage];
@@ -309,12 +350,21 @@
           .catch(err => {
             document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
             console.error(`Ошибка стадии "${stage}":`, err);
+          })
+          .finally(() => {
+            completed++;
+            if (completed === total) hideLoader();
           });
       });
     }
 
     // initial load without filter
     window.onload = () => {
+      showLoader();
+
+      let completed = 0;
+      const total = STAGE_LABELS.length;
+
       STAGE_LABELS.forEach(stage => {
         fetch(`/update_stage/${stage}`)
           .then(r => r.json())
@@ -340,6 +390,14 @@
 
             table.appendChild(tbody);
             container.appendChild(table);
+          })
+          .catch(err => {
+            document.getElementById(`table-${stage}`).innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            console.error(`Ошибка стадии "${stage}":`, err);
+          })
+          .finally(() => {
+            completed++;
+            if (completed === total) hideLoader();
           });
       });
     };
