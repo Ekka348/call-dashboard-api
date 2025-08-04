@@ -1,208 +1,803 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <!-- ... (остальная часть head без изменений) ... -->
+  <meta charset="UTF-8">
+  <title>CRM Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --dark-bg: #1e293b;
+      --block-bg: #232e41;
+      --primary: #3b82f6;
+      --secondary: #9333ea;
+      --accent: #7dd3fc;
+      --border: #334155;
+      --text-main: #e0e7ef;
+      --text-light: #cbd5e1;
+      --badge-bg: #3b82f6;
+      --badge-bg2: #9333ea;
+      --error: #f87171;
+      --success: #4ade80;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: var(--dark-bg);
+      color: var(--text-main);
+      font-family: "Segoe UI", "Inter", Arial, sans-serif;
+      min-height: 100vh;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
+    }
+
+    h1 {
+      text-align: center;
+      margin: 0 0 28px 0;
+      font-size: 2.1em;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--accent);
+      text-shadow: 0 2px 20px rgba(59,130,246,0.14);
+    }
+
+    /* Фильтр выбора периода + операторов */
+    .filter {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: var(--block-bg);
+      padding: 18px 28px;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(30,41,59,0.12);
+      width: fit-content;
+      margin: 0 auto 34px auto;
+      position: relative;
+      z-index: 10;
+    }
+    
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    
+    .period-label {
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+    
+    .period-input-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--dark-bg);
+      border-radius: 7px;
+      padding: 3px 10px 3px 6px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    
+    .period-input-group:focus-within {
+      border: 1.5px solid var(--accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    
+    .period-input-group svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--accent);
+    }
+    
+    .filter input[type="date"] {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      padding: 6px 4px;
+      font-size: 15px;
+      outline: none;
+      width: 120px;
+      font-family: inherit;
+    }
+    
+    .filter input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.7);
+      cursor: pointer;
+    }
+    
+    .filter button {
+      background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+      border: none;
+      color: #fff;
+      padding: 9px 22px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 14px rgba(59,130,246,0.10);
+      transition: all 0.2s;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    
+    .filter button:hover {
+      background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 16px rgba(59,130,246,0.20);
+    }
+    
+    .filter button:active {
+      transform: translateY(0);
+    }
+
+    /* Кастомный выпадающий фильтр операторов */
+    #operator-filter {
+      display: none;
+      position: relative;
+    }
+    
+    .dropdown-selected {
+      background: var(--block-bg);
+      border-radius: 7px;
+      padding: 8px 12px;
+      color: var(--text-main);
+      font-size: 15px;
+      height: 40px;
+      font-family: inherit;
+      box-shadow: 0 1px 6px rgba(30,41,59,0.09);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      user-select: none;
+      min-width: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    
+    .dropdown-selected:hover {
+      border-color: var(--accent);
+    }
+    
+    .dropdown-selected .arrow {
+      font-size: 12px;
+      color: var(--accent);
+      transition: transform 0.2s;
+    }
+    
+    .dropdown-selected.active .arrow {
+      transform: rotate(180deg);
+    }
+    
+    .dropdown-list {
+      position: absolute;
+      top: calc(100% + 5px);
+      left: 0;
+      right: 0;
+      background: var(--block-bg);
+      border: 1.5px solid var(--accent);
+      border-radius: 7px;
+      z-index: 100;
+      display: none;
+      max-height: 300px;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(30,41,59,0.17);
+      padding: 8px 0;
+    }
+    
+    .dropdown-list.show {
+      display: block;
+    }
+    
+    .dropdown-list label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      color: var(--text-main);
+      font-size: 15px;
+      transition: background 0.15s;
+    }
+    
+    .dropdown-list label:hover {
+      background: rgba(59, 130, 246, 0.1);
+    }
+    
+    .dropdown-list input[type="checkbox"] {
+      accent-color: var(--accent);
+      margin: 0;
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+    
+    .dropdown-list .all-ops {
+      font-weight: 600;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 4px;
+    }
+
+    /* Мини-лоадер для каждого блока */
+    .mini-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 120px;
+      width: 100%;
+    }
+    
+    .mini-spinner {
+      border: 3px solid rgba(59, 130, 246, 0.1);
+      border-top: 3px solid var(--accent);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Контейнеры с данными */
+    .stage-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 40px;
+      width: 100%;
+    }
+    
+    .stage-block {
+      background: var(--block-bg);
+      box-shadow: 0 4px 32px rgba(30,41,59,0.14);
+      border-radius: 14px;
+      padding: 22px;
+      min-width: 280px;
+      max-width: 340px;
+      flex: 1 1 320px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .stage-block h2 {
+      margin: 0 0 16px 0;
+      font-size: 1.17em;
+      color: var(--accent);
+      font-weight: 700;
+      border-bottom: 1.5px solid var(--border);
+      padding-bottom: 8px;
+      letter-spacing: 0.01em;
+    }
+    
+    .stage-table {
+      flex: 1;
+    }
+    
+    .stage-table table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      background: transparent;
+    }
+    
+    .stage-table th, .stage-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    
+    .stage-table th {
+      background-color: rgba(34, 48, 75, 0.5);
+      font-weight: 600;
+      color: var(--accent);
+      font-size: 0.95em;
+      position: sticky;
+      top: 0;
+    }
+    
+    .stage-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .stage-table tr:hover {
+      background-color: rgba(59, 130, 246, 0.05);
+    }
+    
+    .stage-table p {
+      color: var(--text-light);
+      margin: 10px 0 0 0;
+      text-align: center;
+    }
+
+    /* Бейджи и сообщения */
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: linear-gradient(90deg, var(--badge-bg) 0%, var(--badge-bg2) 100%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-shadow: 0 1.5px 6px rgba(59,130,246,0.07);
+    }
+    
+    .error-message {
+      color: var(--error);
+      font-weight: 600;
+      margin-top: 14px;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .success-message {
+      color: var(--success);
+      font-weight: 600;
+      margin-top: 14px;
+      text-align: center;
+    }
+    
+    .last-update {
+      color: var(--text-light);
+      font-size: 0.9em;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    /* Адаптивность */
+    @media (max-width: 900px) {
+      .stage-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .stage-block {
+        max-width: 100%;
+        margin: 0 0 24px 0;
+      }
+      
+      .filter {
+        width: 100%;
+        padding: 14px;
+      }
+      
+      .filter-group {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    }
+    
+    @media (max-width: 600px) {
+      body {
+        padding: 15px;
+      }
+      
+      h1 {
+        font-size: 1.5em;
+        margin-bottom: 20px;
+      }
+      
+      .filter {
+        padding: 12px;
+        gap: 10px;
+      }
+      
+      .period-input-group {
+        width: 100%;
+      }
+      
+      .filter input[type="date"] {
+        width: 100%;
+      }
+      
+      .filter button {
+        width: 100%;
+        margin-top: 5px;
+      }
+      
+      #operator-filter {
+        width: 100%;
+      }
+      
+      .dropdown-selected {
+        min-width: 100%;
+      }
+      
+      .stage-block {
+        padding: 16px;
+      }
+      
+      .stage-table th, .stage-table td {
+        padding: 8px 10px;
+      }
+    }
+  </style>
 </head>
 <body>
+  <h1>CRM Dashboard</h1>
+  
   <form class="filter" onsubmit="fetchStats(); return false;">
-    <span class="period-label">Период:</span>
-    <div class="period-input-group">
-      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
-      <input type="date" id="startDate" required>
+    <div class="filter-group">
+      <span class="period-label">Период:</span>
+      <div class="period-input-group">
+        <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
+        <input type="date" id="startDate" required>
+      </div>
+      <span class="period-label">—</span>
+      <div class="period-input-group">
+        <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
+        <input type="date" id="endDate" required>
+      </div>
     </div>
-    <span class="period-label">—</span>
-    <div class="period-input-group">
-      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
-      <input type="date" id="endDate" required>
-    </div>
-    <!-- Убрали лишний select и оставили только кастомный dropdown -->
+    
     <div id="operator-filter">
-      <div class="dropdown-selected" onclick="toggleDropdown(event)">
+      <div class="dropdown-selected" id="dropdown-selected" onclick="toggleDropdown(event)">
         <span id="selected-ops-label">Все операторы</span>
         <span class="arrow">▼</span>
       </div>
       <div class="dropdown-list" id="dropdown-list"></div>
     </div>
+    
     <button type="submit">Показать статистику</button>
   </form>
 
-  <!-- ... (остальная часть HTML без изменений) ... -->
+  <div class="stage-container">
+    <div class="stage-block">
+      <h2>Перезвонить</h2>
+      <div id="table-Перезвонить" class="stage-table">
+        <div class="mini-loader" id="loader-Перезвонить">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="stage-block">
+      <h2>На согласовании</h2>
+      <div id="table-На согласовании" class="stage-table">
+        <div class="mini-loader" id="loader-На согласовании">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="stage-block">
+      <h2>Приглашен к рекрутеру</h2>
+      <div id="table-Приглашен к рекрутеру" class="stage-table">
+        <div class="mini-loader" id="loader-Приглашен к рекрутеру">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <p class="last-update" id="last-update"></p>
 
   <script>
+    // Константы
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
+    const API_BASE_URL = ''; // Базовый URL API
+    
+    // Глобальные переменные
     let userRole = null;
     let operatorList = [];
     let selectedOperators = new Set();
+    let isLoading = false;
 
-    function toggleDropdown(event) {
-      event.stopPropagation();
-      const list = document.getElementById('dropdown-list');
-      if (list) {
-        list.style.display = (list.style.display === 'block') ? 'none' : 'block';
+    // DOM элементы
+    const dropdownSelected = document.getElementById('dropdown-selected');
+    const dropdownList = document.getElementById('dropdown-list');
+    const selectedOpsLabel = document.getElementById('selected-ops-label');
+    const lastUpdateEl = document.getElementById('last-update');
+    
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Установка дат по умолчанию (сегодня)
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('startDate').value = today;
+      document.getElementById('endDate').value = today;
+      
+      // Загрузка данных пользователя и операторов
+      await loadUserInfoAndOperators();
+      
+      // Первоначальная загрузка данных
+      await fetchStats();
+    });
+    
+    // Загрузка информации о пользователе и списка операторов
+    async function loadUserInfoAndOperators() {
+      try {
+        // Загрузка данных пользователя
+        const userResponse = await fetch(`${API_BASE_URL}/api/userinfo`);
+        if (!userResponse.ok) {
+          throw new Error('Ошибка загрузки данных пользователя');
+        }
+        
+        const user = await userResponse.json();
+        userRole = user.role;
+        
+        // Если пользователь админ - загружаем операторов
+        if (userRole === 'admin') {
+          document.getElementById('operator-filter').style.display = 'block';
+          
+          const operatorsResponse = await fetch(`${API_BASE_URL}/api/operators`);
+          if (!operatorsResponse.ok) {
+            throw new Error('Ошибка загрузки списка операторов');
+          }
+          
+          operatorList = await operatorsResponse.json();
+          // По умолчанию выбираем всех операторов
+          selectedOperators = new Set(operatorList.map(op => op.id.toString()));
+          renderOperatorDropdown();
+          updateSelectedLabel();
+        }
+      } catch (error) {
+        console.error('Ошибка:', error);
+        showError('Ошибка загрузки данных. Пожалуйста, обновите страницу.');
       }
     }
     
-    document.addEventListener('click', function(e) {
-      const list = document.getElementById('dropdown-list');
-      const filter = document.getElementById('operator-filter');
-      if (list && list.style.display === 'block' && filter && !filter.contains(e.target)) {
-        list.style.display = 'none';
+    // Переключение выпадающего списка операторов
+    function toggleDropdown(event) {
+      event.stopPropagation();
+      
+      if (dropdownList.classList.contains('show')) {
+        dropdownList.classList.remove('show');
+        dropdownSelected.classList.remove('active');
+      } else {
+        dropdownList.classList.add('show');
+        dropdownSelected.classList.add('active');
+      }
+    }
+    
+    // Закрытие выпадающего списка при клике вне его
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('#operator-filter')) {
+        dropdownList.classList.remove('show');
+        dropdownSelected.classList.remove('active');
       }
     });
-
+    
+    // Обновление текста выбранных операторов
     function updateSelectedLabel() {
-      const label = document.getElementById('selected-ops-label');
-      if (!label) return;
-      
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
-        label.textContent = 'Все операторы';
+        selectedOpsLabel.textContent = 'Все операторы';
       } else {
         const selectedNames = operatorList
           .filter(op => selectedOperators.has(op.id.toString()))
           .map(op => op.name);
-        label.textContent = selectedNames.join(', ') || 'Выберите операторов';
+        selectedOpsLabel.textContent = selectedNames.join(', ') || 'Выберите операторов';
       }
     }
-
-    async function loadUserInfoAndOperators() {
-      try {
-        const user = await fetch('/api/userinfo').then(r => {
-          if (!r.ok) throw new Error('Ошибка получения данных пользователя');
-          return r.json();
-        });
-        
-        userRole = user.role;
-        if (userRole === 'admin') {
-          document.getElementById('operator-filter').style.display = 'flex';
-          
-          const ops = await fetch('/api/operators').then(r => {
-            if (!r.ok) throw new Error('Ошибка получения списка операторов');
-            return r.json();
-          });
-          
-          operatorList = ops;
-          // По умолчанию выбраны все операторы
-          selectedOperators = new Set(operatorList.map(o => o.id.toString()));
-          renderOperatorDropdown();
-          updateSelectedLabel();
-        } else {
-          document.getElementById('operator-filter').style.display = 'none';
-        }
-      } catch (e) {
-        console.error('Ошибка:', e);
-        // Можно добавить уведомление пользователю
-      }
-    }
-
+    
+    // Отрисовка выпадающего списка операторов
     function renderOperatorDropdown() {
-      const list = document.getElementById('dropdown-list');
-      if (!list) return;
-      
-      list.innerHTML = '';
+      dropdownList.innerHTML = '';
       
       // Добавляем чекбокс "Выбрать всех"
       const allChecked = selectedOperators.size === operatorList.length;
-      list.innerHTML += `
-        <label class="all-ops">
-          <input type="checkbox" 
-                 onchange="toggleAllOperators(this)" 
-                 ${allChecked ? 'checked' : ''}>
-          Все операторы
-        </label>
+      const allOpsLabel = document.createElement('label');
+      allOpsLabel.className = 'all-ops';
+      allOpsLabel.innerHTML = `
+        <input type="checkbox" ${allChecked ? 'checked' : ''}>
+        Все операторы
       `;
+      allOpsLabel.querySelector('input').addEventListener('change', toggleAllOperators);
+      dropdownList.appendChild(allOpsLabel);
       
       // Добавляем операторов
       operatorList.forEach(op => {
         const isChecked = selectedOperators.has(op.id.toString());
-        list.innerHTML += `
-          <label>
-            <input type="checkbox" 
-                   value="${op.id}" 
-                   ${isChecked ? 'checked' : ''} 
-                   onchange="toggleOperator(this)">
-            ${op.name}
-          </label>
+        const label = document.createElement('label');
+        label.innerHTML = `
+          <input type="checkbox" value="${op.id}" ${isChecked ? 'checked' : ''}>
+          ${op.name}
         `;
+        label.querySelector('input').addEventListener('change', (e) => toggleOperator(e.target));
+        dropdownList.appendChild(label);
       });
     }
-
+    
+    // Переключение выбора конкретного оператора
     function toggleOperator(checkbox) {
       const operatorId = checkbox.value;
+      
       if (checkbox.checked) {
         selectedOperators.add(operatorId);
       } else {
         selectedOperators.delete(operatorId);
       }
+      
+      // Обновляем чекбокс "Выбрать всех"
+      updateSelectAllCheckbox();
       updateSelectedLabel();
     }
-
-    function toggleAllOperators(checkbox) {
+    
+    // Переключение выбора всех операторов
+    function toggleAllOperators(event) {
+      const checkbox = event.target;
+      
       if (checkbox.checked) {
         operatorList.forEach(op => selectedOperators.add(op.id.toString()));
       } else {
         selectedOperators.clear();
       }
-      // Перерисовываем список, чтобы обновить все чекбоксы
-      renderOperatorDropdown();
+      
+      // Обновляем все чекбоксы
+      const checkboxes = dropdownList.querySelectorAll('input[type="checkbox"]:not(.all-ops input)');
+      checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+      });
+      
       updateSelectedLabel();
     }
-
+    
+    // Обновление состояния чекбокса "Выбрать всех"
+    function updateSelectAllCheckbox() {
+      const allOpsCheckbox = dropdownList.querySelector('.all-ops input');
+      if (!allOpsCheckbox) return;
+      
+      if (selectedOperators.size === operatorList.length) {
+        allOpsCheckbox.checked = true;
+        allOpsCheckbox.indeterminate = false;
+      } else if (selectedOperators.size > 0) {
+        allOpsCheckbox.checked = false;
+        allOpsCheckbox.indeterminate = true;
+      } else {
+        allOpsCheckbox.checked = false;
+        allOpsCheckbox.indeterminate = false;
+      }
+    }
+    
+    // Получение выбранных операторов в виде строки для API
     function getSelectedOperators() {
       if (userRole !== 'admin') return '';
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
       return Array.from(selectedOperators).join(',');
     }
-
-    function fetchStats() {
-      const start = document.getElementById("startDate").value;
-      const end = document.getElementById("endDate").value;
-      if (!start || !end) {
-        alert("Пожалуйста, заполните обе даты");
+    
+    // Показать сообщение об ошибке
+    function showError(message) {
+      const errorEl = document.createElement('div');
+      errorEl.className = 'error-message';
+      errorEl.innerHTML = `⛔ ${message}`;
+      
+      // Добавляем сообщение в верх страницы
+      document.body.insertBefore(errorEl, document.body.firstChild);
+      
+      // Автоматическое скрытие через 5 секунд
+      setTimeout(() => {
+        errorEl.remove();
+      }, 5000);
+    }
+    
+    // Показать сообщение об успехе
+    function showSuccess(message) {
+      const successEl = document.createElement('div');
+      successEl.className = 'success-message';
+      successEl.innerHTML = `✅ ${message}`;
+      
+      // Добавляем сообщение в верх страницы
+      document.body.insertBefore(successEl, document.body.firstChild);
+      
+      // Автоматическое скрытие через 3 секунды
+      setTimeout(() => {
+        successEl.remove();
+      }, 3000);
+    }
+    
+    // Загрузка статистики
+    async function fetchStats() {
+      if (isLoading) return;
+      isLoading = true;
+      
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      
+      // Валидация дат
+      if (!startDate || !endDate) {
+        showError('Пожалуйста, выберите обе даты');
+        isLoading = false;
+        return;
+      }
+      
+      if (new Date(endDate) < new Date(startDate)) {
+        showError('Дата окончания не может быть раньше даты начала');
+        isLoading = false;
         return;
       }
       
       const operators = getSelectedOperators();
-      STAGE_LABELS.forEach(stage => {
-        const container = document.getElementById(`table-${stage}`);
-        if (!container) return;
+      
+      try {
+        // Показываем лоадеры для всех блоков
+        STAGE_LABELS.forEach(stage => {
+          const container = document.getElementById(`table-${stage}`);
+          if (container) {
+            container.innerHTML = `
+              <div class="mini-loader" id="loader-${stage}">
+                <div class="mini-spinner"></div>
+              </div>
+            `;
+          }
+        });
         
-        container.innerHTML = `
-          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
-            <div class="mini-spinner"></div>
-          </div>
-        `;
-        
-        let url = `/update_stage/${stage}?range=custom:${start}:${end}`;
-        if (operators) {
-          url += `&operators=${encodeURIComponent(operators)}`;
-        }
-        
-        fetch(url)
-          .then(r => {
-            if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
-            return r.json();
-          })
-          .then(data => {
+        // Загружаем данные для каждой стадии
+        const promises = STAGE_LABELS.map(async stage => {
+          const container = document.getElementById(`table-${stage}`);
+          if (!container) return;
+          
+          try {
+            let url = `${API_BASE_URL}/update_stage/${encodeURIComponent(stage)}?range=custom:${startDate}:${endDate}`;
+            if (operators) {
+              url += `&operators=${operators}`;
+            }
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
             const stageData = data[stage];
+            
+            // Очищаем контейнер
             container.innerHTML = '';
             
+            // Если нет данных
             if (!stageData.details || stageData.details.length === 0) {
-              container.innerHTML = `<p>Нет данных за выбранный период</p>`;
+              container.innerHTML = '<p>Нет данных за выбранный период</p>';
               return;
             }
             
+            // Создаем таблицу
             const table = document.createElement('table');
-            table.innerHTML = `
-              <thead>
-                <tr>
-                  <th>Оператор</th>
-                  <th>Количество</th>
-                </tr>
-              </thead>
-            `;
             
+            // Заголовок таблицы
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+              <tr>
+                <th>Оператор</th>
+                <th>Количество</th>
+              </tr>
+            `;
+            table.appendChild(thead);
+            
+            // Тело таблицы
             const tbody = document.createElement('tbody');
-            stageData.details.forEach(item => {
+            
+            // Сортируем по количеству (по убыванию)
+            const sortedDetails = [...stageData.details].sort((a, b) => b.count - a.count);
+            
+            // Добавляем строки
+            sortedDetails.forEach(item => {
               const row = document.createElement('tr');
               row.innerHTML = `
                 <td>${item.operator}</td>
@@ -213,29 +808,31 @@
             
             table.appendChild(tbody);
             container.appendChild(table);
-          })
-          .catch(err => {
-            console.error(`Ошибка загрузки данных для "${stage}":`, err);
+          } catch (error) {
+            console.error(`Ошибка загрузки данных для "${stage}":`, error);
             container.innerHTML = `
               <p class="error-message">
-                ⛔ Ошибка загрузки данных. Пожалуйста, попробуйте позже.
+                ⛔ Ошибка загрузки данных
               </p>
             `;
-          });
-      });
+          }
+        });
+        
+        // Ждем завершения всех запросов
+        await Promise.all(promises);
+        
+        // Обновляем время последнего обновления
+        const now = new Date();
+        lastUpdateEl.textContent = `Последнее обновление: ${now.toLocaleString('ru-RU')}`;
+        
+        showSuccess('Данные успешно обновлены');
+      } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        showError('Ошибка загрузки данных. Пожалуйста, попробуйте позже.');
+      } finally {
+        isLoading = false;
+      }
     }
-
-    window.onload = async () => {
-      await loadUserInfoAndOperators();
-      
-      // Устанавливаем даты по умолчанию (сегодня)
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById("startDate").value = today;
-      document.getElementById("endDate").value = today;
-      
-      // Загружаем данные сразу после загрузки страницы
-      fetchStats();
-    };
   </script>
 </body>
 </html>
