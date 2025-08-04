@@ -5,250 +5,34 @@ from datetime import datetime, timedelta
 from collections import Counter
 from pytz import timezone
 from concurrent.futures import ThreadPoolExecutor
-import logging
-from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev_key")
 
-# Конфигурация
-class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY") or os.urandom(24)
-    BITRIX_HOOK = os.environ.get("BITRIX_HOOK", "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-    SESSION_TIMEOUT = 3600  # 1 час
-    USER_CACHE_TIMEOUT = 300  # 5 минут
-    MAX_LOGIN_ATTEMPTS = 5
-    LOG_FILE = 'app.log'
-
-app.config.from_object(Config)
-app.secret_key = app.config['SECRET_KEY']
-
-# Настройка логирования
-handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=10000, backupCount=1)
-handler.setLevel(logging.INFO)
-app.logger.addHandler(handler)
-
-# Глобальные переменные
+HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 GROUPED_STAGES = []
-STAGE_LABELS = {
-    "На согласовании": "UC_A2DF81",
-    "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED",
-}
 
-# Кэш пользователей
-user_cache = {
-    "data": {},
-    "active_users": set(),
-    "last": 0
-}
-
-# Декораторы
+# 🔐 Авторизация
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if "login" not in session:
             return redirect("/auth")
-        if time.time() - session.get('last_activity', 0) > app.config['SESSION_TIMEOUT']:
-            session.clear()
-            return redirect("/auth?timeout=1")
-        session['last_activity'] = time.time()
         return f(*args, **kwargs)
     return wrapper
 
-def admin_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if session.get("role") != "admin":
-            return jsonify({"error": "Forbidden"}), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-# Вспомогательные функции
-def log_error(message, exc=None):
-    app.logger.error(f"{message}: {str(exc) if exc else 'No details'}")
-
-def find_user(login):
-    try:
-        with open("whitelist.json", "r", encoding="utf-8") as f:
-            users = json.load(f)
-        return next((u for u in users if u["login"] == login), None)
-    except Exception as e:
-        log_error("Ошибка загрузки whitelist.json", e)
-        return None
-
-def get_range_dates(rtype):
-    tz = timezone("Europe/Moscow")
-    now = datetime.now(tz)
-
-    try:
-        if rtype == "week":
-            start = now - timedelta(days=now.weekday())
-            end = now
-        elif rtype == "month":
-            start = now.replace(day=1)
-            end = now
-        elif rtype.startswith("custom:"):
-            _, start_raw, end_raw = rtype.split(":")
-            start = datetime.strptime(start_raw, "%Y-%m-%d")
-            end = datetime.strptime(end_raw, "%Y-%m-%d") + timedelta(days=1)
-        else:  # today
-            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now
-
-        return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception as e:
-        log_error("Ошибка определения диапазона дат", e)
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-        return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
-
-def load_users():
-    if time.time() - user_cache["last"] < app.config['USER_CACHE_TIMEOUT']:
-        return user_cache["data"]
-    
-    users = {}
-    user_cache["active_users"] = set()
-    
-    try:
-        start = 0
-        while True:
-            response = requests.post(
-                app.config['BITRIX_HOOK'] + "user.get.json",
-                json={"start": start},
-                timeout=10
-            ).json()
-            
-            if "error" in response:
-                raise Exception(response.get("error_description", "Bitrix API error"))
-                
-            for user in response.get("result", []):
-                user_id = int(user["ID"])
-                users[user_id] = f'{user["NAME"]} {user["LAST_NAME"]}'
-                if user.get("ACTIVE", "Y") == "Y":
-                    user_cache["active_users"].add(user_id)
-                    
-            if "next" not in response:
-                break
-            start = response.get("next")
-            
-    except Exception as e:
-        log_error("Ошибка загрузки пользователей", e)
-        return user_cache["data"]
-        
-    user_cache["data"] = users
-    user_cache["last"] = time.time()
-    return users
-
-# Работа с лидами
-def fetch_leads(stage, start, end, offset=0):
-    try:
-        response = requests.post(
-            app.config['BITRIX_HOOK'] + "crm.lead.list.json",
-            json={
-                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                "select": ["ID", "ASSIGNED_BY_ID"],
-                "start": offset
-            },
-            timeout=10
-        ).json()
-        
-        if "error" in response:
-            raise Exception(response.get("error_description", "Bitrix API error"))
-            
-        return response.get("result", []), response.get("next", 0)
-    except Exception as e:
-        log_error(f"Ошибка загрузки лидов (stage: {stage})", e)
-        return [], 0
-
-def fetch_all_leads(stage):
-    leads, offset = [], 0
-    try:
-        while True:
-            page, offset = fetch_leads(stage, "", "", offset)
-            if not page:
-                break
-            leads.extend(page)
-            if not offset:
-                break
-    except Exception as e:
-        log_error(f"Ошибка загрузки всех лидов (stage: {stage})", e)
-    return leads
-
-# Кэширование групповых стадий
-group_cache = {"data": {}, "last": 0}
-
-def cached_group_count(name, stage_id):
-    now = time.time()
-    if name in group_cache["data"] and now - group_cache["last"] < 60:
-        return group_cache["data"][name]
-        
-    count = len(fetch_all_leads(stage_id))
-    group_cache["data"][name] = count
-    group_cache["last"] = now
-    return count
-
-def process_stage(name, stage_id, start, end, users, operator_filter=None):
-    try:
-        if name in GROUPED_STAGES:
-            return name, {"grouped": True, "count": cached_group_count(name, stage_id)}
-
-        leads = []
-        offset = 0
-        while True:
-            page, offset = fetch_leads(stage_id, start, end, offset)
-            leads.extend(page)
-            if not offset:
-                break
-
-        stats = Counter()
-        for lead in leads:
-            uid = lead.get("ASSIGNED_BY_ID")
-            if not uid or int(uid) not in user_cache["active_users"]:
-                continue
-                
-            if operator_filter and str(uid) not in operator_filter:
-                continue
-                
-            try:
-                stats[int(uid)] += 1
-            except Exception as e:
-                log_error(f"Ошибка при подсчёте UID {uid}", e)
-
-        details = [
-            {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-            for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-        ]
-        
-        return name, {"grouped": False, "details": details}
-    except Exception as e:
-        log_error(f"Ошибка при обработке стадии '{name}'", e)
-        return name, {"grouped": False, "details": []}
-
-# Маршруты
 @app.route("/auth", methods=["GET", "POST"])
 def auth():
     if request.method == "POST":
-        login = request.form.get("login", "").strip()
-        password = request.form.get("password", "").strip()
-        
-        if not login or not password:
-            return render_template("auth.html", error="Заполните все поля")
-            
-        if session.get('login_attempts', 0) >= app.config['MAX_LOGIN_ATTEMPTS']:
-            return render_template("auth.html", error="Слишком много попыток. Попробуйте позже.")
-            
+        login = request.form["login"]
+        password = request.form["password"]
         user = find_user(login)
         if user and user["password"] == password:
-            session.clear()
             session["login"] = user["login"]
             session["role"] = user["role"]
             session["name"] = user["name"]
-            session['last_activity'] = time.time()
             return redirect("/dashboard")
-            
-        session['login_attempts'] = session.get('login_attempts', 0) + 1
         return render_template("auth.html", error="Неверный логин или пароль")
-        
     return render_template("auth.html")
 
 @app.route("/")
@@ -260,20 +44,157 @@ def index():
 def dashboard():
     return app.send_static_file("dashboard.html")
 
+def find_user(login):
+    with open("whitelist.json", "r", encoding="utf-8") as f:
+        users = json.load(f)
+    return next((u for u in users if u["login"] == login), None)
+
+def get_range_dates(rtype):
+    tz = timezone("Europe/Moscow")
+    now = datetime.now(tz)
+
+    if rtype == "week":
+        start = now - timedelta(days=now.weekday())
+        end = now
+    elif rtype == "month":
+        start = now.replace(day=1)
+        end = now
+    elif rtype.startswith("custom:"):
+        try:
+            _, start_raw, end_raw = rtype.split(":")
+            start = datetime.strptime(start_raw, "%Y-%m-%d")
+            end = datetime.strptime(end_raw, "%Y-%m-%d") + timedelta(days=1)
+        except Exception as e:
+            print("Ошибка парсинга custom-периода:", e)
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+    else:  # today
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = now
+
+    return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
+
+
+
+user_cache = {"data": {}, "last": 0}
+def load_users():
+    if time.time() - user_cache["last"] < 300:
+        return user_cache["data"]
+    users, start = {}, 0
+    try:
+        while True:
+            r = requests.post(HOOK + "user.get.json", json={"start": start}, timeout=10).json()
+            for u in r.get("result", []):
+                users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
+            if "next" not in r: break
+            start = r.get("next")
+    except Exception as e:
+        print("Ошибка загрузки пользователей:", e)
+    user_cache["data"], user_cache["last"] = users, time.time()
+    return users
+
+STAGE_LABELS = {
+    "На согласовании": "UC_A2DF81",
+    "Перезвонить": "IN_PROCESS",
+    "Приглашен к рекрутеру": "CONVERTED",
+}
+
+def fetch_leads(stage, start, end):
+    leads, offset = [], 0
+    try:
+        while True:
+            r = requests.post(HOOK + "crm.lead.list.json", json={
+                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
+                "select": ["ID", "ASSIGNED_BY_ID"],
+                "start": offset
+            }, timeout=10).json()
+            page = r.get("result", [])
+            if not page: break
+            leads.extend(page)
+            offset = r.get("next", 0)
+            if not offset: break
+    except Exception as e:
+        print("Ошибка загрузки лидов:", e)
+    return leads
+
+def fetch_all_leads(stage):
+    leads, offset = [], 0
+    try:
+        while True:
+            r = requests.post(HOOK + "crm.lead.list.json", json={
+                "filter": {"STATUS_ID": stage},
+                "select": ["ID", "ASSIGNED_BY_ID"],
+                "start": offset
+            }, timeout=10).json()
+            page = r.get("result", [])
+            if not page: break
+            leads.extend(page)
+            offset = r.get("next", 0)
+            if not offset: break
+    except Exception as e:
+        print("Ошибка загрузки всех лидов:", e)
+    return leads
+
+group_cache = {"data": {}, "last": 0}
+def cached_group_count(name, stage_id):
+    now = time.time()
+    if name in group_cache["data"] and now - group_cache["last"] < 60:
+        return group_cache["data"][name]
+    count = len(fetch_all_leads(stage_id))
+    group_cache["data"][name] = count
+    group_cache["last"] = now
+    return count
+
+def process_stage(name, stage_id, start, end, users):
+def process_stage(name, stage_id, start, end, users, operator_filter=None):
+    try:
+        if name in GROUPED_STAGES:
+            return name, {"grouped": True, "count": cached_group_count(name, stage_id)}
+
+        leads = fetch_leads(stage_id, start, end)
+        stats = Counter()
+
+        for lead in leads:
+            uid = lead.get("ASSIGNED_BY_ID")
+            if not uid: continue
+            # фильтрация по операторам (для админа)
+            if operator_filter:
+                if str(uid) not in operator_filter:
+                    continue
+            try:
+                stats[int(uid)] += 1
+            except Exception as e:
+                print("Ошибка при подсчёте UID:", e)
+
+        details = [
+            {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+            for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+        ]
+        return name, {"grouped": False, "details": details}
+    except Exception as e:
+        print(f"Ошибка при обработке стадии '{name}':", e)
+        return name, {"grouped": False, "details": []}
+
 @app.route("/update_stage/<stage_name>")
 @login_required
 def update_stage(stage_name):
     if stage_name not in STAGE_LABELS:
-        return jsonify({"error": "Стадия не найдена"}), 404
+        return "Стадия не найдена", 404
 
     try:
-        rtype = request.args.get("range", "today")
+        # 💡 Новый параметр из строки запроса: ?range=week
+        rtype = request.args.get("range", "today")  # today/week/month/custom
         start, end = get_range_dates(rtype)
+
         users = load_users()
         stage_id = STAGE_LABELS[stage_name]
+        name, stage_data = process_stage(stage_name, stage_id, start, end, users)
 
+        # Новый: фильтр по операторам для админа
         operator_ids = request.args.get("operators")
-        operator_filter = set(operator_ids.split(",")) if operator_ids else None
+        operator_filter = None
+        if operator_ids:
+            operator_filter = set(operator_ids.split(","))
 
         name, stage_data = process_stage(stage_name, stage_id, start, end, users, operator_filter)
 
@@ -286,13 +207,14 @@ def update_stage(stage_name):
 
         return jsonify({name: stage_data})
     except Exception as e:
-        log_error("Ошибка в update_stage", e)
-        return jsonify({"error": "Internal server error"}), 500
+        print("Ошибка в update_stage:", e)
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/personal_stats")
 @login_required
 def personal_stats():
-    operator_name = session.get("name")
+    operator_name = session.get("name", None)
     if not operator_name:
         return jsonify({"error": "Оператор не найден"}), 403
 
@@ -301,15 +223,12 @@ def personal_stats():
     stats = {}
 
     for name, stage_id in STAGE_LABELS.items():
-        leads = []
-        offset = 0
-        while True:
-            page, offset = fetch_leads(stage_id, start, end, offset)
-            leads.extend(page)
-            if not offset:
-                break
-
-        count = sum(1 for lead in leads if users.get(lead.get("ASSIGNED_BY_ID")) == operator_name)
+        leads = fetch_leads(stage_id, start, end)
+        count = 0
+        for lead in leads:
+            uid = lead.get("ASSIGNED_BY_ID")
+            if users.get(uid) == operator_name:
+                count += 1
         stats[name] = count
 
     return jsonify({"operator": operator_name, "stats": stats})
@@ -319,13 +238,17 @@ def personal_stats():
 def leads_by_stage():
     start, end = get_range_dates("today")
     users = load_users()
-
-    operator_ids = request.args.get("operators")
-    operator_filter = set(operator_ids.split(",")) if operator_ids else None
-
     data = {}
+
+    # Новый: фильтр по операторам для админа
+    operator_ids = request.args.get("operators")
+    operator_filter = None
+    if operator_ids:
+        operator_filter = set(operator_ids.split(","))
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
+            executor.submit(process_stage, name, stage_id, start, end, users)
             executor.submit(process_stage, name, stage_id, start, end, users, operator_filter)
             for name, stage_id in STAGE_LABELS.items()
         ]
@@ -333,7 +256,7 @@ def leads_by_stage():
             name, stage_data = future.result()
             data[name] = stage_data
 
-    return jsonify({"range": "today", "data": data})
+    return {"range": "today", "data": data}
 
 @app.route("/api/userinfo")
 @login_required
@@ -345,36 +268,29 @@ def api_userinfo():
 
 @app.route("/api/operators")
 @login_required
-@admin_required
 def api_operators():
     users = load_users()
+    # Можно фильтровать только операторов, если у вас есть поле role
+    # Сейчас возвращает всех
     return jsonify([
-        {
-            "id": str(uid),
-            "name": name,
-            "surname": name.split()[-1]
-        }
+        {"id": uid, "name": name}
         for uid, name in users.items()
-        if uid in user_cache["active_users"]
     ])
 
 @app.route("/ping")
 def ping():
-    return jsonify({"status": "ok"})
+    return {"status": "ok"}
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/auth")
+@app.route("/clock")
+def clock():
+    tz = timezone("Europe/Moscow")
+    moscow_now = datetime.now(tz)
+    utc_now = datetime.utcnow()
+    return {
+        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
+        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
+    }
 
-@app.errorhandler(404)
-def not_found(e):
-    return render_template("404.html"), 404
-
-@app.errorhandler(500)
-def server_error(e):
-    log_error("Server error", e)
-    return render_template("500.html"), 500
-
+# 🚀 Старт
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
