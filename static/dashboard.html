@@ -19,6 +19,7 @@
       --error: #f87171;
       --success: #4ade80;
       --warning: #fbbf24;
+      --total-bg: #2a3a52;
     }
     
     * {
@@ -328,6 +329,16 @@
       background-color: rgba(59, 130, 246, 0.05);
     }
     
+    /* Строка с итогами */
+    .stage-table tr.total-row {
+      background-color: var(--total-bg);
+      font-weight: 600;
+    }
+    
+    .stage-table tr.total-row td {
+      border-top: 2px solid var(--accent);
+    }
+    
     .stage-table p {
       color: var(--text-light);
       margin: 10px 0 0 0;
@@ -348,7 +359,7 @@
     }
     
     .badge-total {
-      background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
+      background: linear-gradient(90deg, #7c3aed 0%, #3b82f6 100%);
     }
     
     .error-message {
@@ -521,7 +532,7 @@
     let operatorList = [];
     let selectedOperators = new Set();
     let isLoading = false;
-    let activeOperators = new Set(); // Для хранения активных операторов
+    let activeOperators = new Set();
 
     // DOM элементы
     const dropdownSelected = document.getElementById('dropdown-selected');
@@ -567,11 +578,15 @@
           // Получаем список всех операторов и фильтруем активных
           const allOperators = await operatorsResponse.json();
           
-          // Фильтруем уволенных операторов (предполагаем, что у них есть флаг active: false)
-          operatorList = allOperators.filter(op => op.active !== false);
-          
-          // Сортируем операторов по имени
-          operatorList.sort((a, b) => a.name.localeCompare(b.name));
+          // Фильтруем уволенных операторов (active: false) и сортируем по ФИО
+          operatorList = allOperators
+            .filter(op => op.active !== false)
+            .sort((a, b) => {
+              // Сортируем по полному имени (ФИО)
+              const nameA = `${a.lastName || ''} ${a.firstName || ''} ${a.middleName || ''}`.trim().toLowerCase();
+              const nameB = `${b.lastName || ''} ${b.firstName || ''} ${b.middleName || ''}`.trim().toLowerCase();
+              return nameA.localeCompare(nameB);
+            });
           
           // Сохраняем ID активных операторов
           activeOperators = new Set(operatorList.map(op => op.id.toString()));
@@ -613,9 +628,17 @@
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
         selectedOpsLabel.textContent = 'Все операторы';
       } else {
+        // Сортируем выбранных операторов по ФИО
         const selectedNames = operatorList
           .filter(op => selectedOperators.has(op.id.toString()))
-          .map(op => op.name);
+          .map(op => {
+            // Форматируем ФИО в удобочитаемый вид
+            return [op.lastName, op.firstName, op.middleName]
+              .filter(Boolean)
+              .join(' ');
+          })
+          .sort((a, b) => a.localeCompare(b));
+        
         selectedOpsLabel.textContent = selectedNames.join(', ') || 'Выберите операторов';
       }
     }
@@ -635,13 +658,19 @@
       allOpsLabel.querySelector('input').addEventListener('change', toggleAllOperators);
       dropdownList.appendChild(allOpsLabel);
       
-      // Добавляем операторов
+      // Добавляем операторов (уже отсортированных при загрузке)
       operatorList.forEach(op => {
         const isChecked = selectedOperators.has(op.id.toString());
         const label = document.createElement('label');
+        
+        // Форматируем ФИО для отображения
+        const fullName = [op.lastName, op.firstName, op.middleName]
+          .filter(Boolean)
+          .join(' ');
+        
         label.innerHTML = `
           <input type="checkbox" value="${op.id}" ${isChecked ? 'checked' : ''}>
-          ${op.name}
+          ${fullName}
         `;
         label.querySelector('input').addEventListener('change', (e) => toggleOperator(e.target));
         dropdownList.appendChild(label);
@@ -816,8 +845,10 @@
             // Тело таблицы
             const tbody = document.createElement('tbody');
             
-            // Сортируем по количеству (по убыванию)
-            const sortedDetails = [...stageData.details].sort((a, b) => b.count - a.count);
+            // Сортируем по имени оператора (А-Я)
+            const sortedDetails = [...stageData.details].sort((a, b) => {
+              return a.operator.localeCompare(b.operator);
+            });
             
             // Добавляем строки
             sortedDetails.forEach(item => {
