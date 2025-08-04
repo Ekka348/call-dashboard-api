@@ -18,25 +18,25 @@
       --badge-bg2: #9333ea;
       --error: #f87171;
       --success: #4ade80;
+      --warning: #fbbf24;
     }
     
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
     
     html, body {
       height: 100%;
-      margin: 0;
-      padding: 0;
       background: var(--dark-bg);
       color: var(--text-main);
       font-family: "Segoe UI", "Inter", Arial, sans-serif;
-      min-height: 100vh;
+      line-height: 1.5;
     }
 
     body {
       min-height: 100vh;
-      margin: 0;
       padding: 20px;
       display: flex;
       flex-direction: column;
@@ -46,7 +46,7 @@
     h1 {
       text-align: center;
       margin: 0 0 28px 0;
-      font-size: 2.1em;
+      font-size: 2.1rem;
       font-weight: 700;
       letter-spacing: 0.01em;
       color: var(--accent);
@@ -79,7 +79,7 @@
     .period-label {
       color: var(--text-main);
       font-weight: 600;
-      font-size: 16px;
+      font-size: 1rem;
       display: flex;
       align-items: center;
       white-space: nowrap;
@@ -112,7 +112,7 @@
       border: none;
       color: var(--text-main);
       padding: 6px 4px;
-      font-size: 15px;
+      font-size: 0.95rem;
       outline: none;
       width: 120px;
       font-family: inherit;
@@ -129,7 +129,7 @@
       color: #fff;
       padding: 9px 22px;
       border-radius: 8px;
-      font-size: 16px;
+      font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       box-shadow: 0 1px 14px rgba(59,130,246,0.10);
@@ -159,7 +159,7 @@
       border-radius: 7px;
       padding: 8px 12px;
       color: var(--text-main);
-      font-size: 15px;
+      font-size: 0.95rem;
       height: 40px;
       font-family: inherit;
       box-shadow: 0 1px 6px rgba(30,41,59,0.09);
@@ -215,7 +215,7 @@
       padding: 6px 12px;
       cursor: pointer;
       color: var(--text-main);
-      font-size: 15px;
+      font-size: 0.95rem;
       transition: background 0.15s;
     }
     
@@ -286,7 +286,7 @@
     
     .stage-block h2 {
       margin: 0 0 16px 0;
-      font-size: 1.17em;
+      font-size: 1.17rem;
       color: var(--accent);
       font-weight: 700;
       border-bottom: 1.5px solid var(--border);
@@ -315,7 +315,7 @@
       background-color: rgba(34, 48, 75, 0.5);
       font-weight: 600;
       color: var(--accent);
-      font-size: 0.95em;
+      font-size: 0.95rem;
       position: sticky;
       top: 0;
     }
@@ -341,10 +341,14 @@
       border-radius: 12px;
       background: linear-gradient(90deg, var(--badge-bg) 0%, var(--badge-bg2) 100%);
       color: #fff;
-      font-size: 14px;
+      font-size: 0.85rem;
       font-weight: 600;
       letter-spacing: 0.02em;
       box-shadow: 0 1.5px 6px rgba(59,130,246,0.07);
+    }
+    
+    .badge-total {
+      background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
     }
     
     .error-message {
@@ -365,9 +369,16 @@
       text-align: center;
     }
     
+    .warning-message {
+      color: var(--warning);
+      font-weight: 600;
+      margin-top: 14px;
+      text-align: center;
+    }
+    
     .last-update {
       color: var(--text-light);
-      font-size: 0.9em;
+      font-size: 0.9rem;
       text-align: center;
       margin-top: 20px;
     }
@@ -401,7 +412,7 @@
       }
       
       h1 {
-        font-size: 1.5em;
+        font-size: 1.5rem;
         margin-bottom: 20px;
       }
       
@@ -510,6 +521,7 @@
     let operatorList = [];
     let selectedOperators = new Set();
     let isLoading = false;
+    let activeOperators = new Set(); // Для хранения активных операторов
 
     // DOM элементы
     const dropdownSelected = document.getElementById('dropdown-selected');
@@ -552,9 +564,20 @@
             throw new Error('Ошибка загрузки списка операторов');
           }
           
-          operatorList = await operatorsResponse.json();
-          // По умолчанию выбираем всех операторов
-          selectedOperators = new Set(operatorList.map(op => op.id.toString()));
+          // Получаем список всех операторов и фильтруем активных
+          const allOperators = await operatorsResponse.json();
+          
+          // Фильтруем уволенных операторов (предполагаем, что у них есть флаг active: false)
+          operatorList = allOperators.filter(op => op.active !== false);
+          
+          // Сортируем операторов по имени
+          operatorList.sort((a, b) => a.name.localeCompare(b.name));
+          
+          // Сохраняем ID активных операторов
+          activeOperators = new Set(operatorList.map(op => op.id.toString()));
+          
+          // По умолчанию выбираем всех активных операторов
+          selectedOperators = new Set(activeOperators);
           renderOperatorDropdown();
           updateSelectedLabel();
         }
@@ -805,6 +828,16 @@
               `;
               tbody.appendChild(row);
             });
+            
+            // Добавляем строку с итогами
+            const totalCount = sortedDetails.reduce((sum, item) => sum + item.count, 0);
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'total-row';
+            totalRow.innerHTML = `
+              <td><strong>Итого:</strong></td>
+              <td><span class="badge badge-total">${totalCount}</span></td>
+            `;
+            tbody.appendChild(totalRow);
             
             table.appendChild(tbody);
             container.appendChild(table);
