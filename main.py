@@ -14,11 +14,8 @@ if sys.version_info >= (3, 12):
     import ssl
     ssl.wrap_socket = ssl.SSLContext.wrap_socket
 
-from flask import Flask
-from flask_socketio import SocketIO
-
 app = Flask(__name__)
-socketio = SocketIO(app, async_mode='gevent') 
+socketio = SocketIO(app, async_mode='gevent')
 
 # Конфигурация
 class Config:
@@ -40,9 +37,9 @@ app.logger.addHandler(handler)
 
 # Глобальные переменные
 STAGE_LABELS = {
-    "На согласовании": "UC_A2DF81",
     "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED",
+    "На согласовании": "UC_A2DF81", 
+    "Приглашен к рекрутеру": "CONVERTED"
 }
 
 data_cache = {
@@ -82,42 +79,38 @@ def find_user(login):
     try:
         with open("whitelist.json", "r", encoding="utf-8") as f:
             users = json.load(f)
-        return next((u for u in users if u["login"] == login), None)
+        return next((u for u in users if u["login"] == login), None
     except Exception as e:
         log_error("Ошибка загрузки whitelist.json", e)
         return None
 
-def get_range_dates(rtype):
+def get_current_month_range():
     tz = timezone("Europe/Moscow")
     now = datetime.now(tz)
-    try:
-        if rtype == "week":
-            start = now - timedelta(days=now.weekday())
-            end = now
-        elif rtype == "month":
-            start = now.replace(day=1)
-            end = now
-        elif rtype.startswith("custom:"):
-            _, start_raw, end_raw = rtype.split(":")
-            start = datetime.strptime(start_raw, "%Y-%m-%d")
-            end = datetime.strptime(end_raw, "%Y-%m-%d") + timedelta(days=1)
-        else:  # today
-            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now
-        return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception as e:
-        log_error("Ошибка определения диапазона дат", e)
-        return now.strftime("%Y-%m-%d 00:00:00"), now.strftime("%Y-%m-%d %H:%M:%S")
+    first_day = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_day = (now.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    return (
+        first_day.strftime("%Y-%m-%d %H:%M:%S"),
+        last_day.strftime("%Y-%m-%d 23:59:59")
+    )
 
 # Работа с данными
-def fetch_leads(stage, start, end, offset=0):
+def fetch_leads(stage):
     try:
+        month_start, month_end = get_current_month_range()
+        current_time = datetime.now(timezone("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+        
         response = requests.post(
             f"{app.config['BITRIX_HOOK']}crm.lead.list.json",
             json={
-                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
+                "filter": {
+                    "STATUS_ID": stage,
+                    "!CLOSED": "Y",
+                    ">=DATE_MODIFY": month_start,
+                    "<=DATE_MODIFY": current_time
+                },
                 "select": ["ID", "ASSIGNED_BY_ID"],
-                "start": offset
+                "start": 0
             },
             timeout=10
         )
@@ -155,7 +148,6 @@ def update_cache():
     while True:
         try:
             users = load_users()
-            start, end = get_range_dates("today")
             
             leads_by_stage = {}
             total_leads = 0
@@ -164,7 +156,7 @@ def update_cache():
                 leads = []
                 offset = 0
                 while True:
-                    batch, offset = fetch_leads(stage_id, start, end, offset)
+                    batch, offset = fetch_leads(stage_id)
                     leads.extend(batch)
                     if not offset:
                         break
@@ -262,7 +254,7 @@ def admin_data():
 def handle_connect():
     if session.get("role") == "admin":
         with cache_lock:
-            emit('data_update', {
+            socketio.emit('data_update', {
                 'leads_by_stage': data_cache["leads_by_stage"],
                 'operators_stats': data_cache["operators_stats"],
                 'total_leads': data_cache["total_leads"],
