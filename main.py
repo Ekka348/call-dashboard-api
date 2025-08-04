@@ -176,7 +176,7 @@ def cached_group_count(name, stage_id):
     group_cache["last"] = now
     return count
 
-def process_stage(name, stage_id, start, end, users, operator_filter=None):
+def process_stage(name, stage_id, start, end, users):
     try:
         if name in GROUPED_STAGES:
             return name, {"grouped": True, "count": cached_group_count(name, stage_id)}
@@ -193,9 +193,6 @@ def process_stage(name, stage_id, start, end, users, operator_filter=None):
         for lead in leads:
             uid = lead.get("ASSIGNED_BY_ID")
             if not uid:
-                continue
-                
-            if operator_filter and str(uid) not in operator_filter:
                 continue
                 
             try:
@@ -261,10 +258,7 @@ def update_stage(stage_name):
         users = load_users()
         stage_id = STAGE_LABELS[stage_name]
 
-        operator_ids = request.args.get("operators")
-        operator_filter = set(operator_ids.split(",")) if operator_ids else None
-
-        name, stage_data = process_stage(stage_name, stage_id, start, end, users, operator_filter)
+        name, stage_data = process_stage(stage_name, stage_id, start, end, users)
 
         if session.get("role") == "operator":
             operator_name = session.get("name")
@@ -309,13 +303,10 @@ def leads_by_stage():
     start, end = get_range_dates("today")
     users = load_users()
 
-    operator_ids = request.args.get("operators")
-    operator_filter = set(operator_ids.split(",")) if operator_ids else None
-
     data = {}
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
-            executor.submit(process_stage, name, stage_id, start, end, users, operator_filter)
+            executor.submit(process_stage, name, stage_id, start, end, users)
             for name, stage_id in STAGE_LABELS.items()
         ]
         for future in futures:
@@ -331,16 +322,6 @@ def api_userinfo():
         "name": session.get("name"),
         "role": session.get("role")
     })
-
-@app.route("/api/operators")
-@login_required
-@admin_required
-def api_operators():
-    users = load_users()
-    return jsonify([
-        {"id": str(uid), "name": name}
-        for uid, name in users.items()
-    ])
 
 @app.route("/ping")
 def ping():
