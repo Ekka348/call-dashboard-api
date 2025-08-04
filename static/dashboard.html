@@ -394,184 +394,163 @@
   </div>
 
   <script>
-    const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
-    let userRole = null;
-    let operatorList = [];
-    let selectedOperators = new Set();
+const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
+let userRole = null;
+let operatorList = [];
+let selectedOperators = new Set();
+let statsInterval = null; // для автообновления
 
-    function toggleDropdown(event) {
-      event.stopPropagation();
-      const list = document.getElementById('dropdown-list');
-      list.style.display = (list.style.display === 'block') ? 'none' : 'block';
+function toggleDropdown(event) {
+  event.stopPropagation();
+  const list = document.getElementById('dropdown-list');
+  list.style.display = (list.style.display === 'block') ? 'none' : 'block';
+}
+document.addEventListener('click', function(e) {
+  const list = document.getElementById('dropdown-list');
+  if (list && list.style.display === 'block' && !document.getElementById('operator-filter').contains(e.target)) {
+    list.style.display = 'none';
+  }
+});
+
+function updateSelectedLabel() {
+  const label = document.getElementById('selected-ops-label');
+  if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
+    label.textContent = 'Все';
+  } else {
+    label.textContent = Array.from(selectedOperators).map(id => {
+      const op = operatorList.find(o => o.id == id);
+      return op ? op.name : id;
+    }).join(', ');
+  }
+}
+
+async function loadUserInfoAndOperators() {
+  try {
+    const user = await fetch('/api/userinfo').then(r=>r.json());
+    userRole = user.role;
+    if (userRole === 'admin') {
+      document.getElementById('operator-filter').style.display = 'flex';
+      operatorList = await fetch('/api/operators').then(r=>r.json());
+      selectedOperators = new Set(operatorList.map(o => o.id)); // по умолчанию все
+      renderOperatorDropdown();
+      updateSelectedLabel();
+    } else {
+      document.getElementById('operator-filter').style.display = 'none';
     }
-    document.addEventListener('click', function(e) {
-      const list = document.getElementById('dropdown-list');
-      if (list && list.style.display === 'block' && !document.getElementById('operator-filter').contains(e.target)) {
-        list.style.display = 'none';
-      }
-    });
+  } catch (e) {
+    console.error('Ошибка получения данных пользователя или операторов', e);
+  }
+}
 
-    function updateSelectedLabel() {
-      const label = document.getElementById('selected-ops-label');
-      if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
-        label.textContent = 'Все';
-      } else {
-        label.textContent = Array.from(selectedOperators).map(id => {
-          const op = operatorList.find(o => o.id == id);
-          return op ? op.name : id;
-        }).join(', ');
-      }
-    }
+function renderOperatorDropdown() {
+  const list = document.getElementById('dropdown-list');
+  list.innerHTML = '';
+  let allChecked = selectedOperators.size === operatorList.length;
+  list.innerHTML += `<label class="all-ops">
+    <input type="checkbox" onchange="toggleAllOperators(this)" ${allChecked?'checked':''}> Все операторы
+  </label>`;
+  operatorList.forEach(op => {
+    list.innerHTML += `<label>
+      <input type="checkbox" value="${op.id}" ${selectedOperators.has(op.id+'' )?'checked':''} onchange="toggleOperator(this)">
+      ${op.name}
+    </label>`;
+  });
+}
 
-    async function loadUserInfoAndOperators() {
-      try {
-        const user = await fetch('/api/userinfo').then(r=>r.json());
-        userRole = user.role;
-        if (userRole === 'admin') {
-          document.getElementById('operator-filter').style.display = 'flex';
-          operatorList = await fetch('/api/operators').then(r=>r.json());
-          selectedOperators = new Set(operatorList.map(o => o.id)); // по умолчанию все
-          renderOperatorDropdown();
-          updateSelectedLabel();
-        } else {
-          document.getElementById('operator-filter').style.display = 'none';
+function toggleOperator(checkbox) {
+  if (checkbox.checked) {
+    selectedOperators.add(checkbox.value);
+  } else {
+    selectedOperators.delete(checkbox.value);
+  }
+  renderOperatorDropdown();
+  updateSelectedLabel();
+}
+
+function toggleAllOperators(checkbox) {
+  if (checkbox.checked) {
+    operatorList.forEach(o => selectedOperators.add(o.id));
+  } else {
+    selectedOperators.clear();
+  }
+  renderOperatorDropdown();
+  updateSelectedLabel();
+}
+
+function getSelectedOperators() {
+  if (userRole !== 'admin') return '';
+  if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
+  return Array.from(selectedOperators).join(',');
+}
+
+function showMiniLoader(stage) {
+  document.getElementById(`loader-${stage}`).style.display = 'flex';
+}
+function hideMiniLoader(stage) {
+  document.getElementById(`loader-${stage}`).style.display = 'none';
+}
+
+// Главная функция загрузки статистики
+function fetchStats() {
+  const start = document.getElementById("startDate").value;
+  const end = document.getElementById("endDate").value;
+
+  let urlParams = [];
+  if (start && end) urlParams.push(`range=custom:${start}:${end}`);
+  const operators = getSelectedOperators();
+  if (operators) urlParams.push(`operators=${operators}`);
+
+  STAGE_LABELS.forEach(stage => {
+    const container = document.getElementById(`table-${stage}`);
+    container.innerHTML = `
+      <div class="mini-loader" id="loader-${stage}" style="display:flex;">
+        <div class="mini-spinner"></div>
+      </div>
+    `;
+    let url = `/update_stage/${stage}`;
+    if (urlParams.length) url += '?' + urlParams.join('&');
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        const stageData = data[stage];
+        container.innerHTML = '';
+        if (!stageData.details || stageData.details.length === 0) {
+          container.innerHTML = `<p>Нет данных</p>`;
+          return;
         }
-      } catch (e) {
-        console.error('Ошибка получения данных пользователя или операторов', e);
-      }
-    }
-
-    function renderOperatorDropdown() {
-      const list = document.getElementById('dropdown-list');
-      list.innerHTML = '';
-      // "выбрать всех"
-      let allChecked = selectedOperators.size === operatorList.length;
-      list.innerHTML += `<label class="all-ops">
-        <input type="checkbox" onchange="toggleAllOperators(this)" ${allChecked?'checked':''}> Все операторы
-      </label>`;
-      operatorList.forEach(op => {
-        list.innerHTML += `<label>
-          <input type="checkbox" value="${op.id}" ${selectedOperators.has(op.id+'' )?'checked':''} onchange="toggleOperator(this)">
-          ${op.name}
-        </label>`;
+        const table = document.createElement('table');
+        table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+        const tbody = document.createElement('tbody');
+        stageData.details.forEach(item => {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+          tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+      })
+      .catch(err => {
+        container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+        console.error(`Ошибка стадии "${stage}":`, err);
       });
-    }
+  });
+}
 
-    function toggleOperator(checkbox) {
-      if (checkbox.checked) {
-        selectedOperators.add(checkbox.value);
-      } else {
-        selectedOperators.delete(checkbox.value);
-      }
-      renderOperatorDropdown();
-      updateSelectedLabel();
-    }
+// Автозапуск при загрузке страницы
+window.onload = async () => {
+  await loadUserInfoAndOperators();
+  fetchStats(); // первая загрузка
+  // Запуск автообновления каждые 30 секунд
+  statsInterval = setInterval(fetchStats, 30000);
+};
 
-    function toggleAllOperators(checkbox) {
-      if (checkbox.checked) {
-        operatorList.forEach(o => selectedOperators.add(o.id));
-      } else {
-        selectedOperators.clear();
-      }
-      renderOperatorDropdown();
-      updateSelectedLabel();
-    }
-
-    function getSelectedOperators() {
-      if (userRole !== 'admin') return '';
-      if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
-      return Array.from(selectedOperators).join(',');
-    }
-
-    function showMiniLoader(stage) {
-      document.getElementById(`loader-${stage}`).style.display = 'flex';
-    }
-    function hideMiniLoader(stage) {
-      document.getElementById(`loader-${stage}`).style.display = 'none';
-    }
-
-    function fetchStats() {
-      const start = document.getElementById("startDate").value;
-      const end = document.getElementById("endDate").value;
-      if (!start || !end) {
-        alert("Заполни обе даты");
-        return;
-      }
-      const operators = getSelectedOperators();
-      STAGE_LABELS.forEach(stage => {
-        const container = document.getElementById(`table-${stage}`);
-        container.innerHTML = `
-          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
-            <div class="mini-spinner"></div>
-          </div>
-        `;
-        let url = `/update_stage/${stage}?range=custom:${start}:${end}`;
-        if (operators) url += `&operators=${operators}`;
-        fetch(url)
-          .then(r => r.json())
-          .then(data => {
-            const stageData = data[stage];
-            container.innerHTML = '';
-            if (!stageData.details || stageData.details.length === 0) {
-              container.innerHTML = `<p>Нет данных</p>`;
-              return;
-            }
-            const table = document.createElement('table');
-            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
-            const tbody = document.createElement('tbody');
-            stageData.details.forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
-              tbody.appendChild(row);
-            });
-            table.appendChild(tbody);
-            container.appendChild(table);
-          })
-          .catch(err => {
-            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
-            console.error(`Ошибка стадии "${stage}":`, err);
-          });
-      });
-    }
-
-    window.onload = async () => {
-      await loadUserInfoAndOperators();
-      const operators = getSelectedOperators();
-      STAGE_LABELS.forEach(stage => {
-        const container = document.getElementById(`table-${stage}`);
-        container.innerHTML = `
-          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
-            <div class="mini-spinner"></div>
-          </div>
-        `;
-        let url = `/update_stage/${stage}`;
-        if (operators) url += `?operators=${operators}`;
-        fetch(url)
-          .then(r => r.json())
-          .then(data => {
-            const stageData = data[stage];
-            container.innerHTML = '';
-            if (!stageData.details || stageData.details.length === 0) {
-              container.innerHTML = `<p>Нет данных</p>`;
-              return;
-            }
-            const table = document.createElement('table');
-            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
-            const tbody = document.createElement('tbody');
-            stageData.details.forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
-              tbody.appendChild(row);
-            });
-            table.appendChild(tbody);
-            container.appendChild(table);
-          })
-          .catch(err => {
-            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
-            console.error(`Ошибка стадии "${stage}":`, err);
-          });
-      });
-    };
-  </script>
+// Если пользователь выбирает период и нажимает "Показать статистику"
+document.querySelector('.filter').onsubmit = (e) => {
+  e.preventDefault();
+  if (statsInterval) clearInterval(statsInterval); // Остановить автообновление
+  fetchStats(); // Загрузить статистику за выбранный период
+  statsInterval = setInterval(fetchStats, 30000); // Снова запустить автообновление (по желанию)
+};
+</script>
 </body>
 </html>
