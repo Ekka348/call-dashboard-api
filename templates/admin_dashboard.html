@@ -38,24 +38,31 @@
             color: var(--text-light);
             font-size: 0.9em;
         }
-        .dashboard-section {
+        .tables-container {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+        .stage-table {
             background: var(--block-bg);
             border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 15px;
+            min-width: 300px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        .section-header {
+        .stage-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
         }
-        h2 {
+        .stage-title {
             margin: 0;
             color: var(--accent);
+            font-size: 1.2em;
         }
-        .total-badge {
+        .stage-total {
             background: var(--secondary);
             color: white;
             padding: 3px 10px;
@@ -76,23 +83,21 @@
             padding: 8px 10px;
             border-bottom: 1px solid var(--border);
         }
-        tr:hover {
-            background-color: rgba(255,255,255,0.05);
+        tr.total-row {
+            background-color: rgba(59, 130, 246, 0.2);
+            font-weight: bold;
+        }
+        tr.total-row td {
+            border-top: 2px solid var(--primary);
         }
         .badge {
             display: inline-block;
-            min-width: 20px;
-            padding: 2px 6px;
+            padding: 2px 8px;
             border-radius: 10px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
-            text-align: center;
             font-weight: bold;
-            font-size: 0.8em;
-        }
-        .total-row {
-            font-weight: bold;
-            background-color: rgba(59, 130, 246, 0.1);
+            font-size: 0.9em;
         }
         .highlight {
             animation: highlight 1.5s;
@@ -101,21 +106,12 @@
             0% { background-color: rgba(255, 255, 0, 0.3); }
             100% { background-color: transparent; }
         }
-        .error-message {
-            color: var(--error);
-            padding: 10px;
-            text-align: center;
-        }
-        @media (max-width: 768px) {
-            .header {
+        @media (max-width: 1200px) {
+            .tables-container {
                 flex-direction: column;
-                align-items: flex-start;
             }
-            table {
-                font-size: 0.9em;
-            }
-            td, th {
-                padding: 6px 8px;
+            .stage-table {
+                width: 100%;
             }
         }
     </style>
@@ -126,39 +122,52 @@
         <div class="update-info" id="update-time">Загрузка данных...</div>
     </div>
 
-    <div class="dashboard-section">
-        <div class="section-header">
-            <h2>Лиды по этапам</h2>
-            <div class="total-badge" id="total-leads">0</div>
-        </div>
-        <div class="table-responsive">
-            <table id="leads-table">
+    <div class="tables-container">
+        <!-- Таблица "Перезвонить" -->
+        <div class="stage-table" id="callback-table">
+            <div class="stage-header">
+                <h2 class="stage-title">Перезвонить</h2>
+                <div class="stage-total" id="callback-total">0</div>
+            </div>
+            <table>
                 <thead>
                     <tr>
-                        <th>Этап</th>
                         <th>Оператор</th>
-                        <th>Количество</th>
+                        <th>Кол-во</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
         </div>
-    </div>
 
-    <div class="dashboard-section">
-        <div class="section-header">
-            <h2>Статистика операторов</h2>
-            <div class="total-badge" id="total-operators">0</div>
-        </div>
-        <div class="table-responsive">
-            <table id="operators-table">
+        <!-- Таблица "На согласовании" -->
+        <div class="stage-table" id="approval-table">
+            <div class="stage-header">
+                <h2 class="stage-title">На согласовании</h2>
+                <div class="stage-total" id="approval-total">0</div>
+            </div>
+            <table>
                 <thead>
                     <tr>
                         <th>Оператор</th>
-                        <th>Новые</th>
-                        <th>В работе</th>
-                        <th>Завершено</th>
-                        <th>Всего</th>
+                        <th>Кол-во</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Таблица "Приглашен к рекрутеру" -->
+        <div class="stage-table" id="hired-table">
+            <div class="stage-header">
+                <h2 class="stage-title">Приглашен к рекрутеру</h2>
+                <div class="stage-total" id="hired-total">0</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Оператор</th>
+                        <th>Кол-во</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -167,130 +176,71 @@
     </div>
 
     <script>
-        // Инициализация Socket.IO
         const socket = io();
         let previousData = {};
-        
-        // Обработчики событий WebSocket
+
         socket.on('connect', () => {
             console.log('Connected to server');
             document.getElementById('update-time').textContent = 'Подключено к серверу';
         });
-        
+
         socket.on('disconnect', () => {
             document.getElementById('update-time').textContent = 'Соединение потеряно. Попытка переподключения...';
         });
-        
+
         socket.on('data_update', (data) => {
-            updateUI(data);
+            updateTables(data);
             document.getElementById('update-time').textContent = `Обновлено: ${data.timestamp}`;
         });
-        
-        // Функции обновления интерфейса
-        function updateUI(data) {
-            updateLeadsTable(data.leads_by_stage);
-            updateOperatorsTable(data.operators_stats);
-            document.getElementById('total-leads').textContent = data.total_leads;
-            document.getElementById('total-operators').textContent = Object.keys(data.operators_stats).length;
-            
-            // Сохраняем данные для сравнения
+
+        function updateTables(data) {
+            updateStageTable('callback', data.leads_by_stage['Перезвонить'] || []);
+            updateStageTable('approval', data.leads_by_stage['На согласовании'] || []);
+            updateStageTable('hired', data.leads_by_stage['Приглашен к рекрутеру'] || []);
             previousData = JSON.parse(JSON.stringify(data));
         }
-        
-        function updateLeadsTable(data) {
-            const tbody = document.querySelector('#leads-table tbody');
+
+        function updateStageTable(stageId, leads) {
+            const tbody = document.querySelector(`#${stageId}-table tbody`);
             tbody.innerHTML = '';
             
-            // Собираем данные по этапам
-            for (const [stage, leads] of Object.entries(data)) {
-                let stageTotal = 0;
-                
-                leads.forEach(item => {
-                    const row = document.createElement('tr');
-                    
-                    // Проверяем изменения
-                    const prevLeads = previousData.leads_by_stage?.[stage] || [];
-                    const prevItem = prevLeads.find(i => i.operator === item.operator);
-                    const isChanged = prevItem && prevItem.count !== item.count;
-                    
-                    if (isChanged) {
-                        row.classList.add('highlight');
-                    }
-                    
-                    row.innerHTML = `
-                        <td>${stage}</td>
-                        <td>${item.operator}</td>
-                        <td><span class="badge">${item.count}</span></td>
-                    `;
-                    
-                    tbody.appendChild(row);
-                    stageTotal += item.count;
-                });
-                
-                // Добавляем итоговую строку для этапа
-                const totalRow = document.createElement('tr');
-                totalRow.className = 'total-row';
-                totalRow.innerHTML = `
-                    <td colspan="2"><strong>${stage} - Итого</strong></td>
-                    <td><span class="badge">${stageTotal}</span></td>
-                `;
-                tbody.appendChild(totalRow);
-            }
-        }
-        
-        function updateOperatorsTable(data) {
-            const tbody = document.querySelector('#operators-table tbody');
-            tbody.innerHTML = '';
+            let stageTotal = 0;
             
-            let grandTotal = {new: 0, process: 0, success: 0, total: 0};
-            
-            for (const [operator, stats] of Object.entries(data)) {
+            leads.forEach(item => {
                 const row = document.createElement('tr');
                 
-                // Проверяем изменения
-                const prevStats = previousData.operators_stats?.[operator];
-                const isChanged = prevStats && JSON.stringify(prevStats) !== JSON.stringify(stats);
+                const prevLeads = previousData.leads_by_stage?.[stageId] || [];
+                const prevItem = prevLeads.find(i => i.operator === item.operator);
+                const isChanged = prevItem && prevItem.count !== item.count;
                 
-                if (isChanged) {
-                    row.classList.add('highlight');
-                }
+                if (isChanged) row.classList.add('highlight');
                 
                 row.innerHTML = `
-                    <td>${operator}</td>
-                    <td><span class="badge">${stats.new}</span></td>
-                    <td><span class="badge">${stats.process}</span></td>
-                    <td><span class="badge">${stats.success}</span></td>
-                    <td><span class="badge">${stats.total}</span></td>
+                    <td>${item.operator}</td>
+                    <td><span class="badge">${item.count}</span></td>
                 `;
                 
                 tbody.appendChild(row);
-                
-                // Считаем общие итоги
-                grandTotal.new += stats.new;
-                grandTotal.process += stats.process;
-                grandTotal.success += stats.success;
-                grandTotal.total += stats.total;
-            }
+                stageTotal += item.count;
+            });
             
-            // Добавляем итоговую строку
+            // Добавляем строку "Итого"
             const totalRow = document.createElement('tr');
             totalRow.className = 'total-row';
             totalRow.innerHTML = `
-                <td><strong>Все операторы</strong></td>
-                <td><span class="badge">${grandTotal.new}</span></td>
-                <td><span class="badge">${grandTotal.process}</span></td>
-                <td><span class="badge">${grandTotal.success}</span></td>
-                <td><span class="badge">${grandTotal.total}</span></td>
+                <td><strong>Итого</strong></td>
+                <td><span class="badge">${stageTotal}</span></td>
             `;
             tbody.appendChild(totalRow);
+            
+            // Обновляем счетчик в заголовке
+            document.getElementById(`${stageId}-total`).textContent = stageTotal;
         }
-        
-        // Первоначальная загрузка данных
+
+        // Первоначальная загрузка
         fetch('/admin/data')
             .then(response => response.json())
-            .then(data => {
-                updateUI(data);
-            })
+            .then(data => updateTables(data))
             .catch(error => {
                 console.error('Ошибка загрузки данных:', error);
                 document.getElementById('update-time').textContent = 'Ошибка загрузки данных';
