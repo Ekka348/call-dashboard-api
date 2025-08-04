@@ -74,8 +74,6 @@ def get_range_dates(rtype):
 
     return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
 
-
-
 user_cache = {"data": {}, "last": 0}
 def load_users():
     if time.time() - user_cache["last"] < 300:
@@ -145,7 +143,6 @@ def cached_group_count(name, stage_id):
     group_cache["last"] = now
     return count
 
-def process_stage(name, stage_id, start, end, users):
 def process_stage(name, stage_id, start, end, users, operator_filter=None):
     try:
         if name in GROUPED_STAGES:
@@ -182,13 +179,11 @@ def update_stage(stage_name):
         return "Стадия не найдена", 404
 
     try:
-        # 💡 Новый параметр из строки запроса: ?range=week
         rtype = request.args.get("range", "today")  # today/week/month/custom
         start, end = get_range_dates(rtype)
 
         users = load_users()
         stage_id = STAGE_LABELS[stage_name]
-        name, stage_data = process_stage(stage_name, stage_id, start, end, users)
 
         # Новый: фильтр по операторам для админа
         operator_ids = request.args.get("operators")
@@ -209,7 +204,6 @@ def update_stage(stage_name):
     except Exception as e:
         print("Ошибка в update_stage:", e)
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/personal_stats")
 @login_required
@@ -248,7 +242,6 @@ def leads_by_stage():
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
-            executor.submit(process_stage, name, stage_id, start, end, users)
             executor.submit(process_stage, name, stage_id, start, end, users, operator_filter)
             for name, stage_id in STAGE_LABELS.items()
         ]
