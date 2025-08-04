@@ -1,262 +1,300 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Admin Dashboard - Проект ВВ</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    :root {
-      --dark-bg: #1e293b;
-      --block-bg: #232e41;
-      --primary: #3b82f6;
-      --secondary: #9333ea;
-      --accent: #7dd3fc;
-      --border: #334155;
-      --text-main: #e0e7ef;
-      --text-light: #cbd5e1;
-      --badge-bg: #3b82f6;
-      --badge-bg2: #9333ea;
-      --error: #f87171;
-    }
-    body {
-      background: var(--dark-bg);
-      color: var(--text-main);
-      font-family: "Segoe UI", "Inter", Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-      color: var(--accent);
-    }
-    .update-info {
-      text-align: right;
-      margin-bottom: 10px;
-      font-size: 0.9em;
-      color: var(--text-light);
-    }
-    .dashboard-section {
-      background: var(--block-bg);
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    .dashboard-section h2 {
-      margin-top: 0;
-      color: var(--accent);
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 10px;
-    }
-    .dashboard-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    .dashboard-table th {
-      background-color: #22304b;
-      color: var(--accent);
-      padding: 10px;
-      text-align: left;
-    }
-    .dashboard-table td {
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .dashboard-table tr:hover {
-      background-color: #25334c;
-    }
-    .total-row {
-      font-weight: bold;
-      background-color: #2c3e50;
-    }
-    .highlight {
-      animation: highlight-fade 2s;
-    }
-    @keyframes highlight-fade {
-      0% { background-color: rgba(255, 255, 0, 0.3); }
-      100% { background-color: transparent; }
-    }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 10px;
-      background: linear-gradient(90deg, var(--badge-bg) 0%, var(--badge-bg2) 100%);
-      color: white;
-      font-size: 12px;
-      font-weight: bold;
-    }
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .total-badge {
-      background: var(--secondary);
-      padding: 3px 10px;
-      border-radius: 15px;
-      font-size: 14px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель | Проект ВВ</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        :root {
+            --dark-bg: #1e293b;
+            --block-bg: #232e41;
+            --primary: #3b82f6;
+            --secondary: #9333ea;
+            --accent: #7dd3fc;
+            --border: #334155;
+            --text-main: #e0e7ef;
+            --text-light: #cbd5e1;
+            --error: #f87171;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: var(--accent);
+            margin: 0;
+        }
+        .update-info {
+            color: var(--text-light);
+            font-size: 0.9em;
+        }
+        .dashboard-section {
+            background: var(--block-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        h2 {
+            margin: 0;
+            color: var(--accent);
+        }
+        .total-badge {
+            background: var(--secondary);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: var(--primary);
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        tr:hover {
+            background-color: rgba(255,255,255,0.05);
+        }
+        .badge {
+            display: inline-block;
+            min-width: 20px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.8em;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .highlight {
+            animation: highlight 1.5s;
+        }
+        @keyframes highlight {
+            0% { background-color: rgba(255, 255, 0, 0.3); }
+            100% { background-color: transparent; }
+        }
+        .error-message {
+            color: var(--error);
+            padding: 10px;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            table {
+                font-size: 0.9em;
+            }
+            td, th {
+                padding: 6px 8px;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>Административная панель</h1>
-  <div class="update-info" id="update-time">
-    Последнее обновление: загружается...
-  </div>
-
-  <div class="dashboard-section">
-    <div class="section-header">
-      <h2>Лиды по этапам</h2>
-      <span class="total-badge" id="total-leads-badge">0</span>
+    <div class="header">
+        <h1>Админ-панель проекта ВВ</h1>
+        <div class="update-info" id="update-time">Загрузка данных...</div>
     </div>
-    <table class="dashboard-table" id="leads-by-stage">
-      <thead>
-        <tr>
-          <th>Этап</th>
-          <th>Оператор</th>
-          <th>Количество</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
 
-  <div class="dashboard-section">
-    <div class="section-header">
-      <h2>Статистика операторов</h2>
-      <span class="total-badge" id="total-operators-badge">0</span>
+    <div class="dashboard-section">
+        <div class="section-header">
+            <h2>Лиды по этапам</h2>
+            <div class="total-badge" id="total-leads">0</div>
+        </div>
+        <div class="table-responsive">
+            <table id="leads-table">
+                <thead>
+                    <tr>
+                        <th>Этап</th>
+                        <th>Оператор</th>
+                        <th>Количество</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
-    <table class="dashboard-table" id="operators-stats">
-      <thead>
-        <tr>
-          <th>Оператор</th>
-          <th>Новые</th>
-          <th>В работе</th>
-          <th>Завершено</th>
-          <th>Всего</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
-  <script>
-    const socket = io();
-    let previousData = {};
-    
-    // Обработка обновлений данных
-    socket.on('data_update', function(data) {
-      document.getElementById('update-time').textContent = 
-        `Последнее обновление: ${data.timestamp}`;
-      
-      updateLeadsTable(data.leads_by_stage);
-      updateOperatorsTable(data.operators_stats);
-      
-      // Обновляем общие счетчики
-      document.getElementById('total-leads-badge').textContent = data.total_leads;
-      document.getElementById('total-operators-badge').textContent = 
-        Object.keys(data.operators_stats).length;
-    });
-    
-    function updateLeadsTable(data) {
-      const table = document.getElementById('leads-by-stage');
-      const tbody = table.querySelector('tbody');
-      tbody.innerHTML = '';
-      
-      let stageTotals = {};
-      
-      // Сначала собираем все данные по этапам
-      for (const [stage, leads] of Object.entries(data)) {
-        stageTotals[stage] = 0;
+    <div class="dashboard-section">
+        <div class="section-header">
+            <h2>Статистика операторов</h2>
+            <div class="total-badge" id="total-operators">0</div>
+        </div>
+        <div class="table-responsive">
+            <table id="operators-table">
+                <thead>
+                    <tr>
+                        <th>Оператор</th>
+                        <th>Новые</th>
+                        <th>В работе</th>
+                        <th>Завершено</th>
+                        <th>Всего</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Socket.IO
+        const socket = io();
+        let previousData = {};
         
-        leads.forEach(item => {
-          const row = document.createElement('tr');
-          
-          row.innerHTML = `
-            <td>${stage}</td>
-            <td>${item.operator}</td>
-            <td><span class="badge">${item.count}</span></td>
-          `;
-          
-          // Подсветка изменений
-          if (previousData.leads_by_stage && 
-              previousData.leads_by_stage[stage] &&
-              previousData.leads_by_stage[stage].find(i => 
-                i.operator === item.operator && i.count !== item.count)) {
-            row.classList.add('highlight');
-          }
-          
-          tbody.appendChild(row);
-          stageTotals[stage] += item.count;
+        // Обработчики событий WebSocket
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            document.getElementById('update-time').textContent = 'Подключено к серверу';
         });
-      }
-      
-      // Добавляем строки с итогами по этапам
-      for (const [stage, total] of Object.entries(stageTotals)) {
-        const row = document.createElement('tr');
-        row.className = 'total-row';
-        row.innerHTML = `
-          <td colspan="2"><strong>${stage} - Итого</strong></td>
-          <td><span class="badge">${total}</span></td>
-        `;
-        tbody.appendChild(row);
-      }
-    }
-    
-    function updateOperatorsTable(data) {
-      const table = document.getElementById('operators-stats');
-      const tbody = table.querySelector('tbody');
-      tbody.innerHTML = '';
-      
-      let grandTotal = {new: 0, process: 0, success: 0, total: 0};
-      
-      for (const [operator, stats] of Object.entries(data)) {
-        const row = document.createElement('tr');
         
-        row.innerHTML = `
-          <td>${operator}</td>
-          <td><span class="badge">${stats.new}</span></td>
-          <td><span class="badge">${stats.process}</span></td>
-          <td><span class="badge">${stats.success}</span></td>
-          <td><span class="badge">${stats.total}</span></td>
-        `;
+        socket.on('disconnect', () => {
+            document.getElementById('update-time').textContent = 'Соединение потеряно. Попытка переподключения...';
+        });
         
-        // Подсветка изменений
-        if (previousData.operators_stats && 
-            previousData.operators_stats[operator] &&
-            JSON.stringify(previousData.operators_stats[operator]) !== JSON.stringify(stats)) {
-          row.classList.add('highlight');
+        socket.on('data_update', (data) => {
+            updateUI(data);
+            document.getElementById('update-time').textContent = `Обновлено: ${data.timestamp}`;
+        });
+        
+        // Функции обновления интерфейса
+        function updateUI(data) {
+            updateLeadsTable(data.leads_by_stage);
+            updateOperatorsTable(data.operators_stats);
+            document.getElementById('total-leads').textContent = data.total_leads;
+            document.getElementById('total-operators').textContent = Object.keys(data.operators_stats).length;
+            
+            // Сохраняем данные для сравнения
+            previousData = JSON.parse(JSON.stringify(data));
         }
         
-        tbody.appendChild(row);
+        function updateLeadsTable(data) {
+            const tbody = document.querySelector('#leads-table tbody');
+            tbody.innerHTML = '';
+            
+            // Собираем данные по этапам
+            for (const [stage, leads] of Object.entries(data)) {
+                let stageTotal = 0;
+                
+                leads.forEach(item => {
+                    const row = document.createElement('tr');
+                    
+                    // Проверяем изменения
+                    const prevLeads = previousData.leads_by_stage?.[stage] || [];
+                    const prevItem = prevLeads.find(i => i.operator === item.operator);
+                    const isChanged = prevItem && prevItem.count !== item.count;
+                    
+                    if (isChanged) {
+                        row.classList.add('highlight');
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${stage}</td>
+                        <td>${item.operator}</td>
+                        <td><span class="badge">${item.count}</span></td>
+                    `;
+                    
+                    tbody.appendChild(row);
+                    stageTotal += item.count;
+                });
+                
+                // Добавляем итоговую строку для этапа
+                const totalRow = document.createElement('tr');
+                totalRow.className = 'total-row';
+                totalRow.innerHTML = `
+                    <td colspan="2"><strong>${stage} - Итого</strong></td>
+                    <td><span class="badge">${stageTotal}</span></td>
+                `;
+                tbody.appendChild(totalRow);
+            }
+        }
         
-        // Считаем общие итоги
-        grandTotal.new += stats.new;
-        grandTotal.process += stats.process;
-        grandTotal.success += stats.success;
-        grandTotal.total += stats.total;
-      }
-      
-      // Добавляем итоговую строку
-      const totalRow = document.createElement('tr');
-      totalRow.className = 'total-row';
-      totalRow.innerHTML = `
-        <td><strong>Всего</strong></td>
-        <td><span class="badge">${grandTotal.new}</span></td>
-        <td><span class="badge">${grandTotal.process}</span></td>
-        <td><span class="badge">${grandTotal.success}</span></td>
-        <td><span class="badge">${grandTotal.total}</span></td>
-      `;
-      tbody.appendChild(totalRow);
-    }
-    
-    // Сохраняем предыдущие данные для сравнения
-    socket.on('data_update', function(data) {
-      previousData = JSON.parse(JSON.stringify(data));
-    });
-  </script>
+        function updateOperatorsTable(data) {
+            const tbody = document.querySelector('#operators-table tbody');
+            tbody.innerHTML = '';
+            
+            let grandTotal = {new: 0, process: 0, success: 0, total: 0};
+            
+            for (const [operator, stats] of Object.entries(data)) {
+                const row = document.createElement('tr');
+                
+                // Проверяем изменения
+                const prevStats = previousData.operators_stats?.[operator];
+                const isChanged = prevStats && JSON.stringify(prevStats) !== JSON.stringify(stats);
+                
+                if (isChanged) {
+                    row.classList.add('highlight');
+                }
+                
+                row.innerHTML = `
+                    <td>${operator}</td>
+                    <td><span class="badge">${stats.new}</span></td>
+                    <td><span class="badge">${stats.process}</span></td>
+                    <td><span class="badge">${stats.success}</span></td>
+                    <td><span class="badge">${stats.total}</span></td>
+                `;
+                
+                tbody.appendChild(row);
+                
+                // Считаем общие итоги
+                grandTotal.new += stats.new;
+                grandTotal.process += stats.process;
+                grandTotal.success += stats.success;
+                grandTotal.total += stats.total;
+            }
+            
+            // Добавляем итоговую строку
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'total-row';
+            totalRow.innerHTML = `
+                <td><strong>Все операторы</strong></td>
+                <td><span class="badge">${grandTotal.new}</span></td>
+                <td><span class="badge">${grandTotal.process}</span></td>
+                <td><span class="badge">${grandTotal.success}</span></td>
+                <td><span class="badge">${grandTotal.total}</span></td>
+            `;
+            tbody.appendChild(totalRow);
+        }
+        
+        // Первоначальная загрузка данных
+        fetch('/admin/data')
+            .then(response => response.json())
+            .then(data => {
+                updateUI(data);
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки данных:', error);
+                document.getElementById('update-time').textContent = 'Ошибка загрузки данных';
+            });
+    </script>
 </body>
 </html>
