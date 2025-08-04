@@ -540,6 +540,11 @@
     const selectedOpsLabel = document.getElementById('selected-ops-label');
     const lastUpdateEl = document.getElementById('last-update');
     
+    // Функция для форматирования имени оператора
+    function formatOperatorName(operator) {
+      return [operator.firstName, operator.lastName].filter(Boolean).join(' ');
+    }
+    
     // Инициализация при загрузке страницы
     document.addEventListener('DOMContentLoaded', async () => {
       // Установка дат по умолчанию (сегодня)
@@ -578,13 +583,12 @@
           // Получаем список всех операторов и фильтруем активных
           const allOperators = await operatorsResponse.json();
           
-          // Фильтруем уволенных операторов (active: false) и сортируем по ФИО
+          // Фильтруем уволенных операторов (active: false) и сортируем по имени
           operatorList = allOperators
             .filter(op => op.active !== false)
             .sort((a, b) => {
-              // Сортируем по полному имени (ФИО)
-              const nameA = `${a.lastName || ''} ${a.firstName || ''} ${a.middleName || ''}`.trim().toLowerCase();
-              const nameB = `${b.lastName || ''} ${b.firstName || ''} ${b.middleName || ''}`.trim().toLowerCase();
+              const nameA = formatOperatorName(a).toLowerCase();
+              const nameB = formatOperatorName(b).toLowerCase();
               return nameA.localeCompare(nameB);
             });
           
@@ -628,15 +632,10 @@
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
         selectedOpsLabel.textContent = 'Все операторы';
       } else {
-        // Сортируем выбранных операторов по ФИО
+        // Сортируем выбранных операторов по имени
         const selectedNames = operatorList
           .filter(op => selectedOperators.has(op.id.toString()))
-          .map(op => {
-            // Форматируем ФИО в удобочитаемый вид
-            return [op.lastName, op.firstName, op.middleName]
-              .filter(Boolean)
-              .join(' ');
-          })
+          .map(op => formatOperatorName(op))
           .sort((a, b) => a.localeCompare(b));
         
         selectedOpsLabel.textContent = selectedNames.join(', ') || 'Выберите операторов';
@@ -662,15 +661,11 @@
       operatorList.forEach(op => {
         const isChecked = selectedOperators.has(op.id.toString());
         const label = document.createElement('label');
-        
-        // Форматируем ФИО для отображения
-        const fullName = [op.lastName, op.firstName, op.middleName]
-          .filter(Boolean)
-          .join(' ');
+        const operatorName = formatOperatorName(op);
         
         label.innerHTML = `
           <input type="checkbox" value="${op.id}" ${isChecked ? 'checked' : ''}>
-          ${fullName}
+          ${operatorName}
         `;
         label.querySelector('input').addEventListener('change', (e) => toggleOperator(e.target));
         dropdownList.appendChild(label);
