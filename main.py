@@ -9,8 +9,16 @@ import logging
 from logging.handlers import RotatingFileHandler
 from flask_socketio import SocketIO
 
+import sys
+if sys.version_info >= (3, 12):
+    import ssl
+    ssl.wrap_socket = ssl.SSLContext.wrap_socket
+
+from flask import Flask
+from flask_socketio import SocketIO
+
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, async_mode='gevent') 
 
 # Конфигурация
 class Config:
