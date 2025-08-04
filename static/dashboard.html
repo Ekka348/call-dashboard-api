@@ -13,20 +13,23 @@
         .operator-badge { margin-right: 5px; margin-bottom: 5px; }
         .custom-range { max-width: 300px; }
         .table-responsive { max-height: 400px; overflow-y: auto; }
+        .logout-btn { position: absolute; top: 20px; right: 20px; }
     </style>
 </head>
 <body>
     <div class="container-fluid py-4">
         <div class="row mb-4">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <h2>Статистика операторов</h2>
                 <div class="d-flex align-items-center">
                     <span class="me-2">Пользователь:</span>
                     <strong id="current-user"></strong>
+                    <span class="ms-3 me-2">Роль:</span>
+                    <strong id="current-role"></strong>
                 </div>
             </div>
-            <div class="col-md-6 text-end">
-                <a href="/logout" class="btn btn-outline-danger">Выйти</a>
+            <div class="col-md-4 text-end">
+                <a href="/logout" class="btn btn-outline-danger logout-btn">Выйти</a>
             </div>
         </div>
 
@@ -48,7 +51,7 @@
                     <button class="btn btn-primary" id="apply-custom-date">Применить</button>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4" id="operator-filter-container">
                 <div class="input-group mb-3">
                     <label class="input-group-text" for="operator-select">Оператор:</label>
                     <select class="form-select" id="operator-select">
@@ -77,6 +80,8 @@
             const operatorSelect = document.getElementById('operator-select');
             const stagesContainer = document.getElementById('stages-container');
             const currentUserElement = document.getElementById('current-user');
+            const currentRoleElement = document.getElementById('current-role');
+            const operatorFilterContainer = document.getElementById('operator-filter-container');
 
             // Flatpickr для выбора дат
             flatpickr(customDateRange, {
@@ -91,11 +96,20 @@
                 .then(response => response.json())
                 .then(data => {
                     currentUserElement.textContent = data.name;
+                    currentRoleElement.textContent = data.role === 'admin' ? 'Администратор' : 'Оператор';
+                    
+                    // Для админов загружаем список операторов
                     if (data.role === 'admin') {
                         loadOperators();
                     } else {
-                        operatorSelect.disabled = true;
+                        operatorFilterContainer.style.display = 'none';
                     }
+                    
+                    // Первоначальная загрузка данных
+                    loadStages('today');
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки данных пользователя:', error);
                 });
 
             // Обработчики событий
@@ -126,18 +140,35 @@
             // Функция загрузки операторов (только для админов)
             function loadOperators() {
                 fetch('/api/operators')
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) throw new Error('Ошибка загрузки операторов');
+                        return response.json();
+                    })
                     .then(operators => {
                         currentOperators = operators;
+                        const operatorSelect = document.getElementById('operator-select');
+                        
+                        // Сохраняем текущее выбранное значение
+                        const selectedValue = operatorSelect.value;
+                        
+                        // Очищаем и добавляем только активных операторов
                         operatorSelect.innerHTML = '<option value="">Все операторы</option>';
                         
                         operators.forEach(op => {
                             const option = document.createElement('option');
                             option.value = op.id;
-                            // Отображаем только фамилию (последнее слово)
-                            option.textContent = op.name.split(' ').pop();
+                            option.textContent = op.surname || op.name.split(' ').pop();
                             operatorSelect.appendChild(option);
                         });
+                        
+                        // Восстанавливаем выбранное значение, если оно есть в новых данных
+                        if (selectedValue && operators.some(op => op.id === selectedValue)) {
+                            operatorSelect.value = selectedValue;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка загрузки операторов:', error);
+                        // Можно показать сообщение об ошибке
                     });
             }
 
@@ -153,10 +184,18 @@
                 }
 
                 fetch(url)
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) throw new Error('Ошибка загрузки данных');
+                        return response.json();
+                    })
                     .then(data => {
                         renderStages(data.data);
                         stagesContainer.classList.remove('loading');
+                    })
+                    .catch(error => {
+                        console.error('Ошибка загрузки стадий:', error);
+                        stagesContainer.classList.remove('loading');
+                        // Можно показать сообщение об ошибке
                     });
             }
 
@@ -206,9 +245,6 @@
                     stagesContainer.appendChild(card);
                 }
             }
-
-            // Первоначальная загрузка
-            loadStages('today');
         });
     </script>
 </body>
