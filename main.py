@@ -7,8 +7,11 @@ from pytz import timezone
 from concurrent.futures import ThreadPoolExecutor
 import logging
 from logging.handlers import RotatingFileHandler
+from threading import Thread, Lock
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 
 # Конфигурация
 class Config:
@@ -18,6 +21,7 @@ class Config:
     USER_CACHE_TIMEOUT = 300  # 5 минут
     MAX_LOGIN_ATTEMPTS = 5
     LOG_FILE = 'app.log'
+    DATA_UPDATE_INTERVAL = 15  # секунд
 
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
@@ -34,6 +38,14 @@ STAGE_LABELS = {
     "Перезвонить": "IN_PROCESS",
     "Приглашен к рекрутеру": "CONVERTED",
 }
+
+# Кэширование данных
+data_cache = {
+    "leads_by_stage": {},
+    "operators_stats": {},
+    "last_updated": 0
+}
+cache_lock = Lock()
 
 # Декораторы
 def login_required(f):
@@ -210,6 +222,68 @@ def process_stage(name, stage_id, start, end, users):
         log_error(f"Ошибка при обработке стадии '{name}'", e)
         return name, {"grouped": False, "details": []}
 
+def update_global_stats():
+    """Обновление глобальной статистики для админки"""
+    while True:
+        try:
+            users = load_users()
+            start, end = get_range_dates("today")
+            
+            # Статистика по этапам
+            leads_by_stage = {}
+            total_leads = 0
+            
+            for name, stage_id in STAGE_LABELS.items():
+                _, data = process_stage(name, stage_id, start, end, users)
+                leads_by_stage[name] = data["details"]
+                total_leads += sum(item["count"] for item in data["details"])
+            
+            # Статистика по операторам
+            operators_stats = {}
+            for uid, name in users.items():
+                operator_stats = {
+                    "new": 0,
+                    "process": 0,
+                    "success": 0,
+                    "total": 0
+                }
+                
+                for stage_data in leads_by_stage.values():
+                    for item in stage_data:
+                        if item["operator"] == name:
+                            operator_stats["total"] += item["count"]
+                            # Здесь нужно определить тип лида по stage
+                            if "Перезвонить" in item["operator"]:
+                                operator_stats["new"] += item["count"]
+                            elif "На согласовании" in item["operator"]:
+                                operator_stats["process"] += item["count"]
+                            else:
+                                operator_stats["success"] += item["count"]
+                
+                operators_stats[name] = operator_stats
+            
+            with cache_lock:
+                data_cache["leads_by_stage"] = leads_by_stage
+                data_cache["operators_stats"] = operators_stats
+                data_cache["total_leads"] = total_leads
+                data_cache["last_updated"] = time.time()
+            
+            # Отправляем обновление через WebSocket
+            socketio.emit('data_update', {
+                'leads_by_stage': leads_by_stage,
+                'operators_stats': operators_stats,
+                'total_leads': total_leads,
+                'timestamp': datetime.now().strftime("%H:%M:%S")
+            })
+            
+        except Exception as e:
+            log_error("Ошибка при обновлении глобальной статистики", e)
+        
+        time.sleep(app.config['DATA_UPDATE_INTERVAL'])
+
+# Запуск фонового потока обновления
+Thread(target=update_global_stats, daemon=True).start()
+
 # Маршруты
 @app.route("/auth", methods=["GET", "POST"])
 def auth():
@@ -244,7 +318,20 @@ def index():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    if session.get("role") == "admin":
+        return render_template("admin_dashboard.html")
     return app.send_static_file("dashboard.html")
+
+@app.route("/admin/data")
+@admin_required
+def admin_data():
+    with cache_lock:
+        return jsonify({
+            "leads_by_stage": data_cache["leads_by_stage"],
+            "operators_stats": data_cache["operators_stats"],
+            "total_leads": data_cache["total_leads"],
+            "last_updated": data_cache["last_updated"]
+        })
 
 @app.route("/update_stage/<stage_name>")
 @login_required
@@ -297,24 +384,6 @@ def personal_stats():
 
     return jsonify({"operator": operator_name, "stats": stats})
 
-@app.route("/api/leads/by-stage")
-@login_required
-def leads_by_stage():
-    start, end = get_range_dates("today")
-    users = load_users()
-
-    data = {}
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [
-            executor.submit(process_stage, name, stage_id, start, end, users)
-            for name, stage_id in STAGE_LABELS.items()
-        ]
-        for future in futures:
-            name, stage_data = future.result()
-            data[name] = stage_data
-
-    return jsonify({"range": "today", "data": data})
-
 @app.route("/api/userinfo")
 @login_required
 def api_userinfo():
@@ -323,19 +392,16 @@ def api_userinfo():
         "role": session.get("role")
     })
 
-@app.route("/ping")
-def ping():
-    return jsonify({"status": "ok"})
-
-@app.route("/clock")
-def clock():
-    tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
-    return jsonify({
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    })
+@socketio.on('connect')
+def handle_connect():
+    if session.get("role") == "admin":
+        with cache_lock:
+            emit('data_update', {
+                'leads_by_stage': data_cache["leads_by_stage"],
+                'operators_stats': data_cache["operators_stats"],
+                'total_leads': data_cache["total_leads"],
+                'timestamp': datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S")
+            })
 
 @app.errorhandler(404)
 def not_found(e):
@@ -347,4 +413,4 @@ def server_error(e):
     return render_template("500.html"), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
