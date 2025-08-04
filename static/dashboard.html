@@ -1,251 +1,623 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <style>
-        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-        .stage-header { cursor: pointer; }
-        .loading { opacity: 0.5; pointer-events: none; }
-        .operator-badge { margin-right: 5px; margin-bottom: 5px; }
-        .custom-range { max-width: 300px; }
-        .table-responsive { max-height: 400px; overflow-y: auto; }
-        .logout-btn { position: absolute; top: 20px; right: 20px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>CRM Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --dark-bg: #1e293b;
+      --block-bg: #232e41;
+      --primary: #3b82f6;
+      --secondary: #9333ea;
+      --accent: #7dd3fc;
+      --border: #334155;
+      --text-main: #e0e7ef;
+      --text-light: #cbd5e1;
+      --badge-bg: #3b82f6;
+      --badge-bg2: #9333ea;
+      --error: #f87171;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: var(--dark-bg);
+      color: var(--text-main);
+      font-family: "Segoe UI", "Inter", Arial, sans-serif;
+      min-height: 100vh;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
+    }
+
+    h1 {
+      text-align: center;
+      margin: 32px 0 28px 0;
+      font-size: 2.1em;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      color: var(--accent);
+      text-shadow: 0 2px 20px rgba(59,130,246,0.14);
+    }
+
+    /* Фильтр выбора периода + операторов */
+    .filter {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: var(--block-bg);
+      padding: 18px 28px;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(30,41,59,0.12);
+      width: fit-content;
+      margin: 0 auto 34px auto;
+      margin-top: 6px;
+      position: relative;
+      z-index: 10;
+    }
+    .period-label {
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+    }
+    .period-input-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--dark-bg);
+      border-radius: 7px;
+      padding: 3px 10px 3px 6px;
+      border: 1px solid var(--border);
+      transition: border 0.2s;
+    }
+    .period-input-group:focus-within {
+      border: 1.5px solid var(--accent);
+    }
+    .period-input-group svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--accent);
+    }
+    .filter input[type="date"] {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      padding: 6px 4px;
+      font-size: 15px;
+      outline: none;
+      width: 120px;
+      font-family: inherit;
+    }
+    .filter input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.7);
+    }
+    .filter button {
+      background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+      border: none;
+      color: #fff;
+      padding: 9px 22px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 14px rgba(59,130,246,0.10);
+      transition: background 0.2s, transform 0.1s;
+      margin-left: 14px;
+      letter-spacing: 0.01em;
+    }
+    .filter button:hover {
+      background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
+      transform: translateY(-1px) scale(1.04);
+    }
+
+    /* Оператор фильтр — в стиле остальных */
+    /* Кастомный выпадающий фильтр операторов */
+    #operator-filter {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: var(--dark-bg);
+      border-radius: 7px;
+      padding: 3.5px 10px 3.5px 6px;
+      border: 1px solid var(--border);
+      transition: border 0.2s;
+      height: 44px;
+    }
+    #operator-filter:focus-within {
+      border: 1.5px solid var(--accent);
+      position: relative;
+      min-width: 190px;
+      z-index: 20;
+    }
+    #operator-filter label {
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 15px;
+      margin-right: 3px;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    #operators {
+      min-width: 160px;
+      max-width: 260px;
+    .dropdown-selected {
+      background: var(--block-bg);
+      border: none;
+      border-radius: 7px;
+      padding: 7px 12px;
+      color: var(--text-main);
+      font-size: 15px;
+      padding: 6px 7px;
+      height: 32px;
+      outline: none;
+      font-family: inherit;
+      box-shadow: 0 1px 6px rgba(30,41,59,0.09);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      user-select: none;
+      min-width: 140px;
+      min-height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+    }
+    #operators:focus {
+      background: var(--dark-bg);
+    .dropdown-selected .arrow {
+      font-size: 13px;
+      margin-left: 7px;
+      color: var(--accent);
+    }
+    #operators option {
+    .dropdown-list {
+      position: absolute;
+      left: 0; right: 0;
+      top: 38px;
+      background: var(--block-bg);
+      border: 1.5px solid var(--accent);
+      border-radius: 7px;
+      margin-top: 2px;
+      z-index: 40;
+      display: none;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(30,41,59,0.17);
+      min-width: 170px;
+    }
+    .dropdown-list label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      cursor: pointer;
+      color: var(--text-main);
+      font-size: 15px;
+      padding: 4px 8px;
+      transition: background 0.15s;
+      border-radius: 5px;
+    }
+    .dropdown-list label:hover {
+      background: var(--dark-bg);
+    }
+    .dropdown-list input[type="checkbox"] {
+      accent-color: var(--accent);
+      margin-right: 5px;
+      transform: scale(1.07);
+    }
+    .dropdown-list label.all-ops {
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* Мини-лоадер для каждого блока */
+    .mini-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      width: 100%;
+    }
+    .mini-spinner {
+      border: 5px solid #22304b;
+      border-top: 5px solid var(--accent);
+      border-radius: 50%;
+      width: 38px;
+      height: 38px;
+      animation: spin 0.8s linear infinite;
+      box-shadow: 0 2px 10px rgba(59,130,246,0.18);
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+
+    .stage-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 40px;
+      width: 100%;
+    }
+    .stage-block {
+      background: var(--block-bg);
+      box-shadow: 0 4px 32px rgba(30,41,59,0.14);
+      border-radius: 14px;
+      padding: 26px 22px 20px 22px;
+      min-width: 280px;
+      max-width: 340px;
+      flex: 1 1 320px;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 18px;
+    }
+    .stage-block h2 {
+      margin: 0 0 16px 0;
+      font-size: 1.17em;
+      color: var(--accent);
+      font-weight: 700;
+      border-bottom: 1.5px solid var(--border);
+      padding-bottom: 8px;
+      letter-spacing: 0.01em;
+    }
+
+    .stage-table table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      background: transparent;
+    }
+    .stage-table th, .stage-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      color: var(--text-main);
+    }
+    .stage-table th {
+      background-color: #22304b;
+      font-weight: bold;
+      color: var(--accent);
+      font-size: 1em;
+      border-top-left-radius: 5px;
+      border-top-right-radius: 5px;
+    }
+    .stage-table tr:hover {
+      background-color: #25334c;
+    }
+    .stage-table p {
+      color: var(--text-light);
+      margin: 10px 0 0 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: linear-gradient(90deg, var(--badge-bg) 0%, var(--badge-bg2) 100%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      margin-left: 4px;
+      letter-spacing: 0.02em;
+      box-shadow: 0 1.5px 6px rgba(59,130,246,0.07);
+    }
+    .error-message {
+      color: var(--error);
+      font-weight: bold;
+      margin-top: 14px;
+      font-size: 1.03em;
+    }
+
+    @media (max-width: 900px) {
+      .stage-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .stage-block {
+        max-width: 95vw;
+        margin: 0 auto 18px auto;
+      }
+      .filter {
+        width: 98vw;
+        min-width: unset;
+        padding: 12px 6px;
+      }
+    }
+    @media (max-width: 600px) {
+      .stage-block {
+        padding: 14px 6px 14px 8px;
+      }
+      .filter {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 2px;
+        width: 100%;
+      }
+      .filter button {
+        margin-left: 0;
+        margin-top: 8px;
+      }
+      h1 {
+        font-size: 1.23em;
+      }
+      #operator-filter {
+        flex-direction: column;
+        align-items: stretch;
+        height: auto;
+        padding: 6px 4px;
+        margin-top: 7px;
+      }
+      #operators {
+        width: 100%;
+        min-width: 0;
+        margin-top: 4px;
+      .dropdown-selected {
+        min-width: 100px;
+        font-size: 0.97em;
+        padding: 8px 10px;
+      }
+      .dropdown-list {
+        min-width: 100px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container-fluid py-4">
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <h2>Статистика операторов</h2>
-                <div class="d-flex align-items-center">
-                    <span class="me-2">Пользователь:</span>
-                    <strong id="current-user"></strong>
-                    <span class="ms-3 me-2">Роль:</span>
-                    <strong id="current-role"></strong>
-                </div>
-            </div>
-            <div class="col-md-4 text-end">
-                <a href="/logout" class="btn btn-outline-danger logout-btn">Выйти</a>
-            </div>
-        </div>
-
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="input-group mb-3">
-                    <label class="input-group-text" for="date-range">Период:</label>
-                    <select class="form-select" id="date-range">
-                        <option value="today">Сегодня</option>
-                        <option value="week">Неделя</option>
-                        <option value="month">Месяц</option>
-                        <option value="custom">Выбрать даты</option>
-                    </select>
-                </div>
-            </div>
-            <div class="col-md-4" id="custom-date-container" style="display: none;">
-                <div class="input-group">
-                    <input type="text" class="form-control" id="custom-date-range" placeholder="Выберите период">
-                    <button class="btn btn-primary" id="apply-custom-date">Применить</button>
-                </div>
-            </div>
-            <div class="col-md-4" id="operator-filter-container">
-                <div class="input-group mb-3">
-                    <label class="input-group-text" for="operator-select">Оператор:</label>
-                    <select class="form-select" id="operator-select">
-                        <option value="">Все операторы</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="row" id="stages-container">
-            <!-- Динамически загружаемые карточки стадий -->
-        </div>
+  <form class="filter" onsubmit="fetchStats(); return false;">
+    <span class="period-label">Период:</span>
+    <div class="period-input-group">
+      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
+      <input type="date" id="startDate" required>
     </div>
+    <span class="period-label">—</span>
+    <div class="period-input-group">
+      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
+      <input type="date" id="endDate" required>
+    </div>
+    <div id="operator-filter">
+      <label for="operators">Оператор(ы):</label>
+      <select id="operators" multiple></select>
+      <label>Оператор(ы):</label>
+      <div class="dropdown-selected" onclick="toggleDropdown(event)">
+        <span id="selected-ops-label">Все</span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="dropdown-list" id="dropdown-list"></div>
+    </div>
+    <button type="submit">Показать статистику</button>
+  </form>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Инициализация
-            let currentOperators = [];
-            const dateRange = document.getElementById('date-range');
-            const customDateContainer = document.getElementById('custom-date-container');
-            const customDateRange = document.getElementById('custom-date-range');
-            const applyCustomDate = document.getElementById('apply-custom-date');
-            const operatorSelect = document.getElementById('operator-select');
-            const stagesContainer = document.getElementById('stages-container');
-            const currentUserElement = document.getElementById('current-user');
-            const currentRoleElement = document.getElementById('current-role');
-            const operatorFilterContainer = document.getElementById('operator-filter-container');
+  <div class="stage-container">
+    <div class="stage-block">
+      <h2>Перезвонить</h2>
+      <div id="table-Перезвонить" class="stage-table">
+        <div class="mini-loader" id="loader-Перезвонить" style="display:none;">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-block">
+      <h2>На согласовании</h2>
+      <div id="table-На согласовании" class="stage-table">
+        <div class="mini-loader" id="loader-На согласовании" style="display:none;">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-block">
+      <h2>Приглашен к рекрутеру</h2>
+      <div id="table-Приглашен к рекрутеру" class="stage-table">
+        <div class="mini-loader" id="loader-Приглашен к рекрутеру" style="display:none;">
+          <div class="mini-spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-            // Flatpickr для выбора дат
-            flatpickr(customDateRange, {
-                mode: 'range',
-                locale: 'ru',
-                dateFormat: 'Y-m-d',
-                maxDate: 'today'
-            });
+  <script>
+    const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
+    let userRole = null;
+    let operatorList = [];
+    let selectedOperators = new Set();
 
-            // Загрузка данных пользователя
-            fetch('/api/userinfo')
-                .then(response => response.json())
-                .then(data => {
-                    currentUserElement.textContent = data.name;
-                    currentRoleElement.textContent = data.role === 'admin' ? 'Администратор' : 'Оператор';
-                    
-                    // Для админов загружаем список операторов
-                    if (data.role === 'admin') {
-                        loadOperators();
-                    } else {
-                        operatorFilterContainer.style.display = 'none';
-                    }
-                    
-                    // Первоначальная загрузка данных
-                    loadStages('today');
-                })
-                .catch(error => {
-                    console.error('Ошибка загрузки данных пользователя:', error);
-                });
+    function toggleDropdown(event) {
+      event.stopPropagation();
+      const list = document.getElementById('dropdown-list');
+      list.style.display = (list.style.display === 'block') ? 'none' : 'block';
+    }
+    document.addEventListener('click', function(e) {
+      const list = document.getElementById('dropdown-list');
+      if (list && list.style.display === 'block' && !document.getElementById('operator-filter').contains(e.target)) {
+        list.style.display = 'none';
+      }
+    });
 
-            // Обработчики событий
-            dateRange.addEventListener('change', function() {
-                if (this.value === 'custom') {
-                    customDateContainer.style.display = 'block';
-                } else {
-                    customDateContainer.style.display = 'none';
-                    loadStages(this.value);
-                }
-            });
+    function updateSelectedLabel() {
+      const label = document.getElementById('selected-ops-label');
+      if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
+        label.textContent = 'Все';
+      } else {
+        label.textContent = Array.from(selectedOperators).map(id => {
+          const op = operatorList.find(o => o.id == id);
+          return op ? op.name : id;
+        }).join(', ');
+      }
+    }
 
-            applyCustomDate.addEventListener('click', function() {
-                if (customDateRange.value) {
-                    const dates = customDateRange.value.split(' to ');
-                    const range = `custom:${dates[0]}:${dates[1] || dates[0]}`;
-                    loadStages(range);
-                }
-            });
+    async function loadUserInfoAndOperators() {
+      try {
+        const user = await fetch('/api/userinfo').then(r=>r.json());
+        userRole = user.role;
+        if (userRole === 'admin') {
+          document.getElementById('operator-filter').style.display = 'flex';
+          const ops = await fetch('/api/operators').then(r=>r.json());
+          const sel = document.getElementById('operators');
+          sel.innerHTML = '';
+          ops.forEach(op=>{
+            let o = document.createElement('option');
+            o.value = op.id;
+            o.textContent = op.name;
+            sel.appendChild(o);
+          });
+          operatorList = await fetch('/api/operators').then(r=>r.json());
+          selectedOperators = new Set(operatorList.map(o => o.id)); // по умолчанию все
+          renderOperatorDropdown();
+          updateSelectedLabel();
+        } else {
+          document.getElementById('operator-filter').style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Ошибка получения данных пользователя или операторов', e);
+      }
+    }
 
-            operatorSelect.addEventListener('change', function() {
-                const range = dateRange.value === 'custom' 
-                    ? `custom:${customDateRange.value.split(' to ').join(':')}` 
-                    : dateRange.value;
-                loadStages(range);
-            });
+    function renderOperatorDropdown() {
+      const list = document.getElementById('dropdown-list');
+      list.innerHTML = '';
+      // "выбрать всех"
+      let allChecked = selectedOperators.size === operatorList.length;
+      list.innerHTML += `<label class="all-ops">
+        <input type="checkbox" onchange="toggleAllOperators(this)" ${allChecked?'checked':''}> Все операторы
+      </label>`;
+      operatorList.forEach(op => {
+        list.innerHTML += `<label>
+          <input type="checkbox" value="${op.id}" ${selectedOperators.has(op.id+'' )?'checked':''} onchange="toggleOperator(this)">
+          ${op.name}
+        </label>`;
+      });
+    }
 
-            // Функция загрузки операторов (только для админов)
-            function loadOperators() {
-                fetch('/api/operators')
-                    .then(response => {
-                        if (!response.ok) throw new Error('Ошибка загрузки операторов');
-                        return response.json();
-                    })
-                    .then(operators => {
-                        currentOperators = operators;
-                        const operatorSelect = document.getElementById('operator-select');
-                        
-                        // Сохраняем текущее выбранное значение
-                        const selectedValue = operatorSelect.value;
-                        
-                        // Очищаем и добавляем только активных операторов
-                        operatorSelect.innerHTML = '<option value="">Все операторы</option>';
-                        
-                        operators.forEach(op => {
-                            const option = document.createElement('option');
-                            option.value = op.id;
-                            option.textContent = op.surname || op.name.split(' ').pop();
-                            operatorSelect.appendChild(option);
-                        });
-                        
-                        // Восстанавливаем выбранное значение, если оно есть в новых данных
-                        if (selectedValue && operators.some(op => op.id === selectedValue)) {
-                            operatorSelect.value = selectedValue;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Ошибка загрузки операторов:', error);
-                        // Можно показать сообщение об ошибке
-                    });
+    function toggleOperator(checkbox) {
+      if (checkbox.checked) {
+        selectedOperators.add(checkbox.value);
+      } else {
+        selectedOperators.delete(checkbox.value);
+      }
+      renderOperatorDropdown();
+      updateSelectedLabel();
+    }
+
+    function toggleAllOperators(checkbox) {
+      if (checkbox.checked) {
+        operatorList.forEach(o => selectedOperators.add(o.id));
+      } else {
+        selectedOperators.clear();
+      }
+      renderOperatorDropdown();
+      updateSelectedLabel();
+    }
+
+    function getSelectedOperators() {
+      if (userRole !== 'admin') return '';
+      const sel = document.getElementById('operators');
+      const selected = Array.from(sel.selectedOptions).map(o=>o.value);
+      return selected.join(',');
+      if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
+      return Array.from(selectedOperators).join(',');
+    }
+
+    function showMiniLoader(stage) {
+      document.getElementById(`loader-${stage}`).style.display = 'flex';
+    }
+    function hideMiniLoader(stage) {
+      document.getElementById(`loader-${stage}`).style.display = 'none';
+    }
+
+    function fetchStats() {
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      if (!start || !end) {
+        alert("Заполни обе даты");
+        return;
+      }
+      const operators = getSelectedOperators();
+      STAGE_LABELS.forEach(stage => {
+        const container = document.getElementById(`table-${stage}`);
+        container.innerHTML = `
+          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
+            <div class="mini-spinner"></div>
+          </div>
+        `;
+        let url = `/update_stage/${stage}?range=custom:${start}:${end}`;
+        if (operators) url += `&operators=${operators}`;
+        fetch(url)
+          .then(r => r.json())
+          .then(data => {
+            const stageData = data[stage];
+            container.innerHTML = '';
+            if (!stageData.details || stageData.details.length === 0) {
+              container.innerHTML = `<p>Нет данных</p>`;
+              return;
             }
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+            const tbody = document.createElement('tbody');
+            stageData.details.forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+              tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            container.appendChild(table);
+          })
+          .catch(err => {
+            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            console.error(`Ошибка стадии "${stage}":`, err);
+          });
+      });
+    }
 
-            // Функция загрузки стадий
-            function loadStages(range) {
-                stagesContainer.classList.add('loading');
-                
-                const selectedOperator = operatorSelect.value;
-                let url = '/api/leads/by-stage?range=' + encodeURIComponent(range);
-                
-                if (selectedOperator) {
-                    url += '&operators=' + selectedOperator;
-                }
-
-                fetch(url)
-                    .then(response => {
-                        if (!response.ok) throw new Error('Ошибка загрузки данных');
-                        return response.json();
-                    })
-                    .then(data => {
-                        renderStages(data.data);
-                        stagesContainer.classList.remove('loading');
-                    })
-                    .catch(error => {
-                        console.error('Ошибка загрузки стадий:', error);
-                        stagesContainer.classList.remove('loading');
-                        // Можно показать сообщение об ошибке
-                    });
+    window.onload = async () => {
+      await loadUserInfoAndOperators();
+      const operators = getSelectedOperators();
+      STAGE_LABELS.forEach(stage => {
+        const container = document.getElementById(`table-${stage}`);
+        container.innerHTML = `
+          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
+            <div class="mini-spinner"></div>
+          </div>
+        `;
+        let url = `/update_stage/${stage}`;
+        if (operators) url += `?operators=${operators}`;
+        fetch(url)
+          .then(r => r.json())
+          .then(data => {
+            const stageData = data[stage];
+            container.innerHTML = '';
+            if (!stageData.details || stageData.details.length === 0) {
+              container.innerHTML = `<p>Нет данных</p>`;
+              return;
             }
-
-            // Рендер карточек стадий
-            function renderStages(stages) {
-                stagesContainer.innerHTML = '';
-
-                for (const [stageName, stageData] of Object.entries(stages)) {
-                    const card = document.createElement('div');
-                    card.className = 'col-md-6 col-lg-4';
-                    card.innerHTML = `
-                        <div class="card">
-                            <div class="card-header stage-header d-flex justify-content-between align-items-center" 
-                                 data-bs-toggle="collapse" data-bs-target="#collapse-${stageName.replace(/\s+/g, '-')}">
-                                <h5 class="mb-0">${stageName}</h5>
-                                <span class="badge bg-primary rounded-pill">${stageData.grouped ? stageData.count : stageData.details.reduce((a, b) => a + b.count, 0)}</span>
-                            </div>
-                            <div class="collapse show" id="collapse-${stageName.replace(/\s+/g, '-')}">
-                                <div class="card-body">
-                                    ${stageData.grouped ? `
-                                        <p class="text-muted">Групповая стадия</p>
-                                        <p>Всего: ${stageData.count}</p>
-                                    ` : `
-                                        <div class="table-responsive">
-                                            <table class="table table-sm">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Оператор</th>
-                                                        <th class="text-end">Количество</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    ${stageData.details.map(item => `
-                                                        <tr>
-                                                            <td>${item.operator.split(' ').pop()}</td>
-                                                            <td class="text-end">${item.count}</td>
-                                                        </tr>
-                                                    `).join('')}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    `}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    stagesContainer.appendChild(card);
-                }
-            }
-        });
-    </script>
+            const table = document.createElement('table');
+            table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
+            const tbody = document.createElement('tbody');
+            stageData.details.forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
+              tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            container.appendChild(table);
+          })
+          .catch(err => {
+            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
+            console.error(`Ошибка стадии "${stage}":`, err);
+          });
+      });
+    };
+  </script>
 </body>
 </html>
