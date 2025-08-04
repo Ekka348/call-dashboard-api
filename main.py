@@ -35,6 +35,13 @@ STAGE_LABELS = {
     "Приглашен к рекрутеру": "CONVERTED",
 }
 
+# Кэш пользователей
+user_cache = {
+    "data": {},
+    "active_users": set(),
+    "last": 0
+}
+
 # Декораторы
 def login_required(f):
     @wraps(f)
@@ -95,43 +102,47 @@ def get_range_dates(rtype):
         end = now
         return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
 
-# Кэширование пользователей
-user_cache = {"data": {}, "last": 0}
-
 def load_users():
     if time.time() - user_cache["last"] < app.config['USER_CACHE_TIMEOUT']:
         return user_cache["data"]
     
-    users, start = {}, 0
+    users = {}
+    user_cache["active_users"] = set()
+    
     try:
+        start = 0
         while True:
-            r = requests.post(
+            response = requests.post(
                 app.config['BITRIX_HOOK'] + "user.get.json",
                 json={"start": start},
                 timeout=10
             ).json()
             
-            if "error" in r:
-                raise Exception(r.get("error_description", "Bitrix API error"))
+            if "error" in response:
+                raise Exception(response.get("error_description", "Bitrix API error"))
                 
-            for u in r.get("result", []):
-                users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
-                
-            if "next" not in r:
+            for user in response.get("result", []):
+                user_id = int(user["ID"])
+                users[user_id] = f'{user["NAME"]} {user["LAST_NAME"]}'
+                if user.get("ACTIVE", "Y") == "Y":
+                    user_cache["active_users"].add(user_id)
+                    
+            if "next" not in response:
                 break
-            start = r.get("next")
+            start = response.get("next")
             
     except Exception as e:
         log_error("Ошибка загрузки пользователей", e)
-        return user_cache["data"]  # Возвращаем старые данные при ошибке
+        return user_cache["data"]
         
-    user_cache["data"], user_cache["last"] = users, time.time()
+    user_cache["data"] = users
+    user_cache["last"] = time.time()
     return users
 
 # Работа с лидами
 def fetch_leads(stage, start, end, offset=0):
     try:
-        r = requests.post(
+        response = requests.post(
             app.config['BITRIX_HOOK'] + "crm.lead.list.json",
             json={
                 "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
@@ -141,10 +152,10 @@ def fetch_leads(stage, start, end, offset=0):
             timeout=10
         ).json()
         
-        if "error" in r:
-            raise Exception(r.get("error_description", "Bitrix API error"))
+        if "error" in response:
+            raise Exception(response.get("error_description", "Bitrix API error"))
             
-        return r.get("result", []), r.get("next", 0)
+        return response.get("result", []), response.get("next", 0)
     except Exception as e:
         log_error(f"Ошибка загрузки лидов (stage: {stage})", e)
         return [], 0
@@ -192,7 +203,7 @@ def process_stage(name, stage_id, start, end, users, operator_filter=None):
         stats = Counter()
         for lead in leads:
             uid = lead.get("ASSIGNED_BY_ID")
-            if not uid:
+            if not uid or int(uid) not in user_cache["active_users"]:
                 continue
                 
             if operator_filter and str(uid) not in operator_filter:
@@ -338,23 +349,23 @@ def api_userinfo():
 def api_operators():
     users = load_users()
     return jsonify([
-        {"id": str(uid), "name": name}
+        {
+            "id": str(uid),
+            "name": name,
+            "surname": name.split()[-1]
+        }
         for uid, name in users.items()
+        if uid in user_cache["active_users"]
     ])
 
 @app.route("/ping")
 def ping():
     return jsonify({"status": "ok"})
 
-@app.route("/clock")
-def clock():
-    tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
-    return jsonify({
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    })
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/auth")
 
 @app.errorhandler(404)
 def not_found(e):
