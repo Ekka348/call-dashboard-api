@@ -9,36 +9,28 @@ import logging
 from logging.handlers import RotatingFileHandler
 from flask_socketio import SocketIO
 
-import sys
-if sys.version_info >= (3, 12):
-    import ssl
-    ssl.wrap_socket = ssl.SSLContext.wrap_socket
-
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode='gevent')
 
-# Конфигурация
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
     BITRIX_HOOK = os.environ.get("BITRIX_HOOK")
-    SESSION_TIMEOUT = 3600  # 1 час
-    USER_CACHE_TIMEOUT = 300  # 5 минут
+    SESSION_TIMEOUT = 3600
+    USER_CACHE_TIMEOUT = 300
     MAX_LOGIN_ATTEMPTS = 5
     LOG_FILE = 'app.log'
-    DATA_UPDATE_INTERVAL = 15  # секунд
+    DATA_UPDATE_INTERVAL = 15
 
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
 
-# Логирование
 handler = RotatingFileHandler(app.config['LOG_FILE'], maxBytes=10000, backupCount=1)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 
-# Глобальные переменные
 STAGE_LABELS = {
     "Перезвонить": "IN_PROCESS",
-    "На согласовании": "UC_A2DF81", 
+    "На согласовании": "UC_A2DF81",
     "Приглашен к рекрутеру": "CONVERTED"
 }
 
@@ -50,7 +42,6 @@ data_cache = {
 }
 cache_lock = Lock()
 
-# Декораторы
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -71,7 +62,6 @@ def admin_required(f):
         return f(*args, **kwargs)
     return wrapper
 
-# Вспомогательные функции
 def log_error(message, exc=None):
     app.logger.error(f"{message}: {str(exc) if exc else 'No details'}")
 
@@ -79,7 +69,7 @@ def find_user(login):
     try:
         with open("whitelist.json", "r", encoding="utf-8") as f:
             users = json.load(f)
-        return next((u for u in users if u["login"] == login), None
+        return next((u for u in users if u["login"] == login), None)
     except Exception as e:
         log_error("Ошибка загрузки whitelist.json", e)
         return None
@@ -94,7 +84,6 @@ def get_current_month_range():
         last_day.strftime("%Y-%m-%d 23:59:59")
     )
 
-# Работа с данными
 def fetch_leads(stage):
     try:
         month_start, month_end = get_current_month_range()
@@ -148,7 +137,6 @@ def update_cache():
     while True:
         try:
             users = load_users()
-            
             leads_by_stage = {}
             total_leads = 0
             
@@ -210,7 +198,6 @@ def update_cache():
         
         time.sleep(app.config['DATA_UPDATE_INTERVAL'])
 
-# Маршруты
 @app.route("/")
 def index():
     return redirect("/dashboard")
@@ -263,7 +250,6 @@ def handle_connect():
     else:
         return False
 
-# Запуск фонового потока
 Thread(target=update_cache, daemon=True).start()
 
 if __name__ == "__main__":
