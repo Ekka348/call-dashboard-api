@@ -407,9 +407,6 @@
       const startDate = document.getElementById('startDate');
       const endDate = document.getElementById('endDate');
       
-      startDate.valueAsDate = today;
-      endDate.valueAsDate = today;
-      
       // Форматирование даты в YYYY-MM-DD
       const formatDate = (date) => {
         const year = date.getFullYear();
@@ -438,30 +435,43 @@
     function updateSelectedLabel() {
       const label = document.getElementById('selected-ops-label');
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
-        label.textContent = 'Все';
+        label.textContent = 'Все операторы';
       } else {
         label.textContent = Array.from(selectedOperators).map(id => {
           const op = operatorList.find(o => o.id == id);
-          return op ? op.name.split(' ').pop() : id;
+          return op ? op.name : id;
         }).join(', ');
       }
     }
 
     async function loadUserInfoAndOperators() {
       try {
-        const user = await fetch('/api/userinfo').then(r => r.json());
+        // Загружаем информацию о пользователе
+        const userResponse = await fetch('/api/userinfo');
+        if (!userResponse.ok) throw new Error('Ошибка загрузки данных пользователя');
+        const user = await userResponse.json();
+        
         userRole = user.role;
+        
         if (userRole === 'admin') {
           document.getElementById('operator-filter').style.display = 'flex';
-          operatorList = await fetch('/api/operators').then(r => r.json());
+          
+          // Загружаем список операторов
+          const operatorsResponse = await fetch('/api/operators');
+          if (!operatorsResponse.ok) throw new Error('Ошибка загрузки списка операторов');
+          operatorList = await operatorsResponse.json();
+          
+          // По умолчанию выбираем всех операторов
           selectedOperators = new Set(operatorList.map(o => o.id));
+          
           renderOperatorDropdown();
           updateSelectedLabel();
         } else {
           document.getElementById('operator-filter').style.display = 'none';
         }
       } catch (e) {
-        console.error('Ошибка получения данных пользователя или операторов', e);
+        console.error('Ошибка:', e);
+        alert('Произошла ошибка при загрузке данных. Пожалуйста, обновите страницу.');
       }
     }
 
@@ -469,7 +479,8 @@
       const list = document.getElementById('dropdown-list');
       list.innerHTML = '';
       
-      let allChecked = selectedOperators.size === operatorList.length;
+      // Добавляем опцию "Выбрать всех"
+      const allChecked = selectedOperators.size === operatorList.length;
       list.innerHTML += `
         <label class="all-ops">
           <input type="checkbox" onchange="toggleAllOperators(this)" ${allChecked ? 'checked' : ''}>
@@ -477,11 +488,12 @@
         </label>
       `;
       
+      // Добавляем каждого оператора в список
       operatorList.forEach(op => {
         list.innerHTML += `
           <label>
             <input type="checkbox" value="${op.id}" ${selectedOperators.has(op.id) ? 'checked' : ''} onchange="toggleOperator(this)">
-            ${op.name.split(' ').pop()}
+            ${op.name}
           </label>
         `;
       });
@@ -571,7 +583,7 @@
             stageData.details.forEach(item => {
               const row = document.createElement('tr');
               row.innerHTML = `
-                <td>${item.operator.split(' ').pop()}</td>
+                <td>${item.operator}</td>
                 <td><span class="badge">${item.count}</span></td>
               `;
               tbody.appendChild(row);
@@ -581,8 +593,12 @@
             container.appendChild(table);
           })
           .catch(err => {
-            container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки данных</p>`;
             console.error(`Ошибка загрузки стадии "${stage}":`, err);
+            container.innerHTML = `
+              <p class="error-message">
+                ⛔ Ошибка загрузки данных. Пожалуйста, попробуйте позже.
+              </p>
+            `;
           });
       });
     }
