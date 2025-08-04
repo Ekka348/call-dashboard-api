@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>CRM Dashboard</title>
+  <title>CRM Dashboard - Проект ВВ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     :root {
@@ -344,7 +344,7 @@
   </style>
 </head>
 <body>
-  <h1>CRM Dashboard</h1>
+  <h1>CRM Dashboard - Проект ВВ</h1>
   <form class="filter" onsubmit="fetchStats(); return false;">
     <span class="period-label">Период:</span>
     <div class="period-input-group">
@@ -359,7 +359,7 @@
     <div id="operator-filter">
       <label>Оператор(ы):</label>
       <div class="dropdown-selected" onclick="toggleDropdown(event)">
-        <span id="selected-ops-label">Все</span>
+        <span id="selected-ops-label">Все операторы</span>
         <span class="arrow">▼</span>
       </div>
       <div class="dropdown-list" id="dropdown-list"></div>
@@ -456,7 +456,7 @@
         if (userRole === 'admin') {
           document.getElementById('operator-filter').style.display = 'flex';
           
-          // Загружаем список операторов
+          // Загружаем список операторов из подразделения "Проект ВВ"
           const operatorsResponse = await fetch('/api/operators');
           if (!operatorsResponse.ok) throw new Error('Ошибка загрузки списка операторов');
           operatorList = await operatorsResponse.json();
@@ -523,14 +523,6 @@
       if (userRole !== 'admin') return '';
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
       return Array.from(selectedOperators).join(',');
-    }
-
-    function showMiniLoader(stage) {
-      document.getElementById(`loader-${stage}`).style.display = 'flex';
-    }
-
-    function hideMiniLoader(stage) {
-      document.getElementById(`loader-${stage}`).style.display = 'none';
     }
 
     function fetchStats() {
