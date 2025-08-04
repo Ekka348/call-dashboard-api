@@ -27,6 +27,7 @@
       font-family: "Segoe UI", "Inter", Arial, sans-serif;
       min-height: 100vh;
     }
+
     body {
       min-height: 100vh;
       margin: 0;
@@ -35,6 +36,7 @@
       flex-direction: column;
       background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
     }
+
     h1 {
       text-align: center;
       margin: 32px 0 28px 0;
@@ -44,6 +46,8 @@
       color: var(--accent);
       text-shadow: 0 2px 20px rgba(59,130,246,0.14);
     }
+
+    /* Фильтр выбора периода + операторов */
     .filter {
       display: flex;
       flex-wrap: wrap;
@@ -117,11 +121,21 @@
       transform: translateY(-1px) scale(1.04);
     }
 
+    /* Оператор фильтр — в стиле остальных */
     /* Кастомный выпадающий фильтр операторов */
     #operator-filter {
       display: none;
       align-items: center;
       gap: 8px;
+      background: var(--dark-bg);
+      border-radius: 7px;
+      padding: 3.5px 10px 3.5px 6px;
+      border: 1px solid var(--border);
+      transition: border 0.2s;
+      height: 44px;
+    }
+    #operator-filter:focus-within {
+      border: 1.5px solid var(--accent);
       position: relative;
       min-width: 190px;
       z-index: 20;
@@ -134,11 +148,21 @@
       letter-spacing: 0.01em;
       white-space: nowrap;
     }
+    #operators {
+      min-width: 160px;
+      max-width: 260px;
     .dropdown-selected {
       background: var(--block-bg);
+      border: none;
       border-radius: 7px;
       padding: 7px 12px;
       color: var(--text-main);
+      font-size: 15px;
+      padding: 6px 7px;
+      height: 32px;
+      outline: none;
+      font-family: inherit;
+      box-shadow: 0 1px 6px rgba(30,41,59,0.09);
       cursor: pointer;
       border: 1px solid var(--border);
       user-select: none;
@@ -149,11 +173,14 @@
       justify-content: space-between;
       gap: 5px;
     }
+    #operators:focus {
+      background: var(--dark-bg);
     .dropdown-selected .arrow {
       font-size: 13px;
       margin-left: 7px;
       color: var(--accent);
     }
+    #operators option {
     .dropdown-list {
       position: absolute;
       left: 0; right: 0;
@@ -177,6 +204,7 @@
       cursor: pointer;
       color: var(--text-main);
       font-size: 15px;
+      padding: 4px 8px;
       transition: background 0.15s;
       border-radius: 5px;
     }
@@ -332,6 +360,10 @@
         padding: 6px 4px;
         margin-top: 7px;
       }
+      #operators {
+        width: 100%;
+        min-width: 0;
+        margin-top: 4px;
       .dropdown-selected {
         min-width: 100px;
         font-size: 0.97em;
@@ -356,6 +388,8 @@
       <input type="date" id="endDate" required>
     </div>
     <div id="operator-filter">
+      <label for="operators">Оператор(ы):</label>
+      <select id="operators" multiple></select>
       <label>Оператор(ы):</label>
       <div class="dropdown-selected" onclick="toggleDropdown(event)">
         <span id="selected-ops-label">Все</span>
@@ -398,11 +432,6 @@
     let userRole = null;
     let operatorList = [];
     let selectedOperators = new Set();
-const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
-let userRole = null;
-let operatorList = [];
-let selectedOperators = new Set();
-let statsInterval = null; // для автообновления
 
     function toggleDropdown(event) {
       event.stopPropagation();
@@ -434,6 +463,15 @@ let statsInterval = null; // для автообновления
         userRole = user.role;
         if (userRole === 'admin') {
           document.getElementById('operator-filter').style.display = 'flex';
+          const ops = await fetch('/api/operators').then(r=>r.json());
+          const sel = document.getElementById('operators');
+          sel.innerHTML = '';
+          ops.forEach(op=>{
+            let o = document.createElement('option');
+            o.value = op.id;
+            o.textContent = op.name;
+            sel.appendChild(o);
+          });
           operatorList = await fetch('/api/operators').then(r=>r.json());
           selectedOperators = new Set(operatorList.map(o => o.id)); // по умолчанию все
           renderOperatorDropdown();
@@ -445,17 +483,6 @@ let statsInterval = null; // для автообновления
         console.error('Ошибка получения данных пользователя или операторов', e);
       }
     }
-function toggleDropdown(event) {
-  event.stopPropagation();
-  const list = document.getElementById('dropdown-list');
-  list.style.display = (list.style.display === 'block') ? 'none' : 'block';
-}
-document.addEventListener('click', function(e) {
-  const list = document.getElementById('dropdown-list');
-  if (list && list.style.display === 'block' && !document.getElementById('operator-filter').contains(e.target)) {
-    list.style.display = 'none';
-  }
-});
 
     function renderOperatorDropdown() {
       const list = document.getElementById('dropdown-list');
@@ -472,17 +499,6 @@ document.addEventListener('click', function(e) {
         </label>`;
       });
     }
-function updateSelectedLabel() {
-  const label = document.getElementById('selected-ops-label');
-  if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) {
-    label.textContent = 'Все';
-  } else {
-    label.textContent = Array.from(selectedOperators).map(id => {
-      const op = operatorList.find(o => o.id == id);
-      return op ? op.name : id;
-    }).join(', ');
-  }
-}
 
     function toggleOperator(checkbox) {
       if (checkbox.checked) {
@@ -490,23 +506,9 @@ function updateSelectedLabel() {
       } else {
         selectedOperators.delete(checkbox.value);
       }
-async function loadUserInfoAndOperators() {
-  try {
-    const user = await fetch('/api/userinfo').then(r=>r.json());
-    userRole = user.role;
-    if (userRole === 'admin') {
-      document.getElementById('operator-filter').style.display = 'flex';
-      operatorList = await fetch('/api/operators').then(r=>r.json());
-      selectedOperators = new Set(operatorList.map(o => o.id)); // по умолчанию все
       renderOperatorDropdown();
       updateSelectedLabel();
-    } else {
-      document.getElementById('operator-filter').style.display = 'none';
     }
-  } catch (e) {
-    console.error('Ошибка получения данных пользователя или операторов', e);
-  }
-}
 
     function toggleAllOperators(checkbox) {
       if (checkbox.checked) {
@@ -517,35 +519,15 @@ async function loadUserInfoAndOperators() {
       renderOperatorDropdown();
       updateSelectedLabel();
     }
-function renderOperatorDropdown() {
-  const list = document.getElementById('dropdown-list');
-  list.innerHTML = '';
-  let allChecked = selectedOperators.size === operatorList.length;
-  list.innerHTML += `<label class="all-ops">
-    <input type="checkbox" onchange="toggleAllOperators(this)" ${allChecked?'checked':''}> Все операторы
-  </label>`;
-  operatorList.forEach(op => {
-    list.innerHTML += `<label>
-      <input type="checkbox" value="${op.id}" ${selectedOperators.has(op.id+'' )?'checked':''} onchange="toggleOperator(this)">
-      ${op.name}
-    </label>`;
-  });
-}
 
     function getSelectedOperators() {
       if (userRole !== 'admin') return '';
+      const sel = document.getElementById('operators');
+      const selected = Array.from(sel.selectedOptions).map(o=>o.value);
+      return selected.join(',');
       if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
       return Array.from(selectedOperators).join(',');
     }
-function toggleOperator(checkbox) {
-  if (checkbox.checked) {
-    selectedOperators.add(checkbox.value);
-  } else {
-    selectedOperators.delete(checkbox.value);
-  }
-  renderOperatorDropdown();
-  updateSelectedLabel();
-}
 
     function showMiniLoader(stage) {
       document.getElementById(`loader-${stage}`).style.display = 'flex';
@@ -553,15 +535,6 @@ function toggleOperator(checkbox) {
     function hideMiniLoader(stage) {
       document.getElementById(`loader-${stage}`).style.display = 'none';
     }
-function toggleAllOperators(checkbox) {
-  if (checkbox.checked) {
-    operatorList.forEach(o => selectedOperators.add(o.id));
-  } else {
-    selectedOperators.clear();
-  }
-  renderOperatorDropdown();
-  updateSelectedLabel();
-}
 
     function fetchStats() {
       const start = document.getElementById("startDate").value;
@@ -606,11 +579,6 @@ function toggleAllOperators(checkbox) {
           });
       });
     }
-function getSelectedOperators() {
-  if (userRole !== 'admin') return '';
-  if (selectedOperators.size === 0 || selectedOperators.size === operatorList.length) return '';
-  return Array.from(selectedOperators).join(',');
-}
 
     window.onload = async () => {
       await loadUserInfoAndOperators();
@@ -648,76 +616,8 @@ function getSelectedOperators() {
             container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
             console.error(`Ошибка стадии "${stage}":`, err);
           });
-function showMiniLoader(stage) {
-  document.getElementById(`loader-${stage}`).style.display = 'flex';
-}
-function hideMiniLoader(stage) {
-  document.getElementById(`loader-${stage}`).style.display = 'none';
-}
-
-// Главная функция загрузки статистики
-function fetchStats() {
-  const start = document.getElementById("startDate").value;
-  const end = document.getElementById("endDate").value;
-
-  let urlParams = [];
-  if (start && end) urlParams.push(`range=custom:${start}:${end}`);
-  const operators = getSelectedOperators();
-  if (operators) urlParams.push(`operators=${operators}`);
-
-  STAGE_LABELS.forEach(stage => {
-    const container = document.getElementById(`table-${stage}`);
-    container.innerHTML = `
-      <div class="mini-loader" id="loader-${stage}" style="display:flex;">
-        <div class="mini-spinner"></div>
-      </div>
-    `;
-    let url = `/update_stage/${stage}`;
-    if (urlParams.length) url += '?' + urlParams.join('&');
-    fetch(url)
-      .then(r => r.json())
-      .then(data => {
-        const stageData = data[stage];
-        container.innerHTML = '';
-        if (!stageData.details || stageData.details.length === 0) {
-          container.innerHTML = `<p>Нет данных</p>`;
-          return;
-        }
-        const table = document.createElement('table');
-        table.innerHTML = `<thead><tr><th>Оператор</th><th>Количество</th></tr></thead>`;
-        const tbody = document.createElement('tbody');
-        stageData.details.forEach(item => {
-          const row = document.createElement('tr');
-          row.innerHTML = `<td>${item.operator}</td><td><span class="badge">${item.count}</span></td>`;
-          tbody.appendChild(row);
-        });
-        table.appendChild(tbody);
-        container.appendChild(table);
-      })
-      .catch(err => {
-        container.innerHTML = `<p class="error-message">⛔ Ошибка загрузки</p>`;
-        console.error(`Ошибка стадии "${stage}":`, err);
       });
     };
   </script>
-  });
-}
-
-// Автозапуск при загрузке страницы
-window.onload = async () => {
-  await loadUserInfoAndOperators();
-  fetchStats(); // первая загрузка
-  // Запуск автообновления каждые 30 секунд
-  statsInterval = setInterval(fetchStats, 30000);
-};
-
-// Если пользователь выбирает период и нажимает "Показать статистику"
-document.querySelector('.filter').onsubmit = (e) => {
-  e.preventDefault();
-  if (statsInterval) clearInterval(statsInterval); // Остановить автообновление
-  fetchStats(); // Загрузить статистику за выбранный период
-  statsInterval = setInterval(fetchStats, 30000); // Снова запустить автообновление (по желанию)
-};
-</script>
 </body>
 </html>
