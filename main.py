@@ -18,6 +18,7 @@ class Config:
     USER_CACHE_TIMEOUT = 300  # 5 минут
     MAX_LOGIN_ATTEMPTS = 5
     LOG_FILE = 'app.log'
+    TARGET_DEPARTMENT = "Проект ВВ"  # Название целевого подразделения
 
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
@@ -96,42 +97,95 @@ def get_range_dates(rtype):
         return start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S")
 
 # Кэширование пользователей
-user_cache = {"data": {}, "last": 0}
+user_cache = {
+    "data": {},
+    "departments": {},
+    "active_users": set(),
+    "last": 0
+}
+
+def get_user_department(user_id):
+    """Получаем информацию о подразделении пользователя"""
+    if user_id in user_cache["departments"]:
+        return user_cache["departments"][user_id]
+    
+    try:
+        response = requests.post(
+            app.config['BITRIX_HOOK'] + "user.get.json",
+            json={"ID": user_id},
+            timeout=5
+        ).json()
+        
+        if "error" in response:
+            return ""
+            
+        user_data = response.get("result", {})
+        department_name = ""
+        
+        # Получаем название подразделения через department.get
+        if "UF_DEPARTMENT" in user_data:
+            dept_id = user_data["UF_DEPARTMENT"][0] if user_data["UF_DEPARTMENT"] else 0
+            if dept_id:
+                dept_response = requests.post(
+                    app.config['BITRIX_HOOK'] + "department.get.json",
+                    json={"ID": dept_id},
+                    timeout=5
+                ).json()
+                if "result" in dept_response:
+                    department_name = dept_response["result"].get("NAME", "")
+        
+        user_cache["departments"][user_id] = department_name
+        return department_name
+        
+    except Exception as e:
+        log_error(f"Ошибка получения подразделения пользователя {user_id}", e)
+        return ""
 
 def load_users():
     if time.time() - user_cache["last"] < app.config['USER_CACHE_TIMEOUT']:
         return user_cache["data"]
     
-    users, start = {}, 0
+    users = {}
+    user_cache["active_users"] = set()
+    user_cache["departments"] = {}
+    
     try:
+        start = 0
         while True:
-            r = requests.post(
+            response = requests.post(
                 app.config['BITRIX_HOOK'] + "user.get.json",
                 json={"start": start},
                 timeout=10
             ).json()
             
-            if "error" in r:
-                raise Exception(r.get("error_description", "Bitrix API error"))
+            if "error" in response:
+                raise Exception(response.get("error_description", "Bitrix API error"))
                 
-            for u in r.get("result", []):
-                users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
+            for user in response.get("result", []):
+                user_id = int(user["ID"])
+                full_name = f'{user["NAME"]} {user["LAST_NAME"]}'
+                users[user_id] = full_name
                 
-            if "next" not in r:
+                # Проверяем активность пользователя
+                if user.get("ACTIVE", "Y") == "Y":
+                    user_cache["active_users"].add(user_id)
+                    
+            if "next" not in response:
                 break
-            start = r.get("next")
+            start = response.get("next")
             
     except Exception as e:
         log_error("Ошибка загрузки пользователей", e)
-        return user_cache["data"]  # Возвращаем старые данные при ошибке
+        return user_cache["data"]
         
-    user_cache["data"], user_cache["last"] = users, time.time()
+    user_cache["data"] = users
+    user_cache["last"] = time.time()
     return users
 
 # Работа с лидами
 def fetch_leads(stage, start, end, offset=0):
     try:
-        r = requests.post(
+        response = requests.post(
             app.config['BITRIX_HOOK'] + "crm.lead.list.json",
             json={
                 "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
@@ -141,10 +195,10 @@ def fetch_leads(stage, start, end, offset=0):
             timeout=10
         ).json()
         
-        if "error" in r:
-            raise Exception(r.get("error_description", "Bitrix API error"))
+        if "error" in response:
+            raise Exception(response.get("error_description", "Bitrix API error"))
             
-        return r.get("result", []), r.get("next", 0)
+        return response.get("result", []), response.get("next", 0)
     except Exception as e:
         log_error(f"Ошибка загрузки лидов (stage: {stage})", e)
         return [], 0
@@ -192,10 +246,15 @@ def process_stage(name, stage_id, start, end, users, operator_filter=None):
         stats = Counter()
         for lead in leads:
             uid = lead.get("ASSIGNED_BY_ID")
-            if not uid:
+            if not uid or int(uid) not in user_cache["active_users"]:
                 continue
                 
             if operator_filter and str(uid) not in operator_filter:
+                continue
+                
+            # Проверяем принадлежность к целевому подразделению
+            department = get_user_department(int(uid))
+            if department != app.config['TARGET_DEPARTMENT']:
                 continue
                 
             try:
@@ -337,24 +396,30 @@ def api_userinfo():
 @admin_required
 def api_operators():
     users = load_users()
-    return jsonify([
-        {"id": str(uid), "name": name}
-        for uid, name in users.items()
-    ])
+    target_department = app.config['TARGET_DEPARTMENT']
+    
+    operators = []
+    for uid, name in users.items():
+        # Проверяем активность и подразделение
+        if uid in user_cache["active_users"]:
+            department = get_user_department(uid)
+            if department == target_department:
+                operators.append({
+                    "id": str(uid),
+                    "name": name,
+                    "department": department
+                })
+    
+    return jsonify(operators)
 
 @app.route("/ping")
 def ping():
     return jsonify({"status": "ok"})
 
-@app.route("/clock")
-def clock():
-    tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
-    return jsonify({
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    })
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/auth")
 
 @app.errorhandler(404)
 def not_found(e):
