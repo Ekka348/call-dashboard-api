@@ -8,6 +8,8 @@ from threading import Thread, Lock
 import logging
 from logging.handlers import RotatingFileHandler
 from flask_socketio import SocketIO
+from gevent import monkey
+monkey.patch_all()
 
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode='gevent')
