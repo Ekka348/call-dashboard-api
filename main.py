@@ -7,11 +7,10 @@ from pytz import timezone
 from threading import Thread, Lock
 import logging
 from logging.handlers import RotatingFileHandler
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 
-# Инициализация приложения
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Конфигурация
 class Config:
