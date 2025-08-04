@@ -1,10 +1,10 @@
-<!DO CTYPE html>
-<ht ml lang="ru">
+<!DOCTYPE html>
+<html lang="ru">
 <head>
-<met a charset="UTF-8">
+<meta charset="UTF-8">
 <title>CRM Dashboard</title>
-<met a name="viewport" content="width=device-width, initial-scale=1.0">
-<st yle>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
     :root {
      --dark-bg: #1e293b;
      --block-bg: #232e41;
@@ -344,7 +344,7 @@
 </style>
 </head>
 <body>
-<fo rm class="filter" onsub mit="fetchStats(); return false;">
+<form class="filter" onsub mit="fetchStats(); return false;">
     <span class="period-label">Период:</span>
     <div class="period-input-group">
      <sv g viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
@@ -393,7 +393,7 @@
     </div>
 </div>
 
-<sc ript>
+<script>
     const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
     let userRole = null;
     let operatorList = [];
@@ -551,6 +551,6 @@
      fetchStats(); // Загрузить статистику за выбранный период
      statsInterval = setInterval(fetchStats, 30000); // Снова запустить автообновление (по желанию)
     };
-</sc ript>
+</script>
 </body>
 </html>
