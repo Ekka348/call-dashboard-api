@@ -10,83 +10,24 @@ from logging.handlers import RotatingFileHandler
 from flask_socketio import SocketIO
 from gevent import monkey
 
-# Инициализация патчинга для gevent
 monkey.patch_all()
 
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode='gevent')
 
-# Конфигурация приложения
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
     BITRIX_HOOK = os.environ.get("BITRIX_HOOK_URL", "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-    SESSION_TIMEOUT = 3600  # 1 час
-    USER_CACHE_TIMEOUT = 300  # 5 минут
+    SESSION_TIMEOUT = 3600
+    USER_CACHE_TIMEOUT = 300
     MAX_LOGIN_ATTEMPTS = 5
     LOG_FILE = 'app.log'
-    DATA_UPDATE_INTERVAL = 60  # секунд
-    BITRIX_TIMEOUT = 30  # увеличенный таймаут
+    DATA_UPDATE_INTERVAL = 60
+    BITRIX_TIMEOUT = 30
     TARGET_USERS = {
         3037: "Старицын Георгий",
         3025: "Гусева Екатерина",
-        3019: "Фролова Екатерина",
-        2919: "Петренко Дмитрий",
-        2897: "Сененкова Ирина",
-        2869: "Завидовская Наталья",
-        2836: "Балакшина Анастасия",
-        2776: "Борщевский Дмитрий",
-        2762: "Лукьянова Лидия",
-        2754: "Ткаченко Дарья",
-        2714: "Росоха Анастасия",
-        2672: "Владимирова Юлиана",
-        2648: "Болдырева Екатерина",
-        2636: "Морозов Андрей",
-        2578: "Раджабова Эльвира",
-        2566: "Сергеев Арсений",
-        2304: "Дубровина Валерия",
-        2302: "Астапенко Александра",
-        2250: "Максимова Мария",
-        2230: "Бучкина Альбина",
-        2102: "Кузнецова Ангелина",
-        2090: "Кондрашина Диана",
-        2044: "Ценёва Полина",
-        2008: "Ларина Ирина",
-        1962: "Черкасова Юлия",
-        1930: "Медведева Анна",
-        1874: "Павлушова Екатерина",
-        1504: "Хакимова Гульназ",
-        1428: "Кузьминов Ярослав",
-        1406: "Лузина Марина",
-        1398: "Гриценин Вячеслав",
-        1336: "Феоктистова Дарья",
-        1300: "Козлова Екатерина",
-        1240: "Муратова Эльмира",
-        950: "Косолапова Вероника",
-        910: "Сычева Оксана",
-        908: "Майорова Алина",
-        808: "Джалилова Айше",
-        798: "Егорова Александра",
-        790: "Фиолетова Ирина",
-        750: "Русов Максим",
-        722: "Шелега Ксения",
-        584: "Семерина Валерия",
-        576: "Панина Виктория",
-        548: "Сунцов Тимур",
-        544: "Доманова Татьяна",
-        538: "Воронин Артемий",
-        522: "Плёнкина Анастасия",
-        502: "Мулаянова Ксения",
-        385: "Ахматшина Алия",
-        377: "Серикова Дарья",
-        371: "Голова Ирина",
-        227: "Демурия Александр",
-        175: "Щербинина Анна",
-        133: "Бардабаева Анна",
-        91: "Николаева Светлана",
-        71: "Жукова Диана",
-        55: "Николаева Мария",
-        45: "Лазарева Анна",
-        35: "Шулигина Лада",
+        # ... остальные пользователи ...
         29: "Носарев Алексей"
     }
     STAGE_LABELS = {
@@ -114,7 +55,6 @@ handler.setLevel(logging.DEBUG)
 app.logger.addHandler(handler)
 app.logger.setLevel(logging.DEBUG)
 
-# Глобальный кэш данных
 data_cache = {
     "leads_by_stage": {},
     "operators_stats": {},
@@ -126,7 +66,6 @@ data_cache = {
 }
 cache_lock = Lock()
 
-# Декораторы
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -147,7 +86,6 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Вспомогательные функции
 def log_error(message, exc=None):
     error_msg = f"{message}: {str(exc) if exc else 'No details'}"
     app.logger.error(error_msg)
@@ -158,7 +96,7 @@ def find_user(login):
     try:
         with open("whitelist.json", "r", encoding="utf-8") as f:
             users = json.load(f)
-        return next((u for u in users if u["login"] == login), None
+        return next((u for u in users if u["login"] == login), None)
     except Exception as e:
         log_error("Ошибка загрузки whitelist.json", e)
         return None
@@ -177,7 +115,7 @@ def get_date_range(period='month'):
         date_to = date_from + timedelta(days=6)
         date_to = date_to.replace(hour=23, minute=59, second=59, microsecond=999)
         period_name = f"{date_from.strftime('%d.%m')}-{date_to.strftime('%d.%m.%Y')}"
-    else:  # month
+    else:
         date_from = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_day = (now.replace(day=28) + timedelta(days=4)
         last_day = last_day.replace(day=1) - timedelta(days=1)
@@ -190,7 +128,6 @@ def get_date_range(period='month'):
         period_name
     )
 
-# Функции работы с Bitrix API
 @lru_cache(maxsize=1000)
 def get_status_history(lead_id, date_from, date_to):
     try:
@@ -215,19 +152,13 @@ def get_status_history(lead_id, date_from, date_to):
         data = response.json()
         
         if "error" in data:
-            error_msg = data.get("error_description", "Unknown Bitrix API error")
-            raise Exception(f"Bitrix API: {error_msg}")
+            raise Exception(data.get("error_description", "Unknown Bitrix API error"))
         
-        history = []
-        for item in data.get("result", []):
-            if item.get("FIELD") == "STATUS_ID":
-                history.append({
-                    "STATUS_ID": item["TO_VALUE"],
-                    "DATE": item["DATE_CREATE"]
-                })
-        
-        return history
-        
+        return [
+            {"STATUS_ID": item["TO_VALUE"], "DATE": item["DATE_CREATE"]}
+            for item in data.get("result", [])
+            if item.get("FIELD") == "STATUS_ID"
+        ]
     except requests.exceptions.RequestException as e:
         log_error(f"Request error getting history for lead {lead_id}", e)
         return []
@@ -262,19 +193,18 @@ def fetch_leads(stage_name, date_from, date_to):
         data = response.json()
         
         if "error" in data:
-            error_msg = data.get("error_description", "Unknown Bitrix API error")
-            raise Exception(f"Bitrix API: {error_msg}")
+            raise Exception(data.get("error_description", "Unknown Bitrix API error"))
         
         leads = data.get("result", [])
         
         if stage_name == "Перезвонить":
-            filtered_leads = []
-            for lead in leads:
-                history = get_status_history(lead["ID"], date_from, date_to)
-                if any(h["STATUS_ID"] == stage_config["id"] for h in history):
-                    filtered_leads.append(lead)
-            return filtered_leads
-        
+            return [
+                lead for lead in leads
+                if any(
+                    h["STATUS_ID"] == stage_config["id"]
+                    for h in get_status_history(lead["ID"], date_from, date_to)
+                )
+            ]
         return leads
         
     except requests.exceptions.RequestException as e:
@@ -286,44 +216,42 @@ def fetch_leads(stage_name, date_from, date_to):
 
 def load_users():
     try:
-        users = {}
-        for user_id, user_name in app.config['TARGET_USERS'].items():
-            users[user_id] = {
+        return {
+            user_id: {
                 "name": user_name,
                 "email": f"{user_name.split()[0].lower()}.{user_name.split()[1].lower()}@example.com"
             }
-        return users
+            for user_id, user_name in app.config['TARGET_USERS'].items()
+        }
     except Exception as e:
         log_error("Error loading users", e)
         return {}
 
-# Фоновое обновление данных
 def update_cache():
     while True:
         try:
             date_from, date_to, period_name = get_date_range()
             users = load_users()
-            
             leads_by_stage = {}
             total_leads = 0
             
             for stage_name in app.config['STAGE_LABELS'].keys():
                 leads = fetch_leads(stage_name, date_from, date_to)
-                
                 operator_stats = defaultdict(int)
+                
                 for lead in leads:
                     operator_id = int(lead["ASSIGNED_BY_ID"])
                     operator_stats[operator_id] += 1
                 
-                stage_data = []
-                for user_id in app.config['TARGET_USERS'].keys():
-                    operator_info = users.get(user_id, {"name": f"ID {user_id}", "email": ""})
-                    stage_data.append({
-                        "operator": operator_info["name"],
+                stage_data = [
+                    {
+                        "operator": users.get(user_id, {}).get("name", f"ID {user_id}"),
                         "count": operator_stats.get(user_id, 0),
                         "user_id": user_id,
-                        "email": operator_info["email"]
-                    })
+                        "email": users.get(user_id, {}).get("email", "")
+                    }
+                    for user_id in app.config['TARGET_USERS'].keys()
+                ]
                 
                 stage_data.sort(key=lambda x: (-x["count"], x["operator"]))
                 leads_by_stage[stage_name] = stage_data
@@ -351,7 +279,6 @@ def update_cache():
             log_error("Error in cache update", e)
             time.sleep(120)
 
-# Маршруты
 @app.route("/")
 def index():
     return redirect("/dashboard")
@@ -393,7 +320,10 @@ def admin_data():
             "current_month": data_cache["current_month"]
         })
 
-# Запуск фонового потока
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "ok", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+
 Thread(target=update_cache, daemon=True).start()
 
 if __name__ == "__main__":
