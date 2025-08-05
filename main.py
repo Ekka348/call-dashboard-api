@@ -48,7 +48,9 @@ app.logger.setLevel(logging.INFO)
 STAGE_LABELS = {
     "Перезвонить": "IN_PROCESS",
     "На согласовании": "UC_A2DF81", 
-    "Приглашен к рекрутеру": "CONVERTED"
+    "Приглашен к рекрутеру": "CONVERTED",
+    "НДЗ": "5",
+    "НДЗ 2": "9"
 }
 
 # Глобальный кэш данных
