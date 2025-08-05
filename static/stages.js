@@ -1,58 +1,177 @@
-const STAGE_LABELS = ["Перезвонить", "На согласовании", "Приглашен к рекрутеру"];
+<script>
+const STAGES = {
+  "НДЗ": "5",
+  "НДЗ 2": "9",
+  "Перезвонить": "IN_PROCESS",
+  "Приглашен к рекрутеру": "CONVERTED",
+  "NEW": "NEW",
+  "База ВВ": "UC_VTOOIM",
+  "OLD": "11"
+};
 
-async function updateStage(stageName) {
-  try {
-    const response = await fetch(`/update_stage/${stageName}`);
-    if (!response.ok) {
-      throw new Error(`Ошибка загрузки: ${response.status}`);
-    }
-    const data = await response.json();
-    const stageData = data[stageName];
-    const container = document.getElementById(`table-${stageName}`);
-    container.innerHTML = '';
+const STAGE_LABELS = Object.entries(STAGES).reduce((acc, [label, id]) => {
+  acc[id] = label;
+  return acc;
+}, {});
 
-    if (stageData.grouped) {
-      container.innerHTML = `<p>Всего лидов: ${stageData.count}</p>`;
-    } else if (stageData.details && stageData.details.length > 0) {
-      const list = document.createElement('ul');
-      stageData.details.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = `${item.operator} — ${item.count}`;
-        list.appendChild(li);
-      });
-      container.appendChild(list);
-    } else {
-      container.innerHTML = `<p>Нет лидов в стадии</p>`;
+fetch("/active_operators_list")
+  .then(r => r.json())
+  .then(data => {
+    const box = document.getElementById("active_operators_box");
+    box.innerHTML = "";
+    data.forEach(name => {
+      const item = document.createElement("div");
+      item.textContent = `🟢 ${name}`;
+      box.appendChild(item);
+    });
+  });
+
+
+fetch("/api/leads/by-stage")
+  .then(res => res.json())
+  .then(data => {
+    const container = document.getElementById("stats");
+    container.innerHTML = "";
+
+    for (const [stage, info] of Object.entries(data.data)) {
+      const block = document.createElement("div");
+      block.className = "stage-block";
+
+      if (info.grouped) {
+        block.innerHTML = `<h3>Стадия: ${stage}</h3><p>Всего: ${info.count}</p>`;
+      } else {
+        const rows = info.details
+          .map(x => `<tr><td>${x.operator}</td><td>${x.count}</td></tr>`)
+          .join("");
+        block.innerHTML = `
+          <h3>Стадия: ${stage}</h3>
+          <table><thead><tr><th>Оператор</th><th>Количество</th></tr></thead>
+          <tbody>${rows}</tbody></table>`;
+      }
+
+      container.appendChild(block);
     }
-  } catch (error) {
-    console.error(error);
-    const container = document.getElementById(`table-${stageName}`);
-    container.innerHTML = `<p>Ошибка загрузки данных</p>`;
+  });
+
+
+const WORK_STAGES = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
+
+function getDateParams() {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const start = startOfDay.toISOString().slice(0, 19).replace("T", " ");
+  const end = now.toISOString().slice(0, 19).replace("T", " ");
+
+  return `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+}
+
+fetch("/api/leads/info-stages-today")
+  .then(res => res.json())
+  .then(data => {
+    const list = document.getElementById("info-list");
+    list.innerHTML = "";
+    data.info.forEach(stage => {
+      const li = document.createElement("li");
+      li.textContent = `${stage.name}: ${stage.count} лидов`;
+      list.appendChild(li);
+    });
+  });
+
+
+async function fetchStageCount(stageCode) {
+  const res = await fetch("/api/leads/by-stage");
+  const data = await res.json();
+
+  const stageLabel = STAGE_LABELS[stageCode];
+  return data.data?.[stageLabel]?.count ?? 0;
+}
+
+
+async function loadFixedStages() {
+  const stages = Object.entries(STAGES);
+  const list = document.getElementById("fixed_stage_list");
+  list.innerHTML = ""; // очищаем "⏳ Загрузка данных..."
+
+  for (const [name, code] of stages) {
+    const count = await fetchStageCount(code);
+    const item = document.createElement("li");
+    item.textContent = `${name}: ${count} лидов`;
+    list.appendChild(item);
   }
 }
 
-fetch("/update_stage/Перезвонить?range=custom:2025-07-01:2025-07-31")
+function groupLeadsByStageAndUser(leads) {
+  const stageByCode = Object.entries(STAGES).reduce((acc, [name, code]) => {
+    acc[code] = name;
+    return acc;
+  }, {});
 
-function fetchStats() {
-  const start = document.getElementById("startDate").value;
-  const end = document.getElementById("endDate").value;
-  if (!start || !end) {
-    alert("Заполни обе даты");
-    return;
+  const result = {};
+
+  leads.forEach(lead => {
+    const stageName = stageByCode[lead.STAGE_ID];
+    const userId = lead.ASSIGNED_BY_ID;
+
+    if (WORK_STAGES.includes(stageName)) {
+      if (!result[stageName]) result[stageName] = {};
+      if (!result[stageName][userId]) result[stageName][userId] = 0;
+      result[stageName][userId]++;
+    }
+  });
+
+  return result;
+}
+
+function renderOperatorTables(data) {
+  const container = document.getElementById("operator_stage_tables");
+  container.innerHTML = "";
+
+  for (const stage in data) {
+    const operators = data[stage];
+    if (!operators || Object.keys(operators).length === 0) continue;
+
+    const block = document.createElement("div");
+    block.className = "stage-block";
+
+    const table = document.createElement("table");
+
+    const header = document.createElement("tr");
+    header.innerHTML = `<th>${stage}</th><th>Лидов</th>`;
+    table.appendChild(header);
+
+    for (const [uid, count] of Object.entries(operators)) {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${uid}</td><td>${count}</td>`;
+      table.appendChild(row);
+    }
+
+    block.appendChild(table);
+    container.appendChild(block);
+  }
+}
+
+async function loadOperatorTables() {
+  const res = await fetch("/api/leads/by-stage");
+  const data = await res.json();
+
+  const grouped = {};
+  for (const stage of WORK_STAGES) {
+    const info = data.data[stage];
+    if (!info || !info.details || info.details.length === 0) continue;
+
+    grouped[stage] = {};
+    info.details.forEach(({ operator, count }) => {
+      grouped[stage][operator] = count;
+    });
   }
 
-  const rangeParam = `custom:${start}:${end}`;
-  fetch(`/update_stage/Перезвонить?range=${rangeParam}`)
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById("output").textContent = JSON.stringify(data, null, 2);
-    })
-    .catch(err => {
-      document.getElementById("output").textContent = `Ошибка: ${err}`;
-    });
+  renderOperatorTables(grouped);
 }
 
 
 window.onload = () => {
-  STAGE_LABELS.forEach(updateStage);
+  loadFixedStages();
+  loadOperatorTables();
 };
+</script>
