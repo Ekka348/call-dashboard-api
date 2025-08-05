@@ -103,14 +103,14 @@ app.secret_key = app.config['SECRET_KEY']
 # Настройка логирования
 handler = RotatingFileHandler(
     app.config['LOG_FILE'],
-    maxBytes=100000,  # увеличен размер лога
+    maxBytes=100000,
     backupCount=3,
     encoding='utf-8'
 )
 handler.setFormatter(logging.Formatter(
     '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
 ))
-handler.setLevel(logging.DEBUG)  # включено подробное логирование
+handler.setLevel(logging.DEBUG)
 app.logger.addHandler(handler)
 app.logger.setLevel(logging.DEBUG)
 
@@ -126,8 +126,26 @@ data_cache = {
 }
 cache_lock = Lock()
 
-# Декораторы (остаются без изменений)
-# ... (login_required, admin_required)
+# Декораторы
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "login" not in session:
+            return redirect("/auth")
+        if time.time() - session.get('last_activity', 0) > app.config['SESSION_TIMEOUT']:
+            session.clear()
+            return redirect("/auth?timeout=1")
+        session['last_activity'] = time.time()
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get("role") != "admin":
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Вспомогательные функции
 def log_error(message, exc=None):
@@ -188,14 +206,12 @@ def get_status_history(lead_id, date_from, date_to):
             "start": -1
         }
         
-        app.logger.debug(f"Requesting history for lead {lead_id} with params: {params}")
-        
+        app.logger.debug(f"Requesting history for lead {lead_id}")
         response = requests.post(
             f"{app.config['BITRIX_HOOK']}crm.timeline.list.json",
             json=params,
             timeout=app.config['BITRIX_TIMEOUT']
         )
-        
         response.raise_for_status()
         data = response.json()
         
@@ -212,11 +228,13 @@ def get_status_history(lead_id, date_from, date_to):
                     "DATE": item["DATE_CREATE"]
                 })
         
-        app.logger.debug(f"History for lead {lead_id}: {history}")
         return history
         
+    except requests.exceptions.RequestException as e:
+        log_error(f"Request error getting history for lead {lead_id}", e)
+        return []
     except Exception as e:
-        log_error(f"Error getting status history for lead {lead_id}", e)
+        log_error(f"Error getting history for lead {lead_id}", e)
         return []
 
 def fetch_leads(stage_name, date_from, date_to):
@@ -232,21 +250,17 @@ def fetch_leads(stage_name, date_from, date_to):
             "start": -1
         }
         
-        # Для стадии "Перезвонить" сначала получаем все лиды в процессе
         if stage_name == "Перезвонить":
             params["filter"]["STATUS_SEMANTIC_ID"] = "P"
         else:
-            # Для других стадий фильтруем по конкретному статусу
             params["filter"]["STATUS_ID"] = stage_config["id"]
         
-        app.logger.info(f"Fetching leads for stage '{stage_name}' with params: {params}")
-        
+        app.logger.info(f"Fetching leads for stage {stage_name}")
         response = requests.post(
             f"{app.config['BITRIX_HOOK']}crm.lead.list.json",
             json=params,
             timeout=app.config['BITRIX_TIMEOUT']
         )
-        
         response.raise_for_status()
         data = response.json()
         
@@ -256,22 +270,22 @@ def fetch_leads(stage_name, date_from, date_to):
             return []
         
         leads = data.get("result", [])
-        app.logger.info(f"Found {len(leads)} leads for stage '{stage_name}'")
         
-        # Для стадии "Перезвонить" дополнительно проверяем историю
         if stage_name == "Перезвонить":
             filtered_leads = []
             for lead in leads:
                 history = get_status_history(lead["ID"], date_from, date_to)
                 if any(h["STATUS_ID"] == stage_config["id"] for h in history):
                     filtered_leads.append(lead)
-            app.logger.info(f"After history filtering: {len(filtered_leads)} leads")
             return filtered_leads
         
         return leads
         
+    except requests.exceptions.RequestException as e:
+        log_error(f"Request error fetching leads for {stage_name}", e)
+        return []
     except Exception as e:
-        log_error(f"Error fetching leads for stage '{stage_name}'", e)
+        log_error(f"Error fetching leads for {stage_name}", e)
         return []
 
 def load_users():
@@ -282,24 +296,16 @@ def load_users():
                 "name": user_name,
                 "email": f"{user_name.split()[0].lower()}.{user_name.split()[1].lower()}@example.com"
             }
-        app.logger.info(f"Loaded {len(users)} target users")
         return users
     except Exception as e:
-        log_error("Error loading target users", e)
+        log_error("Error loading users", e)
         return {}
 
 # Фоновое обновление данных
 def update_cache():
     while True:
         try:
-            with cache_lock:
-                data_cache["last_error"] = None
-            
-            app.logger.info("Starting cache update cycle...")
-            start_time = time.time()
-            
-            period = 'month'  # можно добавить поддержку других периодов
-            date_from, date_to, period_name = get_date_range(period)
+            date_from, date_to, period_name = get_date_range()
             users = load_users()
             
             leads_by_stage = {}
@@ -314,12 +320,13 @@ def update_cache():
                     operator_stats[operator_id] += 1
                 
                 stage_data = []
-                for user_id, user_name in app.config['TARGET_USERS'].items():
+                for user_id in app.config['TARGET_USERS'].keys():
+                    operator_info = users.get(user_id, {"name": f"ID {user_id}", "email": ""})
                     stage_data.append({
-                        "operator": user_name,
+                        "operator": operator_info["name"],
                         "count": operator_stats.get(user_id, 0),
                         "user_id": user_id,
-                        "email": users.get(user_id, {}).get("email", "")
+                        "email": operator_info["email"]
                     })
                 
                 stage_data.sort(key=lambda x: (-x["count"], x["operator"]))
@@ -342,49 +349,62 @@ def update_cache():
                 'current_month': period_name
             })
             
-            app.logger.info(
-                f"Cache updated successfully in {time.time() - start_time:.2f}s. "
-                f"Total leads: {total_leads}. Period: {period_name}"
-            )
+            time.sleep(app.config['DATA_UPDATE_INTERVAL'])
             
         except Exception as e:
-            log_error("Critical error in cache update", e)
-            time.sleep(120)  # увеличенная пауза при ошибке
+            log_error("Error in cache update", e)
+            time.sleep(120)
+
+# Маршруты
+@app.route("/")
+def index():
+    return redirect("/dashboard")
+
+@app.route("/auth", methods=["GET", "POST"])
+def auth():
+    if request.method == "POST":
+        login = request.form.get("login", "").strip()
+        password = request.form.get("password", "").strip()
+        user = find_user(login)
         
-        time.sleep(app.config['DATA_UPDATE_INTERVAL'])
+        if user and user["password"] == password:
+            session.clear()
+            session.update({
+                "login": user["login"],
+                "role": user["role"],
+                "name": user["name"],
+                "last_activity": time.time()
+            })
+            return redirect("/dashboard")
+        return render_template("auth.html", error="Неверный логин или пароль")
+    return render_template("auth.html")
 
-# Маршруты (основные остаются без изменений)
-# ... (index, auth, dashboard)
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    if session.get("role") == "admin":
+        return render_template("admin_dashboard.html")
+    return render_template("user_dashboard.html")
 
-@app.route("/debug/lead/<int:lead_id>")
-def debug_lead(lead_id):
-    date_from, date_to, _ = get_date_range()
-    history = get_status_history(lead_id, date_from, date_to)
-    return jsonify({
-        "lead_id": lead_id,
-        "history": history,
-        "period": f"{date_from} - {date_to}"
-    })
-
-@app.route("/debug/status")
-def debug_status():
+@app.route("/admin/data")
+@admin_required
+def admin_data():
     with cache_lock:
         return jsonify({
-            "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%Y-%m-%d %H:%M:%S"),
-            "current_month": data_cache["current_month"],
-            "has_data": any(data_cache["leads_by_stage"].values()),
-            "error": data_cache["last_error"],
-            "stages": {k: len(v) for k, v in data_cache["leads_by_stage"].items()}
+            "leads_by_stage": data_cache["leads_by_stage"],
+            "total_leads": data_cache["total_leads"],
+            "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
+            "current_month": data_cache["current_month"]
         })
 
-# ... (остальные маршруты и WebSocket обработчики)
+# Запуск фонового потока
+Thread(target=update_cache, daemon=True).start()
 
 if __name__ == "__main__":
-    app.logger.info("Starting application with DEBUG logging...")
+    app.logger.info("Starting application")
     socketio.run(
         app,
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 8000)),
-        debug=True,
         log_output=True
     )
