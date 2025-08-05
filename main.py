@@ -360,6 +360,25 @@ def handle_connect():
                 'error': data_cache["last_error"]
             })
 
+@app.route("/admin/data")
+@admin_required
+def admin_data():
+    # Получаем параметры фильтрации
+    period = request.args.get('period', 'month')
+    data_type = request.args.get('dataType', 'all')
+    
+    # Здесь можно добавить логику фильтрации данных по period и data_type
+    # Например, изменить date_from и date_to в зависимости от периода
+    
+    with cache_lock:
+        return jsonify({
+            "leads_by_stage": data_cache["leads_by_stage"],
+            "total_leads": data_cache["total_leads"],
+            "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
+            "current_month": data_cache["current_month"],
+            "error": data_cache["last_error"]
+        })
+
 # Запуск фонового потока
 Thread(target=update_cache, daemon=True).start()
 
