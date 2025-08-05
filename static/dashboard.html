@@ -168,29 +168,6 @@
       color: var(--primary);
     }
     
-    .operators-online {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 30px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    }
-    
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: var(--light);
-      color: var(--dark);
-    }
-    
-    .badge.online {
-      background: var(--success);
-      color: white;
-    }
-    
     .loading {
       color: #999;
       text-align: center;
@@ -213,12 +190,6 @@
         <span id="status-text">Connecting...</span>
         <span class="last-update" id="last-update"></span>
       </div>
-    </div>
-    
-    <div class="operators-online">
-      <h2>Операторы</h2>
-      <div>🟢 На линии: <strong id="online-count">0</strong></div>
-      <div id="operators-list" class="info-grid" style="margin-top: 15px;"></div>
     </div>
     
     <div class="info-section">
@@ -293,8 +264,6 @@
     const connectionStatus = document.getElementById('connection-status');
     const statusText = document.getElementById('status-text');
     const lastUpdate = document.getElementById('last-update');
-    const onlineCount = document.getElementById('online-count');
-    const operatorsList = document.getElementById('operators-list');
     const infoStagesContainer = document.getElementById('info-stages');
     
     // Обработчики соединения
