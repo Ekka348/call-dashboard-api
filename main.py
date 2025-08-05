@@ -19,7 +19,7 @@ socketio = SocketIO(app, async_mode='gevent')
 # Конфигурация приложения
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
-    BITRIX_HOOK = os.environ.get("BITRIX_HOOK", "").rstrip('/') + '/'  # Нормализация URL
+    BITRIX_HOOK = os.environ.get("https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/", "").rstrip('/') + '/'  # Нормализация URL
     SESSION_TIMEOUT = 3600  # 1 час
     USER_CACHE_TIMEOUT = 300  # 5 минут
     MAX_LOGIN_ATTEMPTS = 5
