@@ -8,4 +8,4 @@ gunicorn==20.1.0
 python-dotenv==0.21.0
 python-engineio==4.3.4
 python-socketio==5.7.2
-setuptools==65.5.1  # для устранения предупреждения pkg_resources
+setuptools==65.5.1
