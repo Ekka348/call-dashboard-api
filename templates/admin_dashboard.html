@@ -38,6 +38,11 @@
             color: var(--text-light);
             font-size: 0.9em;
         }
+        .month-info {
+            color: var(--accent);
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
         .tables-container {
             display: flex;
             gap: 20px;
@@ -121,6 +126,8 @@
         <h1>Админ-панель проекта ВВ</h1>
         <div class="update-info" id="update-time">Загрузка данных...</div>
     </div>
+    
+    <div class="month-info" id="month-info">Период: загрузка...</div>
 
     <div class="tables-container">
         <!-- Таблица "Перезвонить" -->
@@ -191,6 +198,7 @@
         socket.on('data_update', (data) => {
             updateTables(data);
             document.getElementById('update-time').textContent = `Обновлено: ${data.timestamp}`;
+            document.getElementById('month-info').textContent = `Период: ${data.current_month}`;
         });
 
         function updateTables(data) {
@@ -240,7 +248,10 @@
         // Первоначальная загрузка
         fetch('/admin/data')
             .then(response => response.json())
-            .then(data => updateTables(data))
+            .then(data => {
+                updateTables(data);
+                document.getElementById('month-info').textContent = `Период: ${data.current_month}`;
+            })
             .catch(error => {
                 console.error('Ошибка загрузки данных:', error);
                 document.getElementById('update-time').textContent = 'Ошибка загрузки данных';
