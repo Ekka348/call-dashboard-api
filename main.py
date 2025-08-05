@@ -2,7 +2,7 @@ from flask import Flask, request, redirect, session, jsonify, render_template
 from functools import wraps
 import requests, os, time, json
 from datetime import datetime, timedelta
-from collections import Counter
+from collections import defaultdict
 from pytz import timezone
 from threading import Thread, Lock
 import logging
@@ -57,7 +57,8 @@ data_cache = {
     "operators_stats": {},
     "total_leads": 0,
     "last_updated": 0,
-    "last_error": None
+    "last_error": None,
+    "current_month": ""
 }
 cache_lock = Lock()
 
@@ -103,29 +104,28 @@ def get_current_month_range():
     now = datetime.now(tz)
     first_day = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     last_day = (now.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    month_name = first_day.strftime("%B %Y")
     return (
         first_day.strftime("%Y-%m-%d %H:%M:%S"),
-        last_day.strftime("%Y-%m-%d 23:59:59")
+        last_day.strftime("%Y-%m-%d 23:59:59"),
+        month_name
     )
 
 # Функции работы с Bitrix API
-def fetch_leads(stage):
+def fetch_leads(stage_id, date_from, date_to):
     try:
-        month_start, month_end = get_current_month_range()
-        current_time = datetime.now(timezone("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
-        
         params = {
             "filter": {
-                "STATUS_ID": stage,
+                "STATUS_ID": stage_id,
                 "!CLOSED": "Y",
-                ">=DATE_MODIFY": month_start,
-                "<=DATE_MODIFY": current_time
+                ">=DATE_MODIFY": date_from,
+                "<=DATE_MODIFY": date_to
             },
             "select": ["ID", "ASSIGNED_BY_ID", "STATUS_ID", "DATE_MODIFY"],
             "start": 0
         }
         
-        app.logger.info(f"Fetching leads for stage {stage} with params: {params}")
+        app.logger.info(f"Fetching leads for stage {stage_id} with params: {params}")
         
         response = requests.post(
             f"{app.config['BITRIX_HOOK']}crm.lead.list.json",
@@ -141,15 +141,15 @@ def fetch_leads(stage):
             app.logger.error(f"Bitrix API error: {error_msg}")
             raise Exception(f"Bitrix API: {error_msg}")
         
-        app.logger.info(f"Fetched {len(data.get('result', []))} leads for stage {stage}")
-        return data.get("result", []), data.get("next", 0)
+        app.logger.info(f"Fetched {len(data.get('result', []))} leads for stage {stage_id}")
+        return data.get("result", [])
         
     except requests.exceptions.RequestException as e:
-        log_error(f"Request error fetching leads (stage: {stage})", e)
-        return [], 0
+        log_error(f"Request error fetching leads (stage: {stage_id})", e)
+        return []
     except Exception as e:
-        log_error(f"Error fetching leads (stage: {stage})", e)
-        return [], 0
+        log_error(f"Error fetching leads (stage: {stage_id})", e)
+        return []
 
 def load_users():
     users = {}
@@ -196,82 +196,60 @@ def update_cache():
             app.logger.info("Starting cache update...")
             start_time = time.time()
             
+            # Получаем диапазон дат для текущего месяца
+            month_start, month_end, month_name = get_current_month_range()
+            
+            # Загружаем пользователей
             users = load_users()
+            
+            # Собираем данные по стадиям
             leads_by_stage = {}
             total_leads = 0
             
-            # Получаем данные по каждому этапу
             for stage_name, stage_id in STAGE_LABELS.items():
-                leads = []
-                offset = 0
+                # Получаем лиды для стадии за текущий месяц
+                leads = fetch_leads(stage_id, month_start, month_end)
                 
-                while True:
-                    batch, offset = fetch_leads(stage_id)
-                    leads.extend(batch)
-                    if not offset:
-                        break
-                
-                # Считаем лиды по операторам
-                stats = Counter()
+                # Группируем лиды по операторам
+                operator_stats = defaultdict(int)
                 for lead in leads:
                     if lead.get("ASSIGNED_BY_ID"):
-                        stats[int(lead["ASSIGNED_BY_ID"])] += 1
+                        operator_id = int(lead["ASSIGNED_BY_ID"])
+                        operator_stats[operator_id] += 1
                 
-                # Формируем детализацию
-                details = []
-                for uid, cnt in stats.most_common():
-                    user = users.get(uid, {})
-                    details.append({
-                        "operator": user.get("name", f"ID {uid}"),
-                        "email": user.get("email", ""),
-                        "count": cnt,
-                        "user_id": uid
+                # Формируем данные для отображения
+                stage_data = []
+                for operator_id, count in operator_stats.items():
+                    operator_info = users.get(operator_id, {"name": f"ID {operator_id}", "email": ""})
+                    stage_data.append({
+                        "operator": operator_info["name"],
+                        "count": count,
+                        "user_id": operator_id,
+                        "email": operator_info["email"]
                     })
                 
-                leads_by_stage[stage_name] = details
-                total_leads += sum(stats.values())
-            
-            # Формируем статистику по операторам
-            operators_stats = {}
-            for uid, user in users.items():
-                ops_stats = {
-                    "new": 0,
-                    "process": 0, 
-                    "success": 0,
-                    "total": 0,
-                    "email": user.get("email", "")
-                }
+                # Сортируем по убыванию количества лидов
+                stage_data.sort(key=lambda x: x["count"], reverse=True)
                 
-                for stage, leads in leads_by_stage.items():
-                    for item in leads:
-                        if item["user_id"] == uid:
-                            ops_stats["total"] += item["count"]
-                            if stage == "Перезвонить":
-                                ops_stats["new"] += item["count"]
-                            elif stage == "На согласовании":
-                                ops_stats["process"] += item["count"]
-                            else:
-                                ops_stats["success"] += item["count"]
-                
-                if ops_stats["total"] > 0:
-                    operators_stats[user["name"]] = ops_stats
+                leads_by_stage[stage_name] = stage_data
+                total_leads += len(leads)
             
             # Обновляем кэш
             with cache_lock:
                 data_cache.update({
                     "leads_by_stage": leads_by_stage,
-                    "operators_stats": operators_stats,
                     "total_leads": total_leads,
                     "last_updated": time.time(),
-                    "last_error": None
+                    "last_error": None,
+                    "current_month": month_name
                 })
             
             # Отправляем обновление через WebSocket
             socketio.emit('data_update', {
                 'leads_by_stage': leads_by_stage,
-                'operators_stats': operators_stats,
                 'total_leads': total_leads,
-                'timestamp': datetime.now().strftime("%H:%M:%S")
+                'timestamp': datetime.now().strftime("%H:%M:%S"),
+                'current_month': month_name
             })
             
             app.logger.info(
@@ -323,68 +301,39 @@ def admin_data():
     with cache_lock:
         return jsonify({
             "leads_by_stage": data_cache["leads_by_stage"],
-            "operators_stats": data_cache["operators_stats"],
             "total_leads": data_cache["total_leads"],
             "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
+            "current_month": data_cache["current_month"],
             "error": data_cache["last_error"]
         })
-
-@app.route("/test-api")
-def test_api():
-    """Тестовый маршрут для проверки подключения к Bitrix"""
-    try:
-        users = load_users()
-        test_leads, _ = fetch_leads("IN_PROCESS")
-        
-        return jsonify({
-            "status": "success",
-            "bitrix_hook": app.config['BITRIX_HOOK'],
-            "users_count": len(users),
-            "sample_user": next(iter(users.values())) if users else None,
-            "leads_count": len(test_leads),
-            "sample_lead": test_leads[0] if test_leads else None,
-            "cache_status": {
-                "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%Y-%m-%d %H:%M:%S"),
-                "has_data": any(data_cache["leads_by_stage"].values())
-            }
-        })
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "error": str(e),
-            "bitrix_hook": app.config['BITRIX_HOOK']
-        }), 500
-
-# WebSocket обработчики
-@socketio.on('connect')
-def handle_connect():
-    if session.get("role") == "admin":
-        with cache_lock:
-            socketio.emit('data_update', {
-                'leads_by_stage': data_cache["leads_by_stage"],
-                'operators_stats': data_cache["operators_stats"],
-                'total_leads': data_cache["total_leads"],
-                'timestamp': datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
-                'error': data_cache["last_error"]
-            })
 
 @app.route("/debug-bitrix")
 def debug_bitrix():
     try:
+        # Получаем диапазон дат
+        month_start, month_end, month_name = get_current_month_range()
+        
         # Тест 1: Проверка пользователей
         users = load_users()
         
         # Тест 2: Проверка лидов для каждого этапа
         stage_results = {}
         for stage_name, stage_id in STAGE_LABELS.items():
-            leads, _ = fetch_leads(stage_id)
+            leads = fetch_leads(stage_id, month_start, month_end)
             stage_results[stage_name] = {
                 "count": len(leads),
-                "sample": leads[0] if leads else None
+                "sample": leads[0] if leads else None,
+                "operators": defaultdict(int)
             }
+            
+            for lead in leads:
+                if lead.get("ASSIGNED_BY_ID"):
+                    operator_id = int(lead["ASSIGNED_BY_ID"])
+                    stage_results[stage_name]["operators"][operator_id] += 1
         
         return jsonify({
             "bitrix_hook": app.config['BITRIX_HOOK'],
+            "month_range": f"{month_start} - {month_end}",
             "users_count": len(users),
             "users_sample": list(users.values())[0] if users else None,
             "stages": stage_results,
@@ -395,6 +344,19 @@ def debug_bitrix():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# WebSocket обработчики
+@socketio.on('connect')
+def handle_connect():
+    if session.get("role") == "admin":
+        with cache_lock:
+            socketio.emit('data_update', {
+                'leads_by_stage': data_cache["leads_by_stage"],
+                'total_leads': data_cache["total_leads"],
+                'timestamp': datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
+                'current_month': data_cache["current_month"],
+                'error': data_cache["last_error"]
+            })
 
 # Запуск фонового потока
 Thread(target=update_cache, daemon=True).start()
