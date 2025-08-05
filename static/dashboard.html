@@ -1,163 +1,223 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Dashboard</title>
+  <meta charset="UTF-8">
+  <title>Real-Time Leads Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
+      background-color: #f5f5f5;
     }
-    h1 {
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 20px;
     }
-    #update-log {
-      font-style: italic;
-      color: #555;
-      margin-bottom: 10px;
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ccc;
+    }
+    .indicator.active {
+      background-color: #4CAF50;
+    }
+    .last-update {
+      font-size: 0.9em;
+      color: #666;
     }
     .info-box {
       background-color: #e8f4ff;
       padding: 15px;
       border: 1px solid #b3d8ff;
       margin-bottom: 30px;
-      max-width: 600px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .stage-columns {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: 20px;
     }
     .stage-table {
-      border: 1px solid #ccc;
+      background: white;
       border-radius: 8px;
-      padding: 10px;
-      background-color: #f9f9f9;
-      min-width: 250px;
-      flex: 1;
+      padding: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .stage-table h2 {
-      font-size: 16px;
-      margin-bottom: 10px;
-      text-align: center;
+      margin-top: 0;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
     }
     th, td {
-      border-bottom: 1px solid #ddd;
-      padding: 6px;
+      padding: 10px;
       text-align: left;
-      font-size: 14px;
+      border-bottom: 1px solid #eee;
     }
     th {
-      background-color: #f1f1f1;
+      background-color: #f8f8f8;
     }
-    .empty-message {
-      font-style: italic;
-      color: #888;
-      text-align: center;
+    tr.updated {
+      background-color: #f8fff0;
+      transition: background-color 1.5s;
+    }
+    .count-badge {
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 0.8em;
+      margin-left: 5px;
+    }
+    .operators-online {
+      background-color: #e1f5fe;
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
     }
   </style>
 </head>
 <body>
+  <div class="dashboard-header">
+    <h1>📊 Real-Time Leads Dashboard</h1>
+    <div class="status-indicator">
+      <div class="indicator" id="connection-status"></div>
+      <span id="status-text">Connecting...</span>
+      <span class="last-update" id="last-update"></span>
+    </div>
+  </div>
 
-<div id="active_operators_box">
-  <!-- список прилетит сюда -->
-</div>
-
-  <div>🟢 Операторов на линии: <strong>5</strong></div>
-  
-  <h1>📊 Статистика по стадиям — сегодня</h1>
-
-  <p id="update-log">Обновления ещё не начались.</p>
+  <div class="operators-online">
+    🟢 Операторов на линии: <strong id="online-count">0</strong>
+    <div id="operators-list"></div>
+  </div>
 
   <div class="info-box" id="stats">
-    <p><strong>Загрузка инфо-стадий...</strong></p>
+    <h3>Инфо-стадии</h3>
+    <div id="info-stages"></div>
   </div>
 
   <div class="stage-columns" id="content">
-    <div class="stage-table"><h2>Стадия: НДЗ</h2></div>
-    <div class="stage-table"><h2>Стадия: НДЗ 2</h2></div>
-    <div class="stage-table"><h2>Стадия: Перезвонить</h2></div>
-    <div class="stage-table"><h2>Стадия: Приглашен к рекрутеру</h2></div>
+    <div class="stage-table"><h2>НДЗ</h2><div class="table-content"></div></div>
+    <div class="stage-table"><h2>НДЗ 2</h2><div class="table-content"></div></div>
+    <div class="stage-table"><h2>Перезвонить</h2><div class="table-content"></div></div>
+    <div class="stage-table"><h2>Приглашен к рекрутеру</h2><div class="table-content"></div></div>
   </div>
 
   <script>
-    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру", "INFO"];
-    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
-    let stageIndex = 0;
+    // Подключение к WebSocket
+    const socket = io();
+    const stagesOrder = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
+    const infoStages = ["NEW", "OLD", "База ВВ"];
 
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/leads/by-stage");
-        return await res.json();
-      } catch (e) {
-        console.error("Ошибка при загрузке by-stage", e);
-        return null;
-      }
-    }
+    // Элементы UI
+    const connectionStatus = document.getElementById('connection-status');
+    const statusText = document.getElementById('status-text');
+    const lastUpdate = document.getElementById('last-update');
+    const onlineCount = document.getElementById('online-count');
+    const operatorsList = document.getElementById('operators-list');
 
-    function showUpdateStatus(label) {
-      const ts = new Date().toLocaleTimeString("ru-RU");
-      const statusText = `Обновляется: ${label} • ${ts}`;
-      document.getElementById("update-log").textContent = statusText;
-    }
+    // Обработчики соединения
+    socket.on('connect', () => {
+      console.log('Connected to WebSocket');
+      connectionStatus.classList.add('active');
+      statusText.textContent = 'Connected';
+    });
 
-    async function updateStageCycle() {
-      const current = STAGE_CYCLE[stageIndex];
-      showUpdateStatus(current); // ⏳ Обновление стадии
+    socket.on('disconnect', () => {
+      console.log('Disconnected from WebSocket');
+      connectionStatus.classList.remove('active');
+      statusText.textContent = 'Disconnected';
+    });
 
-      const data = await fetchData();
+    // Обработчик обновления данных
+    socket.on('update', (data) => {
+      console.log('Received update', data);
+      updateDashboard(data);
+      lastUpdate.textContent = new Date().toLocaleTimeString();
+    });
+
+    // Функция обновления дашборда
+    function updateDashboard(data) {
       if (!data || !data.data) return;
 
-      if (current === "INFO") {
-        const statsContainer = document.getElementById("stats");
-        statsContainer.innerHTML = "";
-        INFO_STAGES.forEach(stage => {
-          const value = data.data[stage]?.count ?? 0;
-          const line = document.createElement("p");
-          line.innerHTML = `<strong>${stage}:</strong> ${value}`;
-          statsContainer.appendChild(line);
-        });
-      } else {
-        const info = data.data[current];
-        const block = Array.from(document.getElementById("content").children)
-          .find(el => el.querySelector("h2")?.textContent?.includes(current));
+      // Обновляем инфо-стадии
+      updateInfoStages(data);
 
-        if (!block) return;
-        block.innerHTML = `<h2>Стадия: ${current}</h2>`;
-
-        if (!info?.details || info.details.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "empty-message";
-          empty.textContent = "Нет лидов.";
-          block.appendChild(empty);
-        } else {
-          const table = document.createElement("table");
-          const header = document.createElement("thead");
-          header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-          table.appendChild(header);
-
-          const body = document.createElement("tbody");
-          info.details.forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
-            body.appendChild(tr);
-          });
-
-          table.appendChild(body);
-          block.appendChild(table);
-        }
-      }
-
-      stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
-      setTimeout(updateStageCycle, 3000);
+      // Обновляем таблицы по стадиям
+      stagesOrder.forEach(stage => {
+        updateStageTable(stage, data.data[stage]);
+      });
     }
 
-    updateStageCycle(); // 🚀 запуск
-  </script>
+    function updateInfoStages(data) {
+      const container = document.getElementById('info-stages');
+      container.innerHTML = '';
+      
+      infoStages.forEach(stage => {
+        const stageData = data.data[stage];
+        if (!stageData) return;
+        
+        const div = document.createElement('div');
+        div.innerHTML = `<strong>${stage}:</strong> <span class="count-badge">${stageData.count}</span>`;
+        container.appendChild(div);
+      });
+    }
 
+    function updateStageTable(stage, stageData) {
+      const tableDiv = document.querySelector(`.stage-table h2:contains("${stage}")`).parentNode.querySelector('.table-content');
+      
+      if (!stageData || !stageData.details || stageData.details.length === 0) {
+        tableDiv.innerHTML = '<p>Нет данных</p>';
+        return;
+      }
+
+      let html = `<table>
+        <thead>
+          <tr><th>Оператор</th><th>Количество</th></tr>
+        </thead>
+        <tbody>`;
+
+      stageData.details.forEach(row => {
+        html += `<tr>
+          <td>${row.operator}</td>
+          <td>${row.count}</td>
+        </tr>`;
+      });
+
+      html += `</tbody></table>`;
+      tableDiv.innerHTML = html;
+
+      // Анимация обновления
+      const rows = tableDiv.querySelectorAll('tr');
+      rows.forEach(row => {
+        row.classList.add('updated');
+        setTimeout(() => row.classList.remove('updated'), 1500);
+      });
+    }
+
+    // Инициализация при загрузке
+    document.addEventListener('DOMContentLoaded', () => {
+      // Запрашиваем начальные данные
+      fetch('/api/leads/by-stage')
+        .then(response => response.json())
+        .then(data => updateDashboard(data))
+        .catch(error => console.error('Error fetching initial data:', error));
+    });
+  </script>
 </body>
 </html>
