@@ -26,6 +26,69 @@ class Config:
     LOG_FILE = 'app.log'
     DATA_UPDATE_INTERVAL = 15  # секунд
     BITRIX_TIMEOUT = 10  # таймаут запросов к Bitrix
+    TARGET_USERS = {
+        3037: "Старицын Георгий",
+        3025: "Гусева Екатерина",
+        3019: "Фролова Екатерина",
+        2919: "Петренко Дмитрий",
+        2897: "Сененкова Ирина",
+        2869: "Завидовская Наталья",
+        2836: "Балакшина Анастасия",
+        2776: "Борщевский Дмитрий",
+        2762: "Лукьянова Лидия",
+        2754: "Ткаченко Дарья",
+        2714: "Росоха Анастасия",
+        2672: "Владимирова Юлиана",
+        2648: "Болдырева Екатерина",
+        2636: "Морозов Андрей",
+        2578: "Раджабова Эльвира",
+        2566: "Сергеев Арсений",
+        2304: "Дубровина Валерия",
+        2302: "Астапенко Александра",
+        2250: "Максимова Мария",
+        2230: "Бучкина Альбина",
+        2102: "Кузнецова Ангелина",
+        2090: "Кондрашина Диана",
+        2044: "Ценёва Полина",
+        2008: "Ларина Ирина",
+        1962: "Черкасова Юлия",
+        1930: "Медведева Анна",
+        1874: "Павлушова Екатерина",
+        1504: "Хакимова Гульназ",
+        1428: "Кузьминов Ярослав",
+        1406: "Лузина Марина",
+        1398: "Гриценин Вячеслав",
+        1336: "Феоктистова Дарья",
+        1300: "Козлова Екатерина",
+        1240: "Муратова Эльмира",
+        950: "Косолапова Вероника",
+        910: "Сычева Оксана",
+        908: "Майорова Алина",
+        808: "Джалилова Айше",
+        798: "Егорова Александра",
+        790: "Фиолетова Ирина",
+        750: "Русов Максим",
+        722: "Шелега Ксения",
+        584: "Семерина Валерия",
+        576: "Панина Виктория",
+        548: "Сунцов Тимур",
+        544: "Доманова Татьяна",
+        538: "Воронин Артемий",
+        522: "Плёнкина Анастасия",
+        502: "Мулаянова Ксения",
+        385: "Ахматшина Алия",
+        377: "Серикова Дарья",
+        371: "Голова Ирина",
+        227: "Демурия Александр",
+        175: "Щербинина Анна",
+        133: "Бардабаева Анна",
+        91: "Николаева Светлана",
+        71: "Жукова Диана",
+        55: "Николаева Мария",
+        45: "Лазарева Анна",
+        35: "Шулигина Лада",
+        29: "Носарев Алексей"
+    }
 
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
@@ -60,7 +123,8 @@ data_cache = {
     "total_leads": 0,
     "last_updated": 0,
     "last_error": None,
-    "current_month": ""
+    "current_month": "",
+    "users": {}
 }
 cache_lock = Lock()
 
@@ -121,7 +185,8 @@ def fetch_leads(stage_id, date_from, date_to):
                 "STATUS_ID": stage_id,
                 "!CLOSED": "Y",
                 ">=DATE_MODIFY": date_from,
-                "<=DATE_MODIFY": date_to
+                "<=DATE_MODIFY": date_to,
+                "ASSIGNED_BY_ID": list(app.config['TARGET_USERS'].keys())
             },
             "select": ["ID", "ASSIGNED_BY_ID", "STATUS_ID", "DATE_MODIFY"],
             "start": 0
@@ -154,41 +219,20 @@ def fetch_leads(stage_id, date_from, date_to):
         return []
 
 def load_users():
-    users = {}
     try:
-        start = 0
-        while True:
-            response = requests.post(
-                f"{app.config['BITRIX_HOOK']}user.get.json",
-                json={"start": start},
-                timeout=app.config['BITRIX_TIMEOUT']
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            if "error" in data:
-                error_msg = data.get("error_description", "Unknown Bitrix API error")
-                raise Exception(f"Bitrix API: {error_msg}")
-            
-            for user in data.get("result", []):
-                users[int(user["ID"])] = {
-                    "name": f"{user['NAME']} {user['LAST_NAME']}",
-                    "email": user.get("EMAIL", "")
-                }
-            
-            if "next" not in data or not data["next"]:
-                break
-                
-            start = data["next"]
+        # Используем предопределенный список пользователей
+        users = {}
+        for user_id, user_name in app.config['TARGET_USERS'].items():
+            users[user_id] = {
+                "name": user_name,
+                "email": f"{user_name.split()[0].lower()}.{user_name.split()[1].lower()}@example.com"
+            }
         
-        app.logger.info(f"Loaded {len(users)} users from Bitrix")
+        app.logger.info(f"Loaded {len(users)} target users")
         return users
         
-    except requests.exceptions.RequestException as e:
-        log_error("Request error loading users", e)
-        return {}
     except Exception as e:
-        log_error("Error loading users", e)
+        log_error("Error loading target users", e)
         return {}
 
 # Фоновое обновление данных
@@ -230,8 +274,19 @@ def update_cache():
                         "email": operator_info["email"]
                     })
                 
+                # Добавляем нулевые значения для отсутствующих операторов
+                for user_id in app.config['TARGET_USERS'].keys():
+                    if user_id not in operator_stats:
+                        operator_info = users.get(user_id, {"name": app.config['TARGET_USERS'].get(user_id, f"ID {user_id}"), "email": ""})
+                        stage_data.append({
+                            "operator": operator_info["name"],
+                            "count": 0,
+                            "user_id": user_id,
+                            "email": operator_info["email"]
+                        })
+                
                 # Сортируем по убыванию количества лидов
-                stage_data.sort(key=lambda x: x["count"], reverse=True)
+                stage_data.sort(key=lambda x: (-x["count"], x["operator"]))
                 
                 leads_by_stage[stage_name] = stage_data
                 total_leads += len(leads)
@@ -243,7 +298,8 @@ def update_cache():
                     "total_leads": total_leads,
                     "last_updated": time.time(),
                     "last_error": None,
-                    "current_month": month_name
+                    "current_month": month_name,
+                    "users": users
                 })
             
             # Отправляем обновление через WebSocket
