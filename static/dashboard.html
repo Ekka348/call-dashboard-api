@@ -1,404 +1,163 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>CRM Dashboard - Проект ВВ</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>Dashboard</title>
   <style>
-    :root {
-      --dark-bg: #1e293b;
-      --block-bg: #232e41;
-      --primary: #3b82f6;
-      --secondary: #9333ea;
-      --accent: #7dd3fc;
-      --border: #334155;
-      --text-main: #e0e7ef;
-      --text-light: #cbd5e1;
-      --badge-bg: #3b82f6;
-      --badge-bg2: #9333ea;
-      --error: #f87171;
-    }
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      background: var(--dark-bg);
-      color: var(--text-main);
-      font-family: "Segoe UI", "Inter", Arial, sans-serif;
-      min-height: 100vh;
-    }
     body {
-      min-height: 100vh;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
+      font-family: Arial, sans-serif;
+      margin: 20px;
     }
     h1 {
-      text-align: center;
-      margin: 32px 0 28px 0;
-      font-size: 2.1em;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      color: var(--accent);
-      text-shadow: 0 2px 20px rgba(59,130,246,0.14);
+      margin-bottom: 20px;
     }
-    .filter {
+    #update-log {
+      font-style: italic;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .info-box {
+      background-color: #e8f4ff;
+      padding: 15px;
+      border: 1px solid #b3d8ff;
+      margin-bottom: 30px;
+      max-width: 600px;
+    }
+    .stage-columns {
       display: flex;
       flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      background: var(--block-bg);
-      padding: 18px 28px;
-      border-radius: 16px;
-      box-shadow: 0 2px 16px rgba(30,41,59,0.12);
-      width: fit-content;
-      margin: 0 auto 34px auto;
-      margin-top: 6px;
-      position: relative;
-      z-index: 10;
+      gap: 20px;
     }
-    .period-label {
-      color: var(--text-main);
-      font-weight: 600;
-      font-size: 16px;
-      display: flex;
-      align-items: center;
-    }
-    .period-input-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--dark-bg);
-      border-radius: 7px;
-      padding: 3px 10px 3px 6px;
-      border: 1px solid var(--border);
-      transition: border 0.2s;
-    }
-    .period-input-group:focus-within {
-      border: 1.5px solid var(--accent);
-    }
-    .period-input-group svg {
-      width: 18px;
-      height: 18px;
-      fill: var(--accent);
-    }
-    .filter input[type="date"] {
-      background: transparent;
-      border: none;
-      color: var(--text-main);
-      padding: 6px 4px;
-      font-size: 15px;
-      outline: none;
-      width: 120px;
-      font-family: inherit;
-    }
-    .filter input[type="date"]::-webkit-calendar-picker-indicator {
-      filter: invert(0.7);
-    }
-    .filter button {
-      background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
-      border: none;
-      color: #fff;
-      padding: 9px 22px;
+    .stage-table {
+      border: 1px solid #ccc;
       border-radius: 8px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      min-width: 250px;
+      flex: 1;
+    }
+    .stage-table h2 {
       font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 1px 14px rgba(59,130,246,0.10);
-      transition: background 0.2s, transform 0.1s;
-      margin-left: 14px;
-      letter-spacing: 0.01em;
+      margin-bottom: 10px;
+      text-align: center;
     }
-    .filter button:hover {
-      background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
-      transform: translateY(-1px) scale(1.04);
-    }
-
-    /* Мини-лоадер для каждого блока */
-    .mini-loader {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 52px;
-      width: 100%;
-    }
-    .mini-spinner {
-      border: 5px solid #22304b;
-      border-top: 5px solid var(--accent);
-      border-radius: 50%;
-      width: 38px;
-      height: 38px;
-      animation: spin 0.8s linear infinite;
-      box-shadow: 0 2px 10px rgba(59,130,246,0.18);
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg);}
-      100% { transform: rotate(360deg);}
-    }
-
-    .stage-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 24px;
-      justify-content: center;
-      margin-bottom: 40px;
-      width: 100%;
-    }
-    .stage-block {
-      background: var(--block-bg);
-      box-shadow: 0 4px 32px rgba(30,41,59,0.14);
-      border-radius: 14px;
-      padding: 26px 22px 20px 22px;
-      min-width: 280px;
-      max-width: 340px;
-      flex: 1 1 320px;
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 18px;
-    }
-    .stage-block h2 {
-      margin: 0 0 16px 0;
-      font-size: 1.17em;
-      color: var(--accent);
-      font-weight: 700;
-      border-bottom: 1.5px solid var(--border);
-      padding-bottom: 8px;
-      letter-spacing: 0.01em;
-    }
-
-    .stage-table table {
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 6px;
-      background: transparent;
     }
-    .stage-table th, .stage-table td {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
+    th, td {
+      border-bottom: 1px solid #ddd;
+      padding: 6px;
       text-align: left;
-      color: var(--text-main);
-    }
-    .stage-table th {
-      background-color: #22304b;
-      font-weight: bold;
-      color: var(--accent);
-      font-size: 1em;
-      border-top-left-radius: 5px;
-      border-top-right-radius: 5px;
-    }
-    .stage-table tr:hover {
-      background-color: #25334c;
-    }
-    .stage-table p {
-      color: var(--text-light);
-      margin: 10px 0 0 0;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      background: linear-gradient(90deg, var(--badge-bg) 0%, var(--badge-bg2) 100%);
-      color: #fff;
       font-size: 14px;
-      font-weight: 600;
-      margin-left: 4px;
-      letter-spacing: 0.02em;
-      box-shadow: 0 1.5px 6px rgba(59,130,246,0.07);
     }
-    .error-message {
-      color: var(--error);
-      font-weight: bold;
-      margin-top: 14px;
-      font-size: 1.03em;
+    th {
+      background-color: #f1f1f1;
     }
-
-    @media (max-width: 900px) {
-      .stage-container {
-        flex-direction: column;
-        align-items: stretch;
-      }
-      .stage-block {
-        max-width: 95vw;
-        margin: 0 auto 18px auto;
-      }
-      .filter {
-        width: 98vw;
-        min-width: unset;
-        padding: 12px 6px;
-      }
-    }
-    @media (max-width: 600px) {
-      .stage-block {
-        padding: 14px 6px 14px 8px;
-      }
-      .filter {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-        padding: 10px 2px;
-        width: 100%;
-      }
-      .filter button {
-        margin-left: 0;
-        margin-top: 8px;
-      }
-      h1 {
-        font-size: 1.23em;
-      }
+    .empty-message {
+      font-style: italic;
+      color: #888;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h1>CRM Dashboard - Проект ВВ</h1>
-  <form class="filter" onsubmit="fetchStats(); return false;">
-    <span class="period-label">Период:</span>
-    <div class="period-input-group">
-      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
-      <input type="date" id="startDate" required>
-    </div>
-    <span class="period-label">—</span>
-    <div class="period-input-group">
-      <svg viewBox="0 0 24 24"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm12 4H5v14h14V6zm-2 4v2H7v-2h10zm0 4v2H7v-2h10z"/></svg>
-      <input type="date" id="endDate" required>
-    </div>
-    <button type="submit">Показать статистику</button>
-  </form>
 
-  <div class="stage-container">
-    <div class="stage-block">
-      <h2>Перезвонить</h2>
-      <div id="table-Перезвонить" class="stage-table">
-        <div class="mini-loader" id="loader-Перезвонить" style="display:none;">
-          <div class="mini-spinner"></div>
-        </div>
-      </div>
-    </div>
-    <div class="stage-block">
-      <h2>На согласовании</h2>
-      <div id="table-На согласовании" class="stage-table">
-        <div class="mini-loader" id="loader-На согласовании" style="display:none;">
-          <div class="mini-spinner"></div>
-        </div>
-      </div>
-    </div>
-    <div class="stage-block">
-      <h2>Приглашен к рекрутеру</h2>
-      <div id="table-Приглашен к рекрутеру" class="stage-table">
-        <div class="mini-loader" id="loader-Приглашен к рекрутеру" style="display:none;">
-          <div class="mini-spinner"></div>
-        </div>
-      </div>
-    </div>
+<div id="active_operators_box">
+  <!-- список прилетит сюда -->
+</div>
+
+  <div>🟢 Операторов на линии: <strong>5</strong></div>
+  
+  <h1>📊 Статистика по стадиям — сегодня</h1>
+
+  <p id="update-log">Обновления ещё не начались.</p>
+
+  <div class="info-box" id="stats">
+    <p><strong>Загрузка инфо-стадий...</strong></p>
+  </div>
+
+  <div class="stage-columns" id="content">
+    <div class="stage-table"><h2>Стадия: НДЗ</h2></div>
+    <div class="stage-table"><h2>Стадия: НДЗ 2</h2></div>
+    <div class="stage-table"><h2>Стадия: Перезвонить</h2></div>
+    <div class="stage-table"><h2>Стадия: Приглашен к рекрутеру</h2></div>
   </div>
 
   <script>
-    const STAGE_LABELS = ['Перезвонить', 'На согласовании', 'Приглашен к рекрутеру'];
-    let statsInterval = null;
+    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру", "INFO"];
+    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+    let stageIndex = 0;
 
-    // Установка текущей даты по умолчанию
-    function setDefaultDates() {
-      const today = new Date();
-      const startDate = document.getElementById('startDate');
-      const endDate = document.getElementById('endDate');
-      
-      const formatDate = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
-      
-      startDate.value = formatDate(today);
-      endDate.value = formatDate(today);
-    }
-
-    function fetchStats() {
-      const start = document.getElementById("startDate").value;
-      const end = document.getElementById("endDate").value;
-      
-      if (!start || !end) {
-        alert("Пожалуйста, выберите обе даты");
-        return;
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/leads/by-stage");
+        return await res.json();
+      } catch (e) {
+        console.error("Ошибка при загрузке by-stage", e);
+        return null;
       }
-      
-      STAGE_LABELS.forEach(stage => {
-        const container = document.getElementById(`table-${stage}`);
-        container.innerHTML = `
-          <div class="mini-loader" id="loader-${stage}" style="display:flex;">
-            <div class="mini-spinner"></div>
-          </div>
-        `;
-        
-        const url = `/update_stage/${stage}?range=custom:${start}:${end}`;
-        
-        fetch(url)
-          .then(response => {
-            if (!response.ok) throw new Error('Ошибка сети');
-            return response.json();
-          })
-          .then(data => {
-            const stageData = data[stage];
-            container.innerHTML = '';
-            
-            if (!stageData.details || stageData.details.length === 0) {
-              container.innerHTML = `<p>Нет данных за выбранный период</p>`;
-              return;
-            }
-            
-            const table = document.createElement('table');
-            table.innerHTML = `
-              <thead>
-                <tr>
-                  <th>Оператор</th>
-                  <th>Количество</th>
-                </tr>
-              </thead>
-            `;
-            
-            const tbody = document.createElement('tbody');
-            stageData.details.forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${item.operator}</td>
-                <td><span class="badge">${item.count}</span></td>
-              `;
-              tbody.appendChild(row);
-            });
-            
-            table.appendChild(tbody);
-            container.appendChild(table);
-          })
-          .catch(err => {
-            console.error(`Ошибка загрузки стадии "${stage}":`, err);
-            container.innerHTML = `
-              <p class="error-message">
-                ⛔ Ошибка загрузки данных. Пожалуйста, попробуйте позже.
-              </p>
-            `;
-          });
-      });
     }
 
-    // Инициализация при загрузке страницы
-    window.onload = () => {
-      setDefaultDates();
-      fetchStats();
-      
-      // Автообновление каждые 30 секунд
-      statsInterval = setInterval(fetchStats, 30000);
-    };
+    function showUpdateStatus(label) {
+      const ts = new Date().toLocaleTimeString("ru-RU");
+      const statusText = `Обновляется: ${label} • ${ts}`;
+      document.getElementById("update-log").textContent = statusText;
+    }
 
-    // Обработчик отправки формы
-    document.querySelector('.filter').onsubmit = (e) => {
-      e.preventDefault();
-      if (statsInterval) clearInterval(statsInterval);
-      fetchStats();
-      statsInterval = setInterval(fetchStats, 30000);
-    };
+    async function updateStageCycle() {
+      const current = STAGE_CYCLE[stageIndex];
+      showUpdateStatus(current); // ⏳ Обновление стадии
+
+      const data = await fetchData();
+      if (!data || !data.data) return;
+
+      if (current === "INFO") {
+        const statsContainer = document.getElementById("stats");
+        statsContainer.innerHTML = "";
+        INFO_STAGES.forEach(stage => {
+          const value = data.data[stage]?.count ?? 0;
+          const line = document.createElement("p");
+          line.innerHTML = `<strong>${stage}:</strong> ${value}`;
+          statsContainer.appendChild(line);
+        });
+      } else {
+        const info = data.data[current];
+        const block = Array.from(document.getElementById("content").children)
+          .find(el => el.querySelector("h2")?.textContent?.includes(current));
+
+        if (!block) return;
+        block.innerHTML = `<h2>Стадия: ${current}</h2>`;
+
+        if (!info?.details || info.details.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "empty-message";
+          empty.textContent = "Нет лидов.";
+          block.appendChild(empty);
+        } else {
+          const table = document.createElement("table");
+          const header = document.createElement("thead");
+          header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
+          table.appendChild(header);
+
+          const body = document.createElement("tbody");
+          info.details.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
+            body.appendChild(tr);
+          });
+
+          table.appendChild(body);
+          block.appendChild(table);
+        }
+      }
+
+      stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
+      setTimeout(updateStageCycle, 3000);
+    }
+
+    updateStageCycle(); // 🚀 запуск
   </script>
+
 </body>
 </html>
