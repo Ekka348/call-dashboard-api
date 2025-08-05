@@ -1,11 +1,18 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, jsonify
+from flask_socketio import SocketIO
 import requests, os, time
 from datetime import datetime, timedelta
 from collections import Counter
-from pytz import timezone  # 🕒 для московского времени
+from pytz import timezone
+from threading import Lock
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Конфигурация
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+UPDATE_INTERVAL = 5  # секунды между обновлениями
 
 STAGE_LABELS = {
     "НДЗ": "5",
@@ -19,7 +26,10 @@ STAGE_LABELS = {
 
 GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
 
+# Кеширование
 user_cache = {"data": {}, "last": 0}
+data_cache = {}
+cache_lock = Lock()
 
 def get_range_dates(rtype):
     tz = timezone("Europe/Moscow")
@@ -43,7 +53,8 @@ def load_users():
                 users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
             if "next" not in r: break
             start = r["next"]
-    except Exception: pass
+    except Exception as e:
+        print(f"Error loading users: {e}")
     user_cache["data"], user_cache["last"] = users, time.time()
     return users
 
@@ -61,7 +72,8 @@ def fetch_leads(stage, start, end):
             leads.extend(page)
             offset = r.get("next", 0)
             if not offset: break
-    except Exception: pass
+    except Exception as e:
+        print(f"Error fetching leads for {stage}: {e}")
     return leads
 
 def fetch_all_leads(stage):
@@ -78,34 +90,45 @@ def fetch_all_leads(stage):
             leads.extend(page)
             offset = r.get("next", 0)
             if not offset: break
-    except Exception: pass
+    except Exception as e:
+        print(f"Error fetching all leads for {stage}: {e}")
     return leads
+
+def get_lead_stats():
+    with cache_lock:
+        if time.time() - data_cache.get('timestamp', 0) < UPDATE_INTERVAL:
+            return data_cache.get('data', {})
+        
+        start, end = get_range_dates("today")
+        users = load_users()
+        data = {}
+
+        for name, stage_id in STAGE_LABELS.items():
+            if name in GROUPED_STAGES:
+                leads = fetch_all_leads(stage_id)
+                data[name] = {"grouped": True, "count": len(leads)}
+            else:
+                leads = fetch_leads(stage_id, start, end)
+                stats = Counter()
+                for lead in leads:
+                    uid = lead.get("ASSIGNED_BY_ID")
+                    if uid: stats[int(uid)] += 1
+
+                details = [
+                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                    for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+                ]
+
+                data[name] = {"grouped": False, "details": details}
+
+        result = {"range": "today", "data": data}
+        data_cache['data'] = result
+        data_cache['timestamp'] = time.time()
+        return result
 
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
-    start, end = get_range_dates("today")
-    users = load_users()
-    data = {}
-
-    for name, stage_id in STAGE_LABELS.items():
-        if name in GROUPED_STAGES:
-            leads = fetch_all_leads(stage_id)
-            data[name] = {"grouped": True, "count": len(leads)}
-        else:
-            leads = fetch_leads(stage_id, start, end)
-            stats = Counter()
-            for lead in leads:
-                uid = lead.get("ASSIGNED_BY_ID")
-                if uid: stats[int(uid)] += 1
-
-            details = [
-                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-            ]
-
-            data[name] = {"grouped": False, "details": details}
-
-    return {"range": "today", "data": data}
+    return jsonify(get_lead_stats())
 
 @app.route("/api/leads/info-stages-today")
 def info_stages_today():
@@ -114,30 +137,23 @@ def info_stages_today():
         stage = STAGE_LABELS[name]
         leads = fetch_all_leads(stage)
         result.append({"name": name, "count": len(leads)})
-    return {"range": "total", "info": result}
+    return jsonify({"range": "total", "info": result})
 
-@app.route("/ping")
-def ping(): return {"status": "ok"}
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    socketio.emit('update', get_lead_stats())
 
-@app.route("/clock")
-def clock():
-    tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
-    return {
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    }
+def background_update_thread():
+    while True:
+        data = get_lead_stats()
+        socketio.emit('update', data)
+        time.sleep(UPDATE_INTERVAL)
 
 @app.route("/")
-def home(): return app.send_static_file("dashboard.html")
-
-@app.route("/active_operators_list")
-def active_operators_list():
-    operators = get_active_operators()
-    return jsonify(operators)
-
-
+def home():
+    return app.send_static_file("dashboard.html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    socketio.start_background_task(background_update_thread)
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
