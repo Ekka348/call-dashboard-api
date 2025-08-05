@@ -3,8 +3,16 @@ import requests, os, time
 from datetime import datetime, timedelta
 from collections import Counter
 from pytz import timezone  # 🕒 для московского времени
+from flask import Flask
+from flask_socketio import SocketIO
+import eventlet  # 🚀 Важно для работы WebSocket в Railway
+
+# Используем eventlet для асинхронности
+eventlet.monkey_patch()
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+socketio = SocketIO(app, cors_allowed_origins="*")
 HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
 STAGE_LABELS = {
@@ -137,7 +145,27 @@ def active_operators_list():
     operators = get_active_operators()
     return jsonify(operators)
 
+# Фоновый поток для обновлений
+def background_updates():
+    while True:
+        try:
+            data = leads_by_stage().get_json()
+            info_data = info_stages_today().get_json()
+            socketio.emit('update', {
+                'stages': data['data'],
+                'info': info_data['info'],
+                'timestamp': datetime.now(timezone('Europe/Moscow')).strftime('%H:%M:%S')
+            })
+        except Exception as e:
+            print(f"Ошибка при обновлении: {e}")
+        eventlet.sleep(3)  # ⏱ Интервал 3 секунды
 
+@socketio.on('connect')
+def handle_connect():
+    print('Новое подключение:', request.sid)
+    if not hasattr(app, 'update_thread'):
+        app.update_thread = socketio.start_background_task(background_updates)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    socketio.run(app, host='0.0.0.0', port=port)
