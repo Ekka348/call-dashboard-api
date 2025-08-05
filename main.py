@@ -1,20 +1,23 @@
-from flask import Flask, request, render_template_string
-import requests, os, time
+from flask import Flask, request, render_template_string, jsonify
+from flask_socketio import SocketIO
+import requests
+import os
+import time
 from datetime import datetime, timedelta
 from collections import Counter
-from pytz import timezone  # 🕒 для московского времени
-from flask import Flask
-from flask_socketio import SocketIO
-import eventlet  # 🚀 Важно для работы WebSocket в Railway
+from pytz import timezone
+import eventlet
+import signal
 
-# Используем eventlet для асинхронности
+# Настройка асинхронности
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-socketio = SocketIO(app, cors_allowed_origins="*")
-HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-123')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
+# Конфигурация Bitrix24
+HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 STAGE_LABELS = {
     "НДЗ": "5",
     "НДЗ 2": "9",
@@ -24,148 +27,201 @@ STAGE_LABELS = {
     "OLD": "UC_VTOOIM",
     "База ВВ": "11"
 }
-
 GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
 
+# Кеширование
 user_cache = {"data": {}, "last": 0}
+data_cache = {"leads": None, "info": None, "timestamp": None}
 
 def get_range_dates(rtype):
+    """Получение временного диапазона"""
     tz = timezone("Europe/Moscow")
     now = datetime.now(tz)
     if rtype == "week":
         start = now - timedelta(days=now.weekday())
     elif rtype == "month":
         start = now.replace(day=1)
-    else:
+    else:  # today
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
 def load_users():
-    if time.time() - user_cache["last"] < 300:
+    """Загрузка пользователей с кешированием"""
+    if time.time() - user_cache["last"] < 300:  # 5 минут кеш
         return user_cache["data"]
-    users, start = {}, 0
+    
+    users = {}
     try:
+        start = 0
         while True:
-            r = requests.post(HOOK + "user.get.json", json={"start": start}, timeout=10).json()
-            for u in r.get("result", []):
-                users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
-            if "next" not in r: break
-            start = r["next"]
-    except Exception: pass
-    user_cache["data"], user_cache["last"] = users, time.time()
+            response = requests.post(
+                f"{HOOK}user.get.json",
+                json={"start": start},
+                timeout=10
+            ).json()
+            
+            for user in response.get("result", []):
+                users[int(user["ID"])] = f'{user["NAME"]} {user["LAST_NAME"]}'
+            
+            if "next" not in response:
+                break
+            start = response["next"]
+            
+    except Exception as e:
+        print(f"Ошибка загрузки пользователей: {e}")
+    
+    user_cache["data"] = users
+    user_cache["last"] = time.time()
     return users
 
-def fetch_leads(stage, start, end):
-    leads, offset = [], 0
+def fetch_data(endpoint, params):
+    """Общая функция для запросов к Bitrix24"""
     try:
-        while True:
-            r = requests.post(HOOK + "crm.lead.list.json", json={
-                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                "select": ["ID", "ASSIGNED_BY_ID", "DATE_CREATE", "DATE_MODIFY", "STATUS_ID"],
-                "start": offset
-            }, timeout=10).json()
-            page = r.get("result", [])
-            if not page: break
-            leads.extend(page)
-            offset = r.get("next", 0)
-            if not offset: break
-    except Exception: pass
-    return leads
+        response = requests.post(
+            f"{HOOK}{endpoint}",
+            json=params,
+            timeout=10
+        )
+        return response.json().get("result", [])
+    except Exception as e:
+        print(f"Ошибка запроса к {endpoint}: {e}")
+        return []
+
+def fetch_leads(stage, start_date, end_date):
+    """Получение лидов по стадии с фильтром по дате"""
+    params = {
+        "filter": {
+            ">=DATE_MODIFY": start_date,
+            "<=DATE_MODIFY": end_date,
+            "STATUS_ID": stage
+        },
+        "select": ["ID", "ASSIGNED_BY_ID"],
+        "start": 0
+    }
+    return fetch_data("crm.lead.list.json", params)
 
 def fetch_all_leads(stage):
-    leads, offset = [], 0
-    try:
-        while True:
-            r = requests.post(HOOK + "crm.lead.list.json", json={
-                "filter": {"STATUS_ID": stage},
-                "select": ["ID"],
-                "start": offset
-            }, timeout=10).json()
-            page = r.get("result", [])
-            if not page: break
-            leads.extend(page)
-            offset = r.get("next", 0)
-            if not offset: break
-    except Exception: pass
-    return leads
+    """Получение всех лидов стадии"""
+    params = {
+        "filter": {"STATUS_ID": stage},
+        "select": ["ID"],
+        "start": 0
+    }
+    return fetch_data("crm.lead.list.json", params)
 
-@app.route("/api/leads/by-stage")
-def leads_by_stage():
-    start, end = get_range_dates("today")
+def get_active_operators():
+    """Получение списка активных операторов"""
     users = load_users()
-    data = {}
+    return {"operators": list(users.values())}
 
+def update_cache():
+    """Обновление кеша данных"""
+    start_date, end_date = get_range_dates("today")
+    users = load_users()
+    
+    leads_data = {}
     for name, stage_id in STAGE_LABELS.items():
         if name in GROUPED_STAGES:
             leads = fetch_all_leads(stage_id)
-            data[name] = {"grouped": True, "count": len(leads)}
+            leads_data[name] = {"grouped": True, "count": len(leads)}
         else:
-            leads = fetch_leads(stage_id, start, end)
+            leads = fetch_leads(stage_id, start_date, end_date)
             stats = Counter()
             for lead in leads:
-                uid = lead.get("ASSIGNED_BY_ID")
-                if uid: stats[int(uid)] += 1
+                if uid := lead.get("ASSIGNED_BY_ID"):
+                    stats[int(uid)] += 1
+            
+            leads_data[name] = {
+                "grouped": False,
+                "details": [
+                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                    for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+                ]
+            }
+    
+    info_data = [
+        {"name": name, "count": len(fetch_all_leads(STAGE_LABELS[name]))}
+        for name in GROUPED_STAGES
+    ]
+    
+    data_cache.update({
+        "leads": leads_data,
+        "info": info_data,
+        "timestamp": datetime.now(timezone("Europe/Moscow")).strftime("%H:%M:%S")
+    })
+    return data_cache
 
-            details = [
-                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-            ]
-
-            data[name] = {"grouped": False, "details": details}
-
-    return {"range": "today", "data": data}
+# API Endpoints
+@app.route("/api/leads/by-stage")
+def leads_by_stage():
+    return jsonify({
+        "range": "today",
+        "data": update_cache()["leads"]
+    })
 
 @app.route("/api/leads/info-stages-today")
 def info_stages_today():
-    result = []
-    for name in GROUPED_STAGES:
-        stage = STAGE_LABELS[name]
-        leads = fetch_all_leads(stage)
-        result.append({"name": name, "count": len(leads)})
-    return {"range": "total", "info": result}
+    return jsonify({
+        "range": "total", 
+        "info": update_cache()["info"]
+    })
 
 @app.route("/ping")
-def ping(): return {"status": "ok"}
-
-@app.route("/clock")
-def clock():
-    tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
-    return {
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    }
-
-@app.route("/")
-def home(): return app.send_static_file("dashboard.html")
+def ping():
+    return jsonify({"status": "ok", "time": datetime.now().isoformat()})
 
 @app.route("/active_operators_list")
 def active_operators_list():
-    operators = get_active_operators()
-    return jsonify(operators)
+    return jsonify(get_active_operators())
 
-# Фоновый поток для обновлений
-def background_updates():
+@app.route("/")
+def home():
+    return app.send_static_file("dashboard.html")
+
+# WebSocket Handlers
+def background_updater():
+    """Фоновое обновление данных"""
     while True:
         try:
-            data = leads_by_stage().get_json()
-            info_data = info_stages_today().get_json()
-            socketio.emit('update', {
-                'stages': data['data'],
-                'info': info_data['info'],
-                'timestamp': datetime.now(timezone('Europe/Moscow')).strftime('%H:%M:%S')
+            cache = update_cache()
+            socketio.emit("data_update", {
+                "stages": cache["leads"],
+                "info": cache["info"],
+                "timestamp": cache["timestamp"]
             })
         except Exception as e:
-            print(f"Ошибка при обновлении: {e}")
-        eventlet.sleep(3)  # ⏱ Интервал 3 секунды
+            print(f"Ошибка в фоновом потоке: {e}")
+        eventlet.sleep(5)  # Интервал обновления
 
-@socketio.on('connect')
+@socketio.on("connect")
 def handle_connect():
-    print('Новое подключение:', request.sid)
-    if not hasattr(app, 'update_thread'):
-        app.update_thread = socketio.start_background_task(background_updates)
+    print(f"Клиент подключен: {request.sid}")
+    if not hasattr(app, "updater_thread"):
+        app.updater_thread = socketio.start_background_task(background_updater)
+    # Отправляем текущие данные сразу при подключении
+    socketio.emit("data_update", {
+        "stages": data_cache["leads"] or {},
+        "info": data_cache["info"] or [],
+        "timestamp": data_cache["timestamp"] or "00:00:00"
+    })
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    socketio.run(app, host='0.0.0.0', port=port)
+def shutdown_handler(signum, frame):
+    """Обработчик завершения работы"""
+    print("Завершение работы...")
+    if hasattr(app, "updater_thread"):
+        app.updater_thread.kill()
+    eventlet.sleep(1)
+    exit(0)
+
+if __name__ == "__main__":
+    # Инициализация кеша при старте
+    update_cache()
+    
+    # Регистрация обработчика завершения
+    signal.signal(signal.SIGTERM, shutdown_handler)
+    signal.signal(signal.SIGINT, shutdown_handler)
+    
+    # Запуск сервера
+    port = int(os.environ.get("PORT", 8080))
+    print(f"Запуск сервера на порту {port}...")
+    socketio.run(app, host="0.0.0.0", port=port)
