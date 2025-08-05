@@ -24,10 +24,10 @@ class Config:
     USER_CACHE_TIMEOUT = 300  # 5 минут
     MAX_LOGIN_ATTEMPTS = 5
     LOG_FILE = 'app.log'
-    DATA_UPDATE_INTERVAL = 60  # секунд (увеличено для стабильности)
+    DATA_UPDATE_INTERVAL = 60  # секунд
     BITRIX_TIMEOUT = 30  # увеличенный таймаут
     TARGET_USERS = {
-         3037: "Старицын Георгий",
+        3037: "Старицын Георгий",
         3025: "Гусева Екатерина",
         3019: "Фролова Екатерина",
         2919: "Петренко Дмитрий",
@@ -206,7 +206,6 @@ def get_status_history(lead_id, date_from, date_to):
             "start": -1
         }
         
-        app.logger.debug(f"Requesting history for lead {lead_id}")
         response = requests.post(
             f"{app.config['BITRIX_HOOK']}crm.timeline.list.json",
             json=params,
@@ -217,8 +216,7 @@ def get_status_history(lead_id, date_from, date_to):
         
         if "error" in data:
             error_msg = data.get("error_description", "Unknown Bitrix API error")
-            app.logger.error(f"Bitrix API timeline error: {error_msg}")
-            return []
+            raise Exception(f"Bitrix API: {error_msg}")
         
         history = []
         for item in data.get("result", []):
@@ -255,7 +253,6 @@ def fetch_leads(stage_name, date_from, date_to):
         else:
             params["filter"]["STATUS_ID"] = stage_config["id"]
         
-        app.logger.info(f"Fetching leads for stage {stage_name}")
         response = requests.post(
             f"{app.config['BITRIX_HOOK']}crm.lead.list.json",
             json=params,
@@ -266,8 +263,7 @@ def fetch_leads(stage_name, date_from, date_to):
         
         if "error" in data:
             error_msg = data.get("error_description", "Unknown Bitrix API error")
-            app.logger.error(f"Bitrix API error: {error_msg}")
-            return []
+            raise Exception(f"Bitrix API: {error_msg}")
         
         leads = data.get("result", [])
         
