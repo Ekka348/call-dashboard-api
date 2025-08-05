@@ -9,3 +9,5 @@ python-dotenv==0.21.0
 python-engineio==4.3.4
 python-socketio==5.7.2
 setuptools==65.5.1
+zope.event==4.6  # Добавьте эту строку
+zope.interface==6.0  # Также может потребоваться
