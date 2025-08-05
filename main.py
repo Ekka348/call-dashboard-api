@@ -297,18 +297,6 @@ def dashboard():
         return render_template("admin_dashboard.html")
     return render_template("user_dashboard.html")
 
-@app.route("/admin/data")
-@admin_required
-def admin_data():
-    with cache_lock:
-        return jsonify({
-            "leads_by_stage": data_cache["leads_by_stage"],
-            "total_leads": data_cache["total_leads"],
-            "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
-            "current_month": data_cache["current_month"],
-            "error": data_cache["last_error"]
-        })
-
 @app.route("/debug-bitrix")
 def debug_bitrix():
     try:
