@@ -368,6 +368,34 @@ def handle_connect():
                 'error': data_cache["last_error"]
             })
 
+@app.route("/debug-bitrix")
+def debug_bitrix():
+    try:
+        # Тест 1: Проверка пользователей
+        users = load_users()
+        
+        # Тест 2: Проверка лидов для каждого этапа
+        stage_results = {}
+        for stage_name, stage_id in STAGE_LABELS.items():
+            leads, _ = fetch_leads(stage_id)
+            stage_results[stage_name] = {
+                "count": len(leads),
+                "sample": leads[0] if leads else None
+            }
+        
+        return jsonify({
+            "bitrix_hook": app.config['BITRIX_HOOK'],
+            "users_count": len(users),
+            "users_sample": list(users.values())[0] if users else None,
+            "stages": stage_results,
+            "cache_status": {
+                "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%Y-%m-%d %H:%M:%S"),
+                "has_data": any(data_cache["leads_by_stage"].values())
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Запуск фонового потока
 Thread(target=update_cache, daemon=True).start()
 
