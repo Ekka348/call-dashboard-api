@@ -1,1 +1,1 @@
-web: gunicorn --worker-class gevent --bind :$PORT main:app
+web: gunicorn -k gevent -w 4 -b 0.0.0.0:$PORT main:app
