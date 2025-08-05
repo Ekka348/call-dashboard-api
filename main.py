@@ -231,12 +231,14 @@ def fetch_leads(stage_name, date_from, date_to):
                 ">=DATE_MODIFY": date_from,
                 "<=DATE_MODIFY": date_to
             },
-            "select": ["ID", "ASSIGNED_BY_ID", "STATUS_ID", "DATE_MODIFY"],
+            "select": ["ID", "ASSIGNED_BY_ID", "STATUS_ID", "DATE_MODIFY", "STATUS_SEMANTIC_ID"],
             "start": -1
         }
         
         if stage_name == "Перезвонить":
-            params["filter"]["STATUS_SEMANTIC_ID"] = "P"
+            # Для стадии "Перезвонить" используем точный фильтр
+            params["filter"]["STATUS_ID"] = stage_config["id"]
+            params["filter"]["STATUS_SEMANTIC_ID"] = stage_config["semantic"]
         else:
             params["filter"]["STATUS_ID"] = stage_config["id"]
         
@@ -254,12 +256,24 @@ def fetch_leads(stage_name, date_from, date_to):
         leads = data.get("result", [])
         
         if stage_name == "Перезвонить":
+            # Дополнительная проверка даты изменения для "Перезвонить"
             valid_leads = []
             for lead in leads:
-                history, _ = get_status_history(lead["ID"], date_from, date_to)
-                if any(h["STATUS_ID"] == stage_config["id"] for h in history):
-                    valid_leads.append(lead)
+                try:
+                    lead_date = datetime.strptime(lead["DATE_MODIFY"], "%Y-%m-%dT%H:%M:%S%z")
+                    filter_from = datetime.strptime(date_from, "%Y-%m-%d %H:%M:%S").replace(tzinfo=lead_date.tzinfo)
+                    filter_to = datetime.strptime(date_to, "%Y-%m-%d %H:%M:%S").replace(tzinfo=lead_date.tzinfo)
+                    
+                    if filter_from <= lead_date <= filter_to:
+                        valid_leads.append(lead)
+                except Exception as e:
+                    log_error(f"Error processing lead date {lead['ID']}", e)
+                    continue
+                    
+            app.logger.debug(f"Found {len(valid_leads)} valid leads for 'Перезвонить'")
             return valid_leads
+            
+        app.logger.debug(f"Found {len(leads)} leads for stage {stage_name}")
         return leads
         
     except requests.exceptions.RequestException as e:
@@ -298,19 +312,19 @@ def update_cache():
                     operator_id = int(lead["ASSIGNED_BY_ID"])
                     operator_stats[operator_id] += 1
                 
-                stage_data = [
-                    {
-                        "operator": users.get(user_id, {}).get("name", f"ID {user_id}"),
+                # Создаем записи для всех операторов, даже с нулевыми значениями
+                stage_data = []
+                for user_id, user_name in app.config['TARGET_USERS'].items():
+                    stage_data.append({
+                        "operator": user_name,
                         "count": operator_stats.get(user_id, 0),
                         "user_id": user_id,
-                        "email": users.get(user_id, {}).get("email", "")
-                    }
-                    for user_id in app.config['TARGET_USERS'].keys()
-                ]
+                        "email": f"{user_name.split()[0].lower()}.{user_name.split()[1].lower()}@example.com"
+                    })
                 
                 stage_data.sort(key=lambda x: (-x["count"], x["operator"]))
                 leads_by_stage[stage_name] = stage_data
-                total_leads += len(leads)
+                total_leads += sum(operator_stats.values())
             
             with cache_lock:
                 data_cache.update({
@@ -373,11 +387,15 @@ def admin_data():
     date_from, date_to, period_name = get_date_range(period)
     
     with cache_lock:
+        # Принудительно обновляем данные перед отправкой
+        update_cache()
+        
         filtered_data = {
             "leads_by_stage": {},
             "total_leads": 0,
             "last_updated": data_cache["last_updated"],
-            "current_month": period_name
+            "current_month": period_name,
+            "raw_data": data_cache  # Для отладки
         }
         
         for stage, items in data_cache["leads_by_stage"].items():
