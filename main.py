@@ -27,7 +27,6 @@ class Config:
     TARGET_USERS = {
         3037: "Старицын Георгий",
         3025: "Гусева Екатерина",
-        # ... остальные пользователи ...
         29: "Носарев Алексей"
     }
     STAGE_LABELS = {
@@ -117,8 +116,7 @@ def get_date_range(period='month'):
         period_name = f"{date_from.strftime('%d.%m')}-{date_to.strftime('%d.%m.%Y')}"
     else:
         date_from = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day = (now.replace(day=28) + timedelta(days=4)
-        last_day = last_day.replace(day=1) - timedelta(days=1)
+        last_day = (now.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
         date_to = last_day.replace(hour=23, minute=59, second=59, microsecond=999)
         period_name = date_from.strftime("%B %Y")
     
@@ -158,13 +156,13 @@ def get_status_history(lead_id, date_from, date_to):
             {"STATUS_ID": item["TO_VALUE"], "DATE": item["DATE_CREATE"]}
             for item in data.get("result", [])
             if item.get("FIELD") == "STATUS_ID"
-        ]
+        ], time.time()
     except requests.exceptions.RequestException as e:
         log_error(f"Request error getting history for lead {lead_id}", e)
-        return []
+        return [], time.time()
     except Exception as e:
         log_error(f"Error getting history for lead {lead_id}", e)
-        return []
+        return [], time.time()
 
 def fetch_leads(stage_name, date_from, date_to):
     try:
@@ -198,13 +196,12 @@ def fetch_leads(stage_name, date_from, date_to):
         leads = data.get("result", [])
         
         if stage_name == "Перезвонить":
-            return [
-                lead for lead in leads
-                if any(
-                    h["STATUS_ID"] == stage_config["id"]
-                    for h in get_status_history(lead["ID"], date_from, date_to)
-                )
-            ]
+            valid_leads = []
+            for lead in leads:
+                history, _ = get_status_history(lead["ID"], date_from, date_to)
+                if any(h["STATUS_ID"] == stage_config["id"] for h in history):
+                    valid_leads.append(lead)
+            return valid_leads
         return leads
         
     except requests.exceptions.RequestException as e:
@@ -312,13 +309,29 @@ def dashboard():
 @app.route("/admin/data")
 @admin_required
 def admin_data():
+    period = request.args.get('period', 'month')
+    data_type = request.args.get('dataType', 'all')
+    
+    date_from, date_to, period_name = get_date_range(period)
+    
     with cache_lock:
-        return jsonify({
-            "leads_by_stage": data_cache["leads_by_stage"],
-            "total_leads": data_cache["total_leads"],
-            "last_updated": datetime.fromtimestamp(data_cache["last_updated"]).strftime("%H:%M:%S"),
-            "current_month": data_cache["current_month"]
-        })
+        filtered_data = {
+            "leads_by_stage": {},
+            "total_leads": 0,
+            "last_updated": data_cache["last_updated"],
+            "current_month": period_name
+        }
+        
+        for stage, items in data_cache["leads_by_stage"].items():
+            filtered_items = []
+            for item in items:
+                if data_type == 'all' or item['count'] > 0:
+                    filtered_items.append(item)
+            
+            filtered_data["leads_by_stage"][stage] = filtered_items
+            filtered_data["total_leads"] += sum(item['count'] for item in filtered_items)
+        
+        return jsonify(filtered_data)
 
 @app.route("/ping")
 def ping():
