@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Leads Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
   <style>
     :root {
       --primary: #4285f4;
@@ -22,6 +23,7 @@
     .container {
       max-width: 1400px;
       margin: 0 auto;
+      position: relative;
     }
     
     .header {
@@ -72,6 +74,8 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 20px;
+      min-height: 100px;
+      transition: all 0.3s ease;
     }
     
     .card {
@@ -79,6 +83,30 @@
       border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
       overflow: hidden;
+      cursor: grab;
+      user-select: none;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .card:active {
+      cursor: grabbing;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .card.dragging {
+      opacity: 0.8;
+      transform: scale(1.02);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    
+    .card:hover {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 rgba(0,0,0,0.1); }
+      50% { box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+      100% { box-shadow: 0 0 0 rgba(0,0,0,0.1); }
     }
     
     .card-header {
@@ -206,6 +234,25 @@
       margin-bottom: 0;
     }
     
+    .reset-btn {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      padding: 8px 16px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 1000;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    
+    .reset-btn:hover {
+      background: #3367d6;
+    }
+    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -215,6 +262,12 @@
         max-width: 90%;
         left: 5%;
         right: 5%;
+      }
+      
+      .reset-btn {
+        bottom: 10px;
+        left: 10px;
+        padding: 6px 12px;
       }
     }
   </style>
@@ -230,8 +283,8 @@
       </div>
     </div>
     
-    <div class="dashboard-grid" id="content">
-      <div class="card">
+    <div class="dashboard-grid" id="dashboard-grid">
+      <div class="card" id="agreement-card">
         <div class="card-header" id="agreement-header">
           <span>На согласовании</span>
           <span class="card-count" id="agreement-count">0</span>
@@ -241,7 +294,7 @@
         </div>
       </div>
       
-      <div class="card">
+      <div class="card" id="callback-card">
         <div class="card-header" id="callback-header">
           <span>Перезвонить</span>
           <span class="card-count" id="callback-count">0</span>
@@ -251,7 +304,7 @@
         </div>
       </div>
       
-      <div class="card">
+      <div class="card" id="invited-card">
         <div class="card-header" id="invited-header">
           <span>Приглашен к рекрутеру</span>
           <span class="card-count" id="invited-count">0</span>
@@ -261,6 +314,8 @@
         </div>
       </div>
     </div>
+    
+    <button id="reset-layout" class="reset-btn">↻ Сбросить расположение</button>
   </div>
 
   <script>
@@ -290,6 +345,56 @@
     let retryDelay = 1000;
     let isFirstLoad = true;
     
+    // Инициализация перетаскивания карточек
+    function initSortable() {
+      const dashboardGrid = document.getElementById('dashboard-grid');
+      
+      new Sortable(dashboardGrid, {
+        animation: 150,
+        ghostClass: 'dragging',
+        handle: '.card-header',
+        onStart: function(evt) {
+          evt.item.classList.add('dragging');
+        },
+        onEnd: function(evt) {
+          evt.item.classList.remove('dragging');
+          saveDashboardLayout();
+        },
+        touchStartThreshold: 5,
+        delay: 100,
+        delayOnTouchOnly: true
+      });
+    }
+    
+    // Сохранение положения карточек
+    function saveDashboardLayout() {
+      const dashboardGrid = document.getElementById('dashboard-grid');
+      const layout = Array.from(dashboardGrid.children).map(card => card.id);
+      localStorage.setItem('dashboardLayout', JSON.stringify(layout));
+    }
+    
+    // Восстановление положения карточек
+    function loadDashboardLayout() {
+      const dashboardGrid = document.getElementById('dashboard-grid');
+      const savedLayout = localStorage.getItem('dashboardLayout');
+      
+      if (savedLayout) {
+        const layout = JSON.parse(savedLayout);
+        
+        // Создаем временный массив для правильного порядка
+        const orderedCards = [];
+        layout.forEach(cardId => {
+          const card = document.getElementById(cardId);
+          if (card) orderedCards.push(card);
+        });
+        
+        // Переставляем карточки
+        orderedCards.forEach(card => {
+          dashboardGrid.appendChild(card);
+        });
+      }
+    }
+    
     // Функция для получения данных с сервера
     async function fetchData() {
       try {
@@ -311,12 +416,12 @@
           isFirstLoad = false;
         }
         
-        retryDelay = 1000; // Сброс задержки при успехе
+        retryDelay = 1000;
         return true;
       } catch (error) {
         console.error('Error fetching data:', error);
         updateConnectionStatus(false);
-        retryDelay = Math.min(retryDelay * 2, 60000); // Увеличиваем задержку до максимум 60 секунд
+        retryDelay = Math.min(retryDelay * 2, 60000);
         return false;
       }
     }
@@ -500,7 +605,19 @@
     }
     
     // Инициализация
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', function() {
+      // Инициализация перетаскивания
+      initSortable();
+      
+      // Загрузка сохраненного расположения
+      loadDashboardLayout();
+      
+      // Кнопка сброса расположения
+      document.getElementById('reset-layout').addEventListener('click', function() {
+        localStorage.removeItem('dashboardLayout');
+        location.reload();
+      });
+      
       // Первая загрузка данных
       fetchData();
       
