@@ -65,6 +65,8 @@
     .last-update {
       font-size: 0.85rem;
       color: #666;
+      min-width: 80px;
+      display: inline-block;
     }
     
     .dashboard-grid {
@@ -173,7 +175,7 @@
       <div class="status-indicator">
         <div class="indicator" id="connection-status"></div>
         <span id="status-text">Connecting...</span>
-        <span class="last-update" id="last-update"></span>
+        <span class="last-update" id="last-update">-</span>
       </div>
     </div>
     
@@ -234,7 +236,7 @@
     
     const HIGHLIGHT_DURATION = 3000;
     
-    // Инициализация Socket.IO с увеличенными таймаутами
+    // Инициализация Socket.IO
     const socket = io({
       reconnection: true,
       reconnectionAttempts: 5,
@@ -271,6 +273,7 @@
     socket.on('init', (data) => {
       console.log('Initial data received');
       updateDashboard(data);
+      updateLastUpdate(data.timestamp);
     });
     
     socket.on('full_update', (data) => {
@@ -286,8 +289,8 @@
     }
     
     function updateLastUpdate(timestamp) {
-      const date = new Date(timestamp * 1000);
-      lastUpdate.textContent = date.toLocaleTimeString();
+      // Просто отображаем полученное время как есть (уже отформатировано сервером)
+      lastUpdate.textContent = timestamp || '-';
     }
     
     function showLoading() {
