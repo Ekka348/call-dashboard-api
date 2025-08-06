@@ -4,58 +4,181 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Leads Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
   <style>
-    /* Previous styles remain the same, just add these new ones */
-    
-    /* Remove scroll from card bodies */
-    .card-body {
-      padding: 20px;
-      overflow: visible;
-      max-height: none;
+    :root {
+      --primary: #4285f4;
+      --success: #34a853;
+      --warning: #fbbc05;
+      --danger: #ea4335;
     }
     
-    /* Make tables full width without scroll */
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f7fa;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ccc;
+    }
+    
+    .indicator.connected {
+      background-color: var(--success);
+      animation: pulse 2s infinite;
+    }
+    
+    .indicator.disconnected {
+      background-color: var(--danger);
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
+    .last-update {
+      font-size: 0.85rem;
+      color: #666;
+      min-width: 80px;
+      display: inline-block;
+    }
+    
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+    
+    .card-header {
+      padding: 15px 20px;
+      background-color: var(--primary);
+      color: white;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .card-count {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+    
+    .card-body {
+      padding: 20px;
+    }
+    
     table {
       width: 100%;
       border-collapse: collapse;
-      table-layout: fixed;
     }
     
-    /* Operator selector styles */
-    .operator-selector {
-      margin: 15px 0;
+    th {
+      text-align: left;
+      padding: 8px 10px;
+      background-color: #f8f9fa;
+      font-weight: 500;
+      font-size: 0.85rem;
+      color: #666;
     }
     
-    .operator-selector select {
-      width: 100%;
-      padding: 8px;
-      border-radius: 4px;
-      border: 1px solid var(--dark-gray);
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #f0f0f0;
     }
     
-    /* Chart container improvements */
-    .chart-container {
-      flex: 1;
-      min-width: 300px;
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-      height: auto;
-      min-height: 350px;
-    }
-    
-    .chart-wrapper {
+    .count-cell {
       position: relative;
-      height: 300px;
-      width: 100%;
+      min-width: 80px;
     }
     
-    /* Improved notifications */
+    .count-value {
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+    
+    .count-update {
+      position: absolute;
+      right: 0;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background-color: #ffeb3b;
+      color: #000;
+      opacity: 0;
+      transform: translateY(-20px);
+      animation: count-update-fade 2s forwards;
+    }
+    
+    @keyframes count-update-fade {
+      0% { opacity: 1; transform: translateY(-20px); }
+      70% { opacity: 1; transform: translateY(-30px); }
+      100% { opacity: 0; transform: translateY(-40px); }
+    }
+    
+    .highlight-update {
+      animation: highlight-update 1.5s ease-out;
+    }
+    
+    @keyframes highlight-update {
+      0% { background-color: rgba(255, 235, 59, 0.5); }
+      100% { background-color: transparent; }
+    }
+    
+    .diff-up {
+      background-color: rgba(76, 175, 80, 0.1);
+    }
+    
+    .diff-down {
+      background-color: rgba(244, 67, 54, 0.1);
+    }
+    
+    .loading {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .empty {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
     .changes-notification {
       position: fixed;
       bottom: 20px;
@@ -65,151 +188,160 @@
       border-radius: 5px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       z-index: 1000;
-      max-width: 350px;
-      transition: all 0.3s ease;
-      border-left: 4px solid var(--primary);
+      max-width: 300px;
+      transition: opacity 0.5s;
     }
     
-    .notification-stage {
-      font-weight: bold;
+    .changes-notification.fade-out {
+      opacity: 0;
+    }
+    
+    .changes-notification h4 {
+      margin-top: 0;
       color: var(--primary);
     }
     
-    .notification-operator {
-      font-weight: bold;
+    .changes-notification ul {
+      padding-left: 20px;
+      margin-bottom: 0;
     }
     
-    .notification-count {
-      font-weight: bold;
-      color: var(--success);
-    }
-    
-    .notification-diff {
-      font-weight: bold;
-      color: var(--danger);
-    }
-    
-    .notification-diff.positive {
-      color: var(--success);
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .changes-notification {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
+      }
     }
   </style>
 </head>
 <body>
-  <!-- Previous HTML remains the same until the card-body sections -->
-  
-  <div class="card-body">
-    <div class="operator-selector" id="agreement-selector" style="display:none;">
-      <select onchange="filterOperators('agreement', this.value)">
-        <option value="">Все операторы</option>
-      </select>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Real-Time Leads Dashboard</h1>
+      <div class="status-indicator">
+        <div class="indicator" id="connection-status"></div>
+        <span id="status-text">Connecting...</span>
+        <span class="last-update" id="last-update">-</span>
+      </div>
     </div>
-    <div id="agreement-content" class="loading">Загрузка...</div>
-  </div>
-  
-  <!-- Repeat for other cards -->
-  <div class="card-body">
-    <div class="operator-selector" id="callback-selector" style="display:none;">
-      <select onchange="filterOperators('callback', this.value)">
-        <option value="">Все операторы</option>
-      </select>
+    
+    <div class="dashboard-grid" id="content">
+      <div class="card">
+        <div class="card-header" id="agreement-header">
+          <span>На согласовании</span>
+          <span class="card-count" id="agreement-count">0</span>
+        </div>
+        <div class="card-body">
+          <div id="agreement-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header" id="callback-header">
+          <span>Перезвонить</span>
+          <span class="card-count" id="callback-count">0</span>
+        </div>
+        <div class="card-body">
+          <div id="callback-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header" id="invited-header">
+          <span>Приглашен к рекрутеру</span>
+          <span class="card-count" id="invited-count">0</span>
+        </div>
+        <div class="card-body">
+          <div id="invited-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
     </div>
-    <div id="callback-content" class="loading">Загрузка...</div>
   </div>
-  
-  <div class="card-body">
-    <div class="operator-selector" id="invited-selector" style="display:none;">
-      <select onchange="filterOperators('invited', this.value)">
-        <option value="">Все операторы</option>
-      </select>
-    </div>
-    <div id="invited-content" class="loading">Загрузка...</div>
-  </div>
-
-  <!-- Rest of the HTML remains the same -->
 
   <script>
-    // Add these new functions to the existing script
+    const STAGES = {
+      "На согласовании": { 
+        id: "agreement", 
+        element: "agreement-content", 
+        count: "agreement-count", 
+        header: "agreement-header" 
+      },
+      "Перезвонить": { 
+        id: "callback", 
+        element: "callback-content", 
+        count: "callback-count", 
+        header: "callback-header" 
+      },
+      "Приглашен к рекрутеру": { 
+        id: "invited", 
+        element: "invited-content", 
+        count: "invited-count", 
+        header: "invited-header" 
+      }
+    };
     
-    // Filter operators in a stage
-    function filterOperators(stage, operatorId) {
-      const container = document.getElementById(`${stage}-content`);
-      const rows = container.querySelectorAll('tbody tr');
-      
-      rows.forEach(row => {
-        const rowOperatorId = row.querySelector('.operator-name').getAttribute('data-id');
-        if (!operatorId || rowOperatorId === operatorId) {
-          row.style.display = '';
-        } else {
-          row.style.display = 'none';
-        }
-      });
-    }
+    let lastUpdateTime = 0;
+    const POLLING_INTERVAL = 60000; // 60 секунд
+    let retryDelay = 1000;
+    let isFirstLoad = true;
     
-    // Update operator selectors
-    function updateOperatorSelectors(stageData) {
-      for (const [stageName, stageConfig] of Object.entries(STAGES)) {
-        const selector = document.getElementById(`${stageConfig.id}-selector`);
-        const select = selector.querySelector('select');
+    // Функция для получения данных с сервера
+    async function fetchData() {
+      try {
+        const response = await fetch('/api/leads/by-stage?t=' + Date.now(), {
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
         
-        // Clear existing options except the first one
-        while (select.options.length > 1) {
-          select.remove(1);
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const data = await response.json();
+        updateDashboard(data);
+        lastUpdateTime = Date.now();
+        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+        
+        if (isFirstLoad) {
+          updateConnectionStatus(true);
+          isFirstLoad = false;
         }
         
-        // Add new options if data exists
-        if (stageData.data[stageName]?.details) {
-          stageData.data[stageName].details.forEach(operator => {
-            const option = document.createElement('option');
-            option.value = operator.id;
-            option.textContent = operator.operator;
-            select.appendChild(option);
-          });
-          
-          // Show selector if there are operators
-          selector.style.display = stageData.data[stageName].details.length > 0 ? 'block' : 'none';
-        }
+        retryDelay = 1000; // Сброс задержки при успехе
+        return true;
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        updateConnectionStatus(false);
+        retryDelay = Math.min(retryDelay * 2, 60000); // Увеличиваем задержку до максимум 60 секунд
+        return false;
       }
     }
     
-    // Modified showChangesNotification function
-    function showChangesNotification(changes) {
-      if (changes.length === 0) return;
-      
-      const notification = document.createElement('div');
-      notification.className = 'changes-notification';
-      
-      let html = '<h4>Последние изменения:</h4><ul>';
-      changes.slice(0, 5).forEach(change => {
-        const diffClass = change.diff > 0 ? 'positive' : '';
-        html += `
-          <li>
-            <span class="notification-stage">${change.stage}</span>:
-            <span class="notification-operator">${change.operator}</span>
-            <span class="notification-count">${change.new_count}</span>
-            (<span class="notification-diff ${diffClass}">${change.diff > 0 ? '+' : ''}${change.diff}</span>)
-          </li>
-        `;
-      });
-      html += '</ul>';
-      
-      notification.innerHTML = html;
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.classList.add('fade-out');
-        setTimeout(() => notification.remove(), 500);
-      }, 8000); // Show for 8 seconds
+    // Функция для проверки обновлений
+    async function checkForUpdates() {
+      const success = await fetchData();
+      const delay = success ? POLLING_INTERVAL : retryDelay;
+      setTimeout(checkForUpdates, delay);
     }
     
-    // Modify the updateDashboard function to call updateOperatorSelectors
+    // Функции обновления UI
+    function updateConnectionStatus(connected) {
+      const connectionStatus = document.getElementById('connection-status');
+      const statusText = document.getElementById('status-text');
+      
+      connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
+      statusText.textContent = connected ? 'Connected (Polling)' : 'Disconnected';
+    }
+    
     function updateDashboard(data) {
       if (!data || !data.data) {
         console.error('Invalid data received');
-        showErrorNotification('Received invalid data from server');
         return;
       }
-      
-      updateOperatorSelectors(data);
       
       if (data.changes && data.changes.length > 0) {
         showChangesNotification(data.changes);
@@ -223,58 +355,158 @@
       }
     }
     
-    // Modify the initTrendChart function for better resizing
-    function initTrendChart() {
-      const ctx = document.getElementById('trendChart').getContext('2d');
+    function updateStage(stageName, config, data) {
+      const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
       
-      trendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: []
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'top'
-            },
-            tooltip: {
-              mode: 'index',
-              intersect: false
+      // Обновляем общее количество
+      const countElement = document.getElementById(config.count);
+      if (parseInt(countElement.textContent) !== totalCount) {
+        countElement.textContent = totalCount;
+      }
+      
+      const container = document.getElementById(config.element);
+      
+      if (!data.details || data.details.length === 0) {
+        if (!container.querySelector('.empty')) {
+          container.innerHTML = '<div class="empty">Нет данных</div>';
+        }
+        return;
+      }
+      
+      // Если таблицы нет - создаем ее
+      if (!container.querySelector('table')) {
+        container.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Оператор</th>
+                <th>Количество</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        `;
+      }
+      
+      const tbody = container.querySelector('tbody');
+      const existingRows = Array.from(tbody.querySelectorAll('tr'));
+      const existingData = {};
+      
+      // Собираем текущие данные
+      existingRows.forEach(row => {
+        const operator = row.cells[0].textContent;
+        const countValue = row.cells[1].querySelector('.count-value');
+        const count = countValue ? parseInt(countValue.textContent) : 0;
+        existingData[operator] = {
+          element: row,
+          count: count
+        };
+      });
+      
+      // Обновляем или добавляем строки
+      data.details.forEach(item => {
+        const operator = item.operator;
+        const newCount = item.count;
+        
+        if (existingData[operator]) {
+          // Обновляем существующую строку
+          const row = existingData[operator].element;
+          const oldCount = existingData[operator].count;
+          
+          if (oldCount !== newCount) {
+            const countCell = row.cells[1];
+            let countValue = countCell.querySelector('.count-value');
+            
+            if (!countValue) {
+              countValue = document.createElement('span');
+              countValue.className = 'count-value';
+              countCell.innerHTML = '';
+              countCell.appendChild(countValue);
             }
-          },
-          scales: {
-            y: {
-              beginAtZero: true
-            },
-            x: {
-              ticks: {
-                autoSkip: true,
-                maxRotation: 0,
-                minRotation: 0
-              }
-            }
-          },
-          animation: {
-            duration: 1000
-          },
-          elements: {
-            line: {
-              tension: 0.1
-            }
+            
+            // Анимация изменения числа
+            countValue.textContent = newCount;
+            countValue.classList.add('highlight-update');
+            setTimeout(() => countValue.classList.remove('highlight-update'), 1500);
+            
+            // Показываем разницу
+            const diff = newCount - oldCount;
+            const updateBadge = document.createElement('span');
+            updateBadge.className = 'count-update';
+            updateBadge.textContent = (diff > 0 ? '+' : '') + diff;
+            countCell.appendChild(updateBadge);
+            
+            // Подсветка строки
+            row.classList.add(diff > 0 ? 'diff-up' : 'diff-down');
+            setTimeout(() => {
+              row.classList.remove('diff-up', 'diff-down');
+            }, 1500);
           }
+        } else {
+          // Добавляем новую строку
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${operator}</td>
+            <td class="count-cell">
+              <span class="count-value">${newCount}</span>
+            </td>
+          `;
+          tbody.appendChild(row);
+          
+          // Анимация для новой строки
+          row.classList.add('highlight-update');
+          setTimeout(() => row.classList.remove('highlight-update'), 1500);
         }
       });
       
-      // Handle window resize
-      window.addEventListener('resize', function() {
-        if (trendChart) {
-          trendChart.resize();
+      // Удаляем отсутствующих операторов
+      existingRows.forEach(row => {
+        const operator = row.cells[0].textContent;
+        if (!data.details.some(item => item.operator === operator)) {
+          row.classList.add('diff-down');
+          setTimeout(() => row.remove(), 1000);
         }
       });
+      
+      // Сортируем строки по количеству (по убыванию)
+      const sortedRows = Array.from(tbody.querySelectorAll('tr'))
+        .sort((a, b) => {
+          const aCount = parseInt(a.cells[1].querySelector('.count-value')?.textContent || 0);
+          const bCount = parseInt(b.cells[1].querySelector('.count-value')?.textContent || 0);
+          return bCount - aCount;
+        });
+      
+      sortedRows.forEach(row => tbody.appendChild(row));
     }
+
+    function showChangesNotification(changes) {
+      const notification = document.createElement('div');
+      notification.className = 'changes-notification';
+      
+      let html = '<h4>Изменения:</h4><ul>';
+      changes.forEach(change => {
+        html += `<li>${change.operator}: ${change.old_count} → ${change.new_count} (${change.diff > 0 ? '+' : ''}${change.diff})</li>`;
+      });
+      html += '</ul>';
+      
+      notification.innerHTML = html;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 500);
+      }, 5000);
+    }
+    
+    // Инициализация
+    document.addEventListener('DOMContentLoaded', () => {
+      // Первая загрузка данных
+      fetchData();
+      
+      // Запускаем периодическую проверку
+      setTimeout(checkForUpdates, POLLING_INTERVAL);
+    });
   </script>
 </body>
 </html>
