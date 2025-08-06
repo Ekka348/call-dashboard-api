@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Leads Dashboard</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
   <style>
     :root {
       --primary: #4285f4;
@@ -286,75 +285,66 @@
       }
     };
     
-    // Инициализация Socket.IO
-    const socket = io({
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      transports: ['websocket']
-    });
+    let lastUpdateTime = 0;
+    const POLLING_INTERVAL = 60000; // 60 секунд
+    let retryDelay = 1000;
+    let isFirstLoad = true;
     
-    const connectionStatus = document.getElementById('connection-status');
-    const statusText = document.getElementById('status-text');
-    const lastUpdate = document.getElementById('last-update');
-    
-    // Обработчики событий Socket.IO
-    socket.on('connect', () => {
-      console.log('Connected to server');
-      updateConnectionStatus(true);
-      statusText.textContent = 'Connected';
-      lastUpdate.textContent = new Date().toLocaleTimeString();
-    });
-    
-    socket.on('disconnect', (reason) => {
-      console.log('Disconnected:', reason);
-      updateConnectionStatus(false);
-      statusText.textContent = 'Disconnected';
-      showLoading();
-    });
-    
-    socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
-      updateConnectionStatus(false);
-      statusText.textContent = 'Connection error';
-      showLoading();
-    });
-    
-    socket.on('init', (data) => {
-      console.log('Initial data received');
-      updateDashboard(data);
-    });
-    
-    socket.on('full_update', (data) => {
-      console.log('Data update received');
-      if (data.changes && data.changes.length > 0) {
-        showChangesNotification(data.changes);
+    // Функция для получения данных с сервера
+    async function fetchData() {
+      try {
+        const response = await fetch('/api/leads/by-stage?t=' + Date.now(), {
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const data = await response.json();
+        updateDashboard(data);
+        lastUpdateTime = Date.now();
+        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+        
+        if (isFirstLoad) {
+          updateConnectionStatus(true);
+          isFirstLoad = false;
+        }
+        
+        retryDelay = 1000; // Сброс задержки при успехе
+        return true;
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        updateConnectionStatus(false);
+        retryDelay = Math.min(retryDelay * 2, 60000); // Увеличиваем задержку до максимум 60 секунд
+        return false;
       }
-      updateDashboard(data);
-      lastUpdate.textContent = data.timestamp || new Date().toLocaleTimeString();
-    });
+    }
+    
+    // Функция для проверки обновлений
+    async function checkForUpdates() {
+      const success = await fetchData();
+      const delay = success ? POLLING_INTERVAL : retryDelay;
+      setTimeout(checkForUpdates, delay);
+    }
     
     // Функции обновления UI
     function updateConnectionStatus(connected) {
+      const connectionStatus = document.getElementById('connection-status');
+      const statusText = document.getElementById('status-text');
+      
       connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
-    }
-    
-    function showLoading() {
-      Object.values(STAGES).forEach(config => {
-        const container = document.getElementById(config.element);
-        if (!container.querySelector('.loading')) {
-          container.innerHTML = '<div class="loading">Загрузка...</div>';
-        }
-      });
+      statusText.textContent = connected ? 'Connected (Polling)' : 'Disconnected';
     }
     
     function updateDashboard(data) {
       if (!data || !data.data) {
         console.error('Invalid data received');
-        showLoading();
         return;
+      }
+      
+      if (data.changes && data.changes.length > 0) {
+        showChangesNotification(data.changes);
       }
       
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
@@ -511,28 +501,12 @@
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      socket.connect();
+      // Первая загрузка данных
+      fetchData();
       
-      // Fallback на HTTP запрос если WebSocket не подключится
-      setTimeout(() => {
-        if (!socket.connected) {
-          fetchInitialData();
-        }
-      }, 3000);
+      // Запускаем периодическую проверку
+      setTimeout(checkForUpdates, POLLING_INTERVAL);
     });
-    
-    // Функция для получения данных через API
-    async function fetchInitialData() {
-      try {
-        const response = await fetch('/api/leads/by-stage');
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
-        updateDashboard(data);
-      } catch (error) {
-        console.error('Error fetching initial data:', error);
-        setTimeout(fetchInitialData, 5000);
-      }
-    }
   </script>
 </body>
 </html>
