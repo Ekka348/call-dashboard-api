@@ -55,6 +55,10 @@
       animation: pulse 2s infinite;
     }
     
+    .indicator.disconnected {
+      background-color: var(--danger);
+    }
+    
     @keyframes pulse {
       0% { opacity: 1; }
       50% { opacity: 0.5; }
@@ -132,7 +136,7 @@
     
     tr.highlight {
       background-color: #f8fff0;
-      transition: background-color 1.5s;
+      transition: all 0.5s ease;
     }
     
     .info-section {
@@ -154,6 +158,12 @@
       background: #f8f9fa;
       border-radius: 8px;
       text-align: center;
+      transition: all 0.3s ease;
+    }
+    
+    .info-item.highlight {
+      background-color: #e8f5e9;
+      transform: scale(1.05);
     }
     
     .info-item h3 {
@@ -172,6 +182,21 @@
       color: #999;
       text-align: center;
       padding: 20px;
+    }
+    
+    .empty {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .fade-out {
+      opacity: 1;
+      transition: opacity 0.5s ease-out;
+    }
+    
+    .fade-out {
+      opacity: 0;
     }
     
     @media (max-width: 768px) {
@@ -271,6 +296,7 @@
       console.log('Connected to server with ID:', socket.id);
       updateConnectionStatus(true);
       lastUpdate.textContent = new Date().toLocaleTimeString();
+      socket.emit('request_full_update');
     });
     
     socket.on('disconnect', (reason) => {
@@ -278,7 +304,6 @@
       updateConnectionStatus(false);
       
       if (reason === 'io server disconnect') {
-        // Переподключение при разрыве со стороны сервера
         socket.connect();
       }
     });
@@ -293,9 +318,14 @@
       updateDashboard(data);
     });
     
-    socket.on('update', (data) => {
-      console.log('Data update received');
+    socket.on('full_update', (data) => {
+      console.log('Full data update received');
       updateDashboard(data);
+      lastUpdate.textContent = new Date().toLocaleTimeString();
+    });
+    
+    socket.on('heartbeat', (data) => {
+      console.log('Server heartbeat', data.timestamp);
       lastUpdate.textContent = new Date().toLocaleTimeString();
     });
     
@@ -318,10 +348,8 @@
         return;
       }
       
-      // Обновляем инфо-стадии
       updateInfoStages(data.data);
       
-      // Обновляем данные по стадиям
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
         const stageData = data.data[stageName];
         if (stageData) {
@@ -331,35 +359,107 @@
     }
     
     function updateInfoStages(data) {
-      infoStagesContainer.innerHTML = '';
-      
+      const items = {};
       INFO_STAGES.forEach(stage => {
         const stageData = data[stage];
         if (!stageData) return;
         
-        const item = document.createElement('div');
-        item.className = 'info-item';
-        item.innerHTML = `
-          <h3>${stage}</h3>
-          <div class="info-value">${stageData.count || 0}</div>
-        `;
-        infoStagesContainer.appendChild(item);
+        const itemId = `info-item-${stage}`;
+        let item = document.getElementById(itemId);
+        
+        if (!item) {
+          item = document.createElement('div');
+          item.className = 'info-item';
+          item.id = itemId;
+          item.innerHTML = `
+            <h3>${stage}</h3>
+            <div class="info-value">${stageData.count || 0}</div>
+          `;
+          infoStagesContainer.appendChild(item);
+        } else {
+          const valueElement = item.querySelector('.info-value');
+          if (parseInt(valueElement.textContent) !== stageData.count) {
+            valueElement.textContent = stageData.count;
+            item.classList.add('highlight');
+            setTimeout(() => item.classList.remove('highlight'), 1000);
+          }
+        }
+        
+        items[stage] = item;
+      });
+      
+      // Удаляем устаревшие элементы
+      Array.from(infoStagesContainer.children).forEach(child => {
+        if (!Object.values(items).includes(child)) {
+          child.remove();
+        }
       });
     }
     
     function updateStage(stageName, config, data) {
-      // Обновляем счетчик
       const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
-      document.getElementById(config.count).textContent = totalCount;
+      const countElement = document.getElementById(config.count);
       
-      // Обновляем содержимое
+      if (parseInt(countElement.textContent) !== totalCount) {
+        countElement.textContent = totalCount;
+      }
+      
       const container = document.getElementById(config.element);
       
       if (!data.details || data.details.length === 0) {
-        container.innerHTML = '<div class="empty">Нет данных</div>';
+        if (!container.querySelector('.empty')) {
+          container.innerHTML = '<div class="empty">Нет данных</div>';
+        }
         return;
       }
       
+      if (container.querySelector('table')) {
+        updateTable(container, data);
+      } else {
+        createNewTable(container, data);
+      }
+    }
+    
+    function updateTable(container, data) {
+      const table = container.querySelector('table');
+      const tbody = table.querySelector('tbody');
+      const existingRows = Array.from(tbody.querySelectorAll('tr'));
+      
+      const existingData = new Map();
+      existingRows.forEach(row => {
+        const operator = row.cells[0].textContent;
+        const count = parseInt(row.cells[1].textContent);
+        existingData.set(operator, { row, count });
+      });
+      
+      data.details.forEach(item => {
+        const existing = existingData.get(item.operator);
+        if (existing) {
+          if (existing.count !== item.count) {
+            existing.row.cells[1].textContent = item.count;
+            existing.row.classList.add('highlight');
+            setTimeout(() => existing.row.classList.remove('highlight'), 1500);
+          }
+          existingData.delete(item.operator);
+        } else {
+          const row = document.createElement('tr');
+          row.className = 'highlight';
+          row.innerHTML = `
+            <td>${item.operator}</td>
+            <td>${item.count}</td>
+          `;
+          tbody.appendChild(row);
+          setTimeout(() => row.classList.remove('highlight'), 1500);
+        }
+      });
+      
+      existingData.forEach(({ row }) => {
+        row.classList.add('fade-out');
+        setTimeout(() => row.remove(), 500);
+      });
+    }
+    
+    function createNewTable(container, data) {
       let html = `
         <table>
           <thead>
@@ -373,7 +473,7 @@
       
       data.details.forEach(item => {
         html += `
-          <tr>
+          <tr class="highlight">
             <td>${item.operator}</td>
             <td>${item.count}</td>
           </tr>
@@ -387,17 +487,16 @@
       
       container.innerHTML = html;
       
-      // Добавляем анимацию для новых/измененных строк
-      const rows = container.querySelectorAll('tbody tr');
-      rows.forEach(row => {
-        row.classList.add('highlight');
-        setTimeout(() => row.classList.remove('highlight'), 1500);
-      });
+      setTimeout(() => {
+        container.querySelectorAll('.highlight').forEach(el => {
+          el.classList.remove('highlight');
+        });
+      }, 1500);
     }
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      // Запрашиваем начальные данные через HTTP на случай проблем с WebSocket
+      // Резервный запрос на случай проблем с WebSocket
       fetch('/api/leads/by-stage')
         .then(response => response.json())
         .then(data => updateDashboard(data))
