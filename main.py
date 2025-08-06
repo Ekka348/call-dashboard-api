@@ -1,5 +1,4 @@
 from flask import Flask, send_from_directory, jsonify, request
-from flask import Flask, send_from_directory, jsonify
 from flask_socketio import SocketIO
 import requests, os, time, threading
 from datetime import datetime, timedelta
@@ -10,18 +9,18 @@ from copy import deepcopy
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Настройки SocketIO с увеличенными таймаутами
+# Настройки SocketIO
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     ping_timeout=60,
     ping_interval=25,
-    engineio_logger=True,  # Включаем логирование для отладки
+    engineio_logger=True,
     async_mode='eventlet'
 )
 
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 30  # Интервал обновления в секундах
+UPDATE_INTERVAL = 60  # Интервал обновления в секундах (1 минута)
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -114,6 +113,8 @@ def check_for_operator_changes(new_data):
                 changes.append({
                     'stage': stage_name,
                     'operator': operator_name,
+                    'old_count': old_count,
+                    'new_count': new_count,
                     'diff': new_count - old_count
                 })
             last_operator_status[stage_name][operator_name] = new_count
@@ -187,15 +188,6 @@ def serve_index():
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
-
-@socketio.on('connect')
-def handle_connect():
-    print(f'Client connected: {request.sid}')
-    socketio.emit('init', get_lead_stats())
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print(f'Client disconnected: {request.sid}')
 
 if __name__ == "__main__":
     threading.Thread(target=background_updater, daemon=True).start()
