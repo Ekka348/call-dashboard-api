@@ -9,19 +9,19 @@ from copy import deepcopy
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Увеличиваем таймауты для production
+# Настройки SocketIO с увеличенными таймаутами
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     ping_timeout=300,
     ping_interval=60,
-    engineio_logger=False,
+    engineio_logger=True,
     async_mode='eventlet',
     max_http_buffer_size=1e8
 )
 
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 30  # Увеличили интервал обновления
+UPDATE_INTERVAL = 30  # Интервал обновления в секундах
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -148,7 +148,7 @@ def get_lead_stats():
             socketio.emit('full_update', {
                 'data': result,
                 'changes': changes,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().timestamp()  # Исправлено: отправляем timestamp
             })
         
         data_cache["data"] = result
@@ -172,9 +172,10 @@ def background_updater():
     while True:
         try:
             get_lead_stats()
+            time.sleep(UPDATE_INTERVAL)
         except Exception as e:
             print(f"Update error: {e}")
-        time.sleep(UPDATE_INTERVAL)
+            time.sleep(10)
 
 @app.route('/')
 def serve_index():
