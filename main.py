@@ -1,5 +1,4 @@
-from flask import Flask, send_from_directory, jsonify, request
-from flask_socketio import SocketIO
+from flask import Flask, send_from_directory, jsonify
 import requests, os, time, threading
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
@@ -9,18 +8,8 @@ from copy import deepcopy
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Настройки SocketIO
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    ping_timeout=60,
-    ping_interval=25,
-    engineio_logger=True,
-    async_mode='eventlet'
-)
-
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 10  # Интервал обновления в секундах (1 минута)
+UPDATE_INTERVAL = 60  # Интервал обновления в секундах
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -33,7 +22,6 @@ user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
-last_emitted_data = None
 
 def get_moscow_time():
     tz = timezone("Europe/Moscow")
@@ -121,7 +109,6 @@ def check_for_operator_changes(new_data):
     return changes
 
 def get_lead_stats():
-    global last_emitted_data
     with cache_lock:
         if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
             return data_cache["data"]
@@ -144,16 +131,12 @@ def get_lead_stats():
                 ]
             }
 
-        result = {"range": "today", "data": data}
-        changes = check_for_operator_changes(result)
-        
-        if changes or result != last_emitted_data:
-            last_emitted_data = deepcopy(result)
-            socketio.emit('full_update', {
-                'data': result,
-                'changes': changes,
-                'timestamp': get_moscow_time().strftime("%H:%M:%S")
-            })
+        result = {
+            "range": "today", 
+            "data": data,
+            "changes": check_for_operator_changes({"data": data}),
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
+        }
         
         data_cache["data"] = result
         data_cache["timestamp"] = time.time()
@@ -162,24 +145,6 @@ def get_lead_stats():
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
     return jsonify(get_lead_stats())
-
-@socketio.on('connect')
-def handle_connect():
-    print(f'Client connected: {request.sid}')
-    socketio.emit('init', get_lead_stats())
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print(f'Client disconnected: {request.sid}')
-
-def background_updater():
-    while True:
-        try:
-            get_lead_stats()
-            time.sleep(UPDATE_INTERVAL)
-        except Exception as e:
-            print(f"Update error: {e}")
-            time.sleep(10)
 
 @app.route('/')
 def serve_index():
@@ -190,6 +155,5 @@ def serve_static(path):
     return send_from_directory(app.static_folder, path)
 
 if __name__ == "__main__":
-    threading.Thread(target=background_updater, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
