@@ -9,13 +9,13 @@ from copy import deepcopy
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Настройки SocketIO с увеличенными таймаутами
+# Настройки SocketIO
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     ping_timeout=300,
     ping_interval=60,
-    engineio_logger=True,
+    engineio_logger=False,
     async_mode='eventlet',
     max_http_buffer_size=1e8
 )
@@ -36,9 +36,12 @@ cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
 last_emitted_data = None
 
-def get_range_dates():
+def get_moscow_time():
     tz = timezone("Europe/Moscow")
-    now = datetime.now(tz)
+    return datetime.now(tz)
+
+def get_range_dates():
+    now = get_moscow_time()
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -148,7 +151,7 @@ def get_lead_stats():
             socketio.emit('full_update', {
                 'data': result,
                 'changes': changes,
-                'timestamp': datetime.now().timestamp()  # Исправлено: отправляем timestamp
+                'timestamp': get_moscow_time().strftime("%H:%M:%S")  # Формат времени ЧЧ:ММ:СС
             })
         
         data_cache["data"] = result
