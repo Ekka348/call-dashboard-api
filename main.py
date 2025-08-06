@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 import requests, os, time, threading
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
@@ -8,8 +8,9 @@ from copy import deepcopy
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
+# Настройки подключения к Bitrix24
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 30  # Интервал обновления в секундах
+UPDATE_INTERVAL = 60  # Интервал обновления в секундах (1 минута)
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -20,6 +21,11 @@ STAGE_LABELS = {
 # Кеширование
 user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
+trend_cache = {
+    "day": {"data": {}, "timestamp": 0},
+    "hour": {"data": {}, "timestamp": 0}
+}
+CACHE_TIMEOUT = 300  # 5 минут
 cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
 
@@ -33,7 +39,7 @@ def get_range_dates():
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
 def load_users():
-    if time.time() - user_cache["last"] < 300:
+    if time.time() - user_cache["last"] < CACHE_TIMEOUT:
         return user_cache["data"]
     
     users = {}
@@ -71,7 +77,7 @@ def fetch_leads(stage, start, end):
                 f"{HOOK}crm.lead.list.json",
                 json={
                     "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                    "select": ["ID", "ASSIGNED_BY_ID"],
+                    "select": ["ID", "ASSIGNED_BY_ID", "DATE_MODIFY"],
                     "start": offset
                 },
                 timeout=20
@@ -142,6 +148,66 @@ def get_lead_stats():
         data_cache["timestamp"] = time.time()
         return result
 
+@app.route("/api/leads/trend")
+def leads_trend():
+    period = request.args.get('period', 'day')
+    
+    # Проверка кеша
+    if time.time() - trend_cache[period]["timestamp"] < CACHE_TIMEOUT:
+        return jsonify(trend_cache[period]["data"])
+    
+    tz = timezone("Europe/Moscow")
+    now = datetime.now(tz)
+    stats = defaultdict(list)
+    
+    try:
+        if period == 'day':
+            # Данные за последние 7 дней
+            days = []
+            for i in range(7):
+                day = now - timedelta(days=6-i)
+                days.append(day.strftime("%a"))  # Сокращенные названия дней
+                
+                day_start = day.replace(hour=0, minute=0, second=0)
+                day_end = day.replace(hour=23, minute=59, second=59)
+                
+                for name, stage_id in STAGE_LABELS.items():
+                    leads = fetch_leads(stage_id, day_start.strftime("%Y-%m-%d %H:%M:%S"), 
+                                      day_end.strftime("%Y-%m-%d %H:%M:%S"))
+                    stats[name].append(len(leads))
+            
+            result = {"days": days, "stats": stats}
+        else:
+            # Данные по часам за текущий день
+            day_start = now.replace(hour=0, minute=0, second=0)
+            
+            for hour in range(24):
+                hour_start = day_start + timedelta(hours=hour)
+                hour_end = hour_start + timedelta(hours=1)
+                
+                for name, stage_id in STAGE_LABELS.items():
+                    if hour not in range(9, 19):  # Только рабочее время (9:00-18:59)
+                        stats[name].append(0)
+                        continue
+                        
+                    leads = fetch_leads(stage_id, hour_start.strftime("%Y-%m-%d %H:%M:%S"), 
+                                      hour_end.strftime("%Y-%m-%d %H:%M:%S"))
+                    stats[name].append(len(leads))
+            
+            result = {"stats": stats}
+        
+        # Сохраняем в кеш
+        trend_cache[period] = {
+            "data": result,
+            "timestamp": time.time()
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error generating trend data: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
     return jsonify(get_lead_stats())
@@ -154,6 +220,25 @@ def serve_index():
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
 
+def background_updater():
+    while True:
+        try:
+            # Обновляем основные данные
+            get_lead_stats()
+            
+            # Периодически обновляем кеш графиков
+            if time.time() - trend_cache["day"]["timestamp"] > CACHE_TIMEOUT:
+                leads_trend()
+            
+            time.sleep(UPDATE_INTERVAL)
+        except Exception as e:
+            print(f"Update error: {e}")
+            time.sleep(10)
+
 if __name__ == "__main__":
+    # Запускаем фоновое обновление в отдельном потоке
+    threading.Thread(target=background_updater, daemon=True).start()
+    
+    # Запускаем Flask-приложение
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False)
