@@ -32,8 +32,6 @@ STAGE_LABELS = {
     "База ВВ": "11"
 }
 
-GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
-
 # Кеширование
 user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
@@ -172,41 +170,20 @@ def get_lead_stats():
         data = {}
 
         for name, stage_id in STAGE_LABELS.items():
-            if name in GROUPED_STAGES:
-                leads = fetch_all_leads(stage_id)
-                data[name] = {"grouped": True, "count": len(leads)}
-            else:
-                leads = fetch_leads(stage_id, start, end)
-                stats = Counter()
-                for lead in leads:
-                    uid = lead.get("ASSIGNED_BY_ID")
-                    if uid:
-                        stats[int(uid)] += 1
+            leads = fetch_leads(stage_id, start, end)
+            stats = Counter()
+            for lead in leads:
+                uid = lead.get("ASSIGNED_BY_ID")
+                if uid:
+                    stats[int(uid)] += 1
 
-                details = [
-                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                    for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-                ]
-
-                data[name] = {"grouped": False, "details": details}
+            details = [
+                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+            ]
+            data[name] = {"details": details}
 
         result = {"range": "today", "data": data}
-        changes = check_for_operator_changes(result)
-        
-        if changes or result != last_emitted_data:
-            last_emitted_data = deepcopy(result)
-            socketio.emit('full_update', {
-                'data': result,
-                'changes': changes,
-                'timestamp': datetime.now().isoformat()
-            })
-        else:
-            socketio.emit('heartbeat', {'timestamp': datetime.now().isoformat()})
-        
-        data_cache["data"] = result
-        data_cache["timestamp"] = time.time()
-        return result
-
 # API Endpoints
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
