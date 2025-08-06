@@ -10,6 +10,8 @@
       --success: #34a853;
       --warning: #fbbc05;
       --danger: #ea4335;
+      --dark: #2c3e50;
+      --light: #ecf0f1;
     }
     
     body {
@@ -17,29 +19,38 @@
       margin: 0;
       padding: 0;
       background-color: #f5f7fa;
+      color: #333;
     }
     
+    /* Стили для формы авторизации */
     .login-container {
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      background-color: #f5f7fa;
+      background-color: var(--dark);
     }
     
     .login-form {
       background: white;
       padding: 30px;
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
       width: 100%;
       max-width: 400px;
+      animation: fadeIn 0.5s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     
     .login-form h2 {
       margin-top: 0;
       color: var(--primary);
       text-align: center;
+      margin-bottom: 25px;
     }
     
     .form-group {
@@ -50,14 +61,22 @@
       display: block;
       margin-bottom: 8px;
       font-weight: 500;
+      color: #555;
     }
     
     .form-group input {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       border: 1px solid #ddd;
       border-radius: 4px;
       font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    
+    .form-group input:focus {
+      border-color: var(--primary);
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
     }
     
     .login-button {
@@ -68,20 +87,31 @@
       border: none;
       border-radius: 4px;
       font-size: 16px;
+      font-weight: 600;
       cursor: pointer;
-      transition: background-color 0.3s;
+      transition: background-color 0.3s, transform 0.2s;
+      margin-top: 10px;
     }
     
     .login-button:hover {
       background-color: #3367d6;
     }
     
+    .login-button:active {
+      transform: scale(0.98);
+    }
+    
     .error-message {
       color: var(--danger);
       text-align: center;
       margin-top: 15px;
+      font-size: 14px;
+      padding: 10px;
+      background-color: rgba(234, 67, 53, 0.1);
+      border-radius: 4px;
     }
     
+    /* Стили для дашборда */
     .container {
       max-width: 1400px;
       margin: 0 auto;
@@ -100,16 +130,27 @@
       gap: 15px;
     }
     
+    .header h1 {
+      margin: 0;
+      color: var(--dark);
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
     .header-controls {
       display: flex;
       align-items: center;
       gap: 20px;
+      flex-wrap: wrap;
     }
     
     .status-indicator {
       display: flex;
       align-items: center;
       gap: 10px;
+      font-size: 14px;
     }
     
     .indicator {
@@ -152,6 +193,12 @@
       border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
       overflow: hidden;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
     }
     
     .card-header {
@@ -169,6 +216,7 @@
       padding: 3px 10px;
       border-radius: 20px;
       font-size: 0.9rem;
+      font-weight: bold;
     }
     
     .card-body {
@@ -178,20 +226,26 @@
     table {
       width: 100%;
       border-collapse: collapse;
+      font-size: 14px;
     }
     
     th {
       text-align: left;
-      padding: 8px 10px;
+      padding: 10px;
       background-color: #f8f9fa;
       font-weight: 500;
-      font-size: 0.85rem;
       color: #666;
+      position: sticky;
+      top: 0;
     }
     
     td {
-      padding: 10px;
+      padding: 12px 10px;
       border-bottom: 1px solid #f0f0f0;
+    }
+    
+    tr:hover td {
+      background-color: #f8f9fa;
     }
     
     .count-cell {
@@ -202,6 +256,7 @@
     .count-value {
       transition: all 0.3s ease;
       display: inline-block;
+      font-weight: 600;
     }
     
     .pulse-update {
@@ -222,6 +277,7 @@
       border-radius: 10px;
       opacity: 0;
       animation: countChangeFade 2s forwards;
+      font-weight: bold;
     }
     
     .count-up {
@@ -243,27 +299,52 @@
     .loading {
       color: #999;
       text-align: center;
-      padding: 20px;
+      padding: 40px 20px;
+      font-size: 16px;
+    }
+    
+    .loading:after {
+      content: '...';
+      animation: dots 1.5s steps(5, end) infinite;
+    }
+    
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
     }
     
     .empty {
       color: #999;
       text-align: center;
-      padding: 20px;
+      padding: 40px 20px;
+      font-size: 16px;
     }
     
     .operator-filter {
       min-width: 250px;
+      position: relative;
     }
     
     .operator-filter select {
-      padding: 8px 12px;
+      padding: 10px 12px;
       border-radius: 4px;
       border: 1px solid #ddd;
       background: white;
       font-family: inherit;
       font-size: 0.9rem;
       width: 100%;
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 16px;
+    }
+    
+    .operator-filter select:focus {
+      border-color: var(--primary);
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
     }
     
     .hidden-row {
@@ -279,6 +360,7 @@
       text-align: center;
       padding: 20px;
       display: none;
+      font-size: 14px;
     }
     
     .show-empty-message {
@@ -290,6 +372,9 @@
       text-align: center;
       padding: 10px;
       margin-top: 10px;
+      background-color: rgba(234, 67, 53, 0.1);
+      border-radius: 4px;
+      font-size: 14px;
     }
     
     .changes-notification {
@@ -302,7 +387,14 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       z-index: 1000;
       max-width: 300px;
-      transition: opacity 0.5s;
+      transition: all 0.3s;
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    
+    .changes-notification.show {
+      transform: translateY(0);
+      opacity: 1;
     }
     
     .changes-notification.fade-out {
@@ -312,27 +404,65 @@
     .changes-notification h4 {
       margin-top: 0;
       color: var(--primary);
+      font-size: 16px;
+      margin-bottom: 10px;
     }
     
     .changes-notification ul {
       padding-left: 20px;
       margin-bottom: 0;
+      font-size: 14px;
+    }
+    
+    .changes-notification li {
+      margin-bottom: 5px;
     }
     
     .logout-button {
       background: var(--danger);
       color: white;
       border: none;
-      padding: 8px 15px;
+      padding: 10px 15px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.9rem;
+      font-weight: 600;
+      transition: background-color 0.3s, transform 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
     
     .logout-button:hover {
       background: #d32f2f;
     }
     
+    .logout-button:active {
+      transform: scale(0.98);
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+    
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background-color: var(--primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    
+    /* Адаптивные стили */
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -341,6 +471,10 @@
       .header {
         flex-direction: column;
         align-items: flex-start;
+      }
+      
+      .header h1 {
+        font-size: 20px;
       }
       
       .header-controls {
@@ -355,9 +489,9 @@
       }
       
       .changes-notification {
-        max-width: 90%;
-        left: 5%;
-        right: 5%;
+        max-width: calc(100% - 40px);
+        left: 20px;
+        right: 20px;
       }
     }
   </style>
@@ -369,11 +503,11 @@
       <form id="login-form">
         <div class="form-group">
           <label for="username">Логин</label>
-          <input type="text" id="username" name="username" required>
+          <input type="text" id="username" name="username" required autocomplete="username">
         </div>
         <div class="form-group">
           <label for="password">Пароль</label>
-          <input type="password" id="password" name="password" required>
+          <input type="password" id="password" name="password" required autocomplete="current-password">
         </div>
         <button type="submit" class="login-button">Войти</button>
         <div class="error-message" id="login-error"></div>
@@ -395,7 +529,18 @@
           <span id="status-text">Connecting...</span>
           <span class="last-update" id="last-update">-</span>
         </div>
-        <button class="logout-button" id="logout-button">Выйти</button>
+        <div class="user-info" id="user-info">
+          <div class="user-avatar" id="user-avatar"></div>
+          <span id="username-display"></span>
+        </div>
+        <button class="logout-button" id="logout-button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          Выйти
+        </button>
       </div>
     </div>
     
@@ -406,7 +551,7 @@
           <span class="card-count" id="agreement-count">0</span>
         </div>
         <div class="card-body">
-          <div id="agreement-content" class="loading">Загрузка...</div>
+          <div id="agreement-content" class="loading">Загрузка</div>
         </div>
       </div>
       
@@ -416,7 +561,7 @@
           <span class="card-count" id="callback-count">0</span>
         </div>
         <div class="card-body">
-          <div id="callback-content" class="loading">Загрузка...</div>
+          <div id="callback-content" class="loading">Загрузка</div>
         </div>
       </div>
       
@@ -426,13 +571,35 @@
           <span class="card-count" id="invited-count">0</span>
         </div>
         <div class="card-body">
-          <div id="invited-content" class="loading">Загрузка...</div>
+          <div id="invited-content" class="loading">Загрузка</div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    // Белый список пользователей (логин: пароль)
+    const WHITE_LIST = {
+      "admin": "admin123",
+      "manager": "manager2023",
+      "supervisor": "super1234",
+      "user1": "password1",
+      "user2": "password2"
+    };
+
+    // Роли пользователей (для расширения функционала)
+    const USER_ROLES = {
+      "admin": "Администратор",
+      "manager": "Менеджер",
+      "supervisor": "Супервайзер",
+      "user1": "Оператор",
+      "user2": "Оператор"
+    };
+
+    // Ключ для localStorage
+    const AUTH_KEY = 'dashboard_auth';
+    
+    // Конфигурация этапов
     const STAGES = {
       "На согласовании": { 
         id: "agreement", 
@@ -454,125 +621,131 @@
       }
     };
     
+    // Глобальные переменные
     let lastUpdateTime = 0;
     let isFirstLoad = true;
     let allOperators = [];
-    let authToken = null;
-    
-    // Функция для проверки авторизации
+    let currentUser = null;
+    let dataRefreshInterval = null;
+    let updateCheckInterval = null;
+
+    // DOM элементы
+    const loginContainer = document.getElementById('login-container');
+    const dashboardContainer = document.getElementById('dashboard-container');
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+    const logoutButton = document.getElementById('logout-button');
+    const userInfo = document.getElementById('user-info');
+    const userAvatar = document.getElementById('user-avatar');
+    const usernameDisplay = document.getElementById('username-display');
+
+    // Проверка авторизации при загрузке
     function checkAuth() {
-      const token = localStorage.getItem('dashboard_auth_token');
-      if (token) {
-        authToken = token;
-        showDashboard();
-      } else {
-        showLogin();
+      const authData = localStorage.getItem(AUTH_KEY);
+      if (authData) {
+        try {
+          const { username, password } = JSON.parse(authData);
+          if (WHITE_LIST[username] === password) {
+            currentUser = {
+              username,
+              role: USER_ROLES[username] || 'Пользователь'
+            };
+            showDashboard();
+            return;
+          }
+        } catch (e) {
+          console.error('Ошибка чтения данных авторизации', e);
+        }
       }
+      showLogin();
     }
-    
+
     // Показать форму входа
     function showLogin() {
-      document.getElementById('login-container').style.display = 'flex';
-      document.getElementById('dashboard-container').style.display = 'none';
+      clearIntervals();
+      loginContainer.style.display = 'flex';
+      dashboardContainer.style.display = 'none';
+      loginError.textContent = '';
+      document.getElementById('password').value = '';
+      currentUser = null;
     }
-    
+
     // Показать дашборд
     function showDashboard() {
-      document.getElementById('login-container').style.display = 'none';
-      document.getElementById('dashboard-container').style.display = 'block';
+      loginContainer.style.display = 'none';
+      dashboardContainer.style.display = 'block';
+      
+      // Обновляем информацию о пользователе
+      updateUserInfo();
       
       // Первая загрузка данных
       fetchData();
       
+      // Устанавливаем интервал обновления данных
+      dataRefreshInterval = setInterval(fetchData, 300000); // 5 минут
+      
       // Запускаем проверку обновлений через минуту
-      setTimeout(checkForUpdates, 60000);
+      updateCheckInterval = setTimeout(checkForUpdates, 60000);
     }
-    
-    // Функция для авторизации
-    async function login(username, password) {
-      try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ username, password })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Неверный логин или пароль');
-        }
-        
-        const data = await response.json();
-        
-        if (data.token) {
-          authToken = data.token;
-          localStorage.setItem('dashboard_auth_token', authToken);
-          showDashboard();
-        } else {
-          throw new Error('Ошибка авторизации');
-        }
-      } catch (error) {
-        document.getElementById('login-error').textContent = error.message;
+
+    // Обновление информации о пользователе
+    function updateUserInfo() {
+      if (!currentUser) return;
+      
+      usernameDisplay.textContent = currentUser.username;
+      userAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
+      
+      // Можно добавить разные цвета для разных ролей
+      if (currentUser.role === 'Администратор') {
+        userAvatar.style.backgroundColor = var(--danger);
+      } else if (currentUser.role === 'Менеджер') {
+        userAvatar.style.backgroundColor = var(--primary);
+      } else {
+        userAvatar.style.backgroundColor = var(--success);
       }
     }
-    
-    // Функция для выхода
+
+    // Авторизация
+    function login(username, password) {
+      if (WHITE_LIST[username] === password) {
+        // Сохраняем данные авторизации
+        localStorage.setItem(AUTH_KEY, JSON.stringify({ username, password }));
+        currentUser = {
+          username,
+          role: USER_ROLES[username] || 'Пользователь'
+        };
+        showDashboard();
+      } else {
+        loginError.textContent = 'Неверный логин или пароль';
+        document.getElementById('password').value = '';
+      }
+    }
+
+    // Выход
     function logout() {
-      authToken = null;
-      localStorage.removeItem('dashboard_auth_token');
+      localStorage.removeItem(AUTH_KEY);
       showLogin();
     }
-    
-    // Функция для получения данных с сервера
+
+    // Очистка интервалов
+    function clearIntervals() {
+      if (dataRefreshInterval) clearInterval(dataRefreshInterval);
+      if (updateCheckInterval) clearTimeout(updateCheckInterval);
+    }
+
+    // Функция для получения данных с сервера (заглушка)
     async function fetchData() {
       try {
-        const response = await fetch('/api/leads/by-stage?t=' + Date.now(), {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Authorization': `Bearer ${authToken}`
-          }
-        });
-        
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Не авторизован
-            logout();
-            return false;
-          }
-          throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.status === "error") {
-          throw new Error(data.message);
-        }
-        
-        // Загружаем список операторов
-        const operatorsResponse = await fetch('/api/leads/operators?t=' + Date.now(), {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Authorization': `Bearer ${authToken}`
-          }
-        });
-        
-        if (!operatorsResponse.ok) {
-          throw new Error(`Ошибка HTTP! Статус: ${operatorsResponse.status}`);
-        }
-        
-        const operatorsData = await operatorsResponse.json();
-        
-        if (operatorsData.status === "error") {
-          throw new Error(operatorsData.message);
-        }
+        // В реальном приложении здесь был бы fetch к API
+        // Для демонстрации используем mock-данные
+        const mockData = generateMockData();
         
         // Обновляем интерфейс
-        updateDashboard(data);
-        updateOperatorSelect(operatorsData.operators);
+        updateDashboard(mockData);
+        updateOperatorSelect(mockData.operators || []);
         
         lastUpdateTime = Date.now();
-        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
         
         if (isFirstLoad) {
           updateConnectionStatus(true);
@@ -584,11 +757,9 @@
         console.error('Ошибка загрузки данных:', error);
         updateConnectionStatus(false);
         
-        // Показываем сообщение об ошибке
         document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
         document.getElementById('status-text').textContent = 'Ошибка соединения';
         
-        // Показываем ошибки в каждой карточке
         Object.values(STAGES).forEach(stage => {
           const container = document.getElementById(stage.element);
           if (!container.querySelector('.error-message')) {
@@ -603,45 +774,89 @@
         return false;
       }
     }
-    
+
+    // Генерация mock-данных для демонстрации
+    function generateMockData() {
+      const operators = ['Иванов И.', 'Петров П.', 'Сидоров С.', 'Кузнецова А.', 'Смирнов Д.'];
+      const stages = Object.keys(STAGES);
+      
+      const data = {
+        status: "success",
+        timestamp: new Date().toLocaleTimeString(),
+        data: {},
+        operators: operators
+      };
+      
+      stages.forEach(stage => {
+        const operatorsData = [];
+        const count = Math.floor(Math.random() * 5) + 1;
+        
+        for (let i = 0; i < count; i++) {
+          const opIndex = Math.floor(Math.random() * operators.length);
+          operatorsData.push({
+            operator: operators[opIndex],
+            count: Math.floor(Math.random() * 20) + 1
+          });
+        }
+        
+        data.data[stage] = {
+          details: operatorsData
+        };
+      });
+      
+      return data;
+    }
+
     // Функция для проверки обновлений
     async function checkForUpdates() {
       try {
-        const response = await fetch('/api/leads/updates?t=' + Date.now(), {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Authorization': `Bearer ${authToken}`
-          }
-        });
+        // В реальном приложении здесь был бы fetch к API
+        // Для демонстрации используем mock-данные
+        const mockUpdates = generateMockUpdates();
+        processUpdates(mockUpdates);
         
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Не авторизован
-            logout();
-            return;
-          }
-          throw new Error('Ошибка сети');
-        }
-        
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-          processUpdates(data.updates);
-          lastUpdateTime = Date.now();
-          document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
-          updateConnectionStatus(true);
-        }
+        lastUpdateTime = Date.now();
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        updateConnectionStatus(true);
       } catch (error) {
         console.error('Ошибка проверки обновлений:', error);
         updateConnectionStatus(false);
       } finally {
-        setTimeout(checkForUpdates, 60000); // Проверка каждую минуту
+        updateCheckInterval = setTimeout(checkForUpdates, 60000); // Проверка каждую минуту
       }
     }
-    
+
+    // Генерация mock-обновлений для демонстрации
+    function generateMockUpdates() {
+      const operators = allOperators.length ? allOperators : ['Иванов И.', 'Петров П.', 'Сидоров С.', 'Кузнецова А.', 'Смирнов Д.'];
+      const stages = Object.keys(STAGES);
+      const updates = {};
+      
+      stages.forEach(stage => {
+        const operatorsData = [];
+        const count = Math.floor(Math.random() * 3) + 1;
+        
+        for (let i = 0; i < count; i++) {
+          const opIndex = Math.floor(Math.random() * operators.length);
+          operatorsData.push({
+            operator: operators[opIndex],
+            count: Math.floor(Math.random() * 20) + 1
+          });
+        }
+        
+        updates[stage] = {
+          operators: operatorsData
+        };
+      });
+      
+      return updates;
+    }
+
     // Функция для обработки обновлений
     function processUpdates(updates) {
       if (!updates) return;
+      
+      const changes = [];
       
       for (const [stageName, stageData] of Object.entries(updates)) {
         const stageConfig = STAGES[stageName];
@@ -650,12 +865,6 @@
         const container = document.getElementById(stageConfig.element);
         const tbody = container?.querySelector('tbody');
         if (!tbody) continue;
-        
-        // Обновляем счетчик в заголовке
-        const countElement = document.getElementById(stageConfig.count);
-        if (countElement && stageData.total_count !== undefined) {
-          countElement.textContent = stageData.total_count;
-        }
         
         // Обновляем данные операторов
         if (stageData.operators) {
@@ -685,6 +894,14 @@
               const newCount = operatorData.count;
               
               if (oldCount !== newCount) {
+                changes.push({
+                  operator: operatorData.operator,
+                  stage: stageName,
+                  old_count: oldCount,
+                  new_count: newCount,
+                  diff: newCount - oldCount
+                });
+                
                 countValue.textContent = newCount;
                 
                 // Анимация изменения
@@ -709,8 +926,13 @@
           });
         }
       }
+      
+      // Показываем уведомление об изменениях
+      if (changes.length > 0) {
+        showChangesNotification(changes);
+      }
     }
-    
+
     // Функции обновления UI
     function updateConnectionStatus(connected) {
       const connectionStatus = document.getElementById('connection-status');
@@ -724,10 +946,6 @@
       if (!data || !data.data) {
         console.error('Получены неверные данные');
         return;
-      }
-      
-      if (data.changes && data.changes.length > 0) {
-        showChangesNotification(data.changes);
       }
       
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
@@ -937,43 +1155,67 @@
       });
     }
 
+    // Показать уведомление об изменениях
     function showChangesNotification(changes) {
       const notification = document.createElement('div');
       notification.className = 'changes-notification';
       
-      let html = '<h4>Изменения:</h4><ul>';
-      changes.forEach(change => {
-        html += `<li>${change.operator}: ${change.old_count} → ${change.new_count} (${change.diff > 0 ? '+' : ''}${change.diff})</li>`;
+      let html = '<h4>Обновления данных:</h4><ul>';
+      changes.slice(0, 5).forEach(change => {
+        html += `<li><strong>${change.operator}</strong> (${change.stage}): ${change.old_count} → ${change.new_count} <span class="${change.diff > 0 ? 'count-up' : 'count-down'}">(${change.diff > 0 ? '+' : ''}${change.diff})</span></li>`;
       });
+      
+      if (changes.length > 5) {
+        html += `<li>...и еще ${changes.length - 5} изменений</li>`;
+      }
+      
       html += '</ul>';
       
       notification.innerHTML = html;
       document.body.appendChild(notification);
       
+      // Показываем уведомление
+      setTimeout(() => {
+        notification.classList.add('show');
+      }, 100);
+      
+      // Скрываем через 5 секунд
       setTimeout(() => {
         notification.classList.add('fade-out');
         setTimeout(() => notification.remove(), 500);
       }, 5000);
     }
-    
+
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
       // Проверяем авторизацию при загрузке
       checkAuth();
       
       // Обработчик формы входа
-      document.getElementById('login-form').addEventListener('submit', (e) => {
+      loginForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const username = document.getElementById('username').value;
+        const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
-        login(username, password);
+        
+        if (username && password) {
+          login(username, password);
+        } else {
+          loginError.textContent = 'Введите логин и пароль';
+        }
       });
       
       // Обработчик кнопки выхода
-      document.getElementById('logout-button').addEventListener('click', logout);
+      logoutButton.addEventListener('click', logout);
       
       // Обработчик фильтра операторов
       document.getElementById('operator-select').addEventListener('change', applyOperatorFilter);
+      
+      // Обработчик клавиши Escape для выхода
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dashboardContainer.style.display !== 'none') {
+          logout();
+        }
+      });
     });
   </script>
 </body>
