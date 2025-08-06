@@ -15,13 +15,78 @@
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       background-color: #f5f7fa;
+    }
+    
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f5f7fa;
+    }
+    
+    .login-form {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    
+    .login-form h2 {
+      margin-top: 0;
+      color: var(--primary);
+      text-align: center;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    .login-button {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    .login-button:hover {
+      background-color: #3367d6;
+    }
+    
+    .error-message {
+      color: var(--danger);
+      text-align: center;
+      margin-top: 15px;
     }
     
     .container {
       max-width: 1400px;
       margin: 0 auto;
+      padding: 20px;
+      display: none;
     }
     
     .header {
@@ -254,6 +319,20 @@
       margin-bottom: 0;
     }
     
+    .logout-button {
+      background: var(--danger);
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    
+    .logout-button:hover {
+      background: #d32f2f;
+    }
+    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -284,7 +363,25 @@
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="login-container" id="login-container">
+    <div class="login-form">
+      <h2>Авторизация</h2>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Логин</label>
+          <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Пароль</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit" class="login-button">Войти</button>
+        <div class="error-message" id="login-error"></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="container" id="dashboard-container">
     <div class="header">
       <h1>📊 Real-Time Leads Dashboard</h1>
       <div class="header-controls">
@@ -298,6 +395,7 @@
           <span id="status-text">Connecting...</span>
           <span class="last-update" id="last-update">-</span>
         </div>
+        <button class="logout-button" id="logout-button">Выйти</button>
       </div>
     </div>
     
@@ -359,17 +457,89 @@
     let lastUpdateTime = 0;
     let isFirstLoad = true;
     let allOperators = [];
+    let authToken = null;
+    
+    // Функция для проверки авторизации
+    function checkAuth() {
+      const token = localStorage.getItem('dashboard_auth_token');
+      if (token) {
+        authToken = token;
+        showDashboard();
+      } else {
+        showLogin();
+      }
+    }
+    
+    // Показать форму входа
+    function showLogin() {
+      document.getElementById('login-container').style.display = 'flex';
+      document.getElementById('dashboard-container').style.display = 'none';
+    }
+    
+    // Показать дашборд
+    function showDashboard() {
+      document.getElementById('login-container').style.display = 'none';
+      document.getElementById('dashboard-container').style.display = 'block';
+      
+      // Первая загрузка данных
+      fetchData();
+      
+      // Запускаем проверку обновлений через минуту
+      setTimeout(checkForUpdates, 60000);
+    }
+    
+    // Функция для авторизации
+    async function login(username, password) {
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, password })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Неверный логин или пароль');
+        }
+        
+        const data = await response.json();
+        
+        if (data.token) {
+          authToken = data.token;
+          localStorage.setItem('dashboard_auth_token', authToken);
+          showDashboard();
+        } else {
+          throw new Error('Ошибка авторизации');
+        }
+      } catch (error) {
+        document.getElementById('login-error').textContent = error.message;
+      }
+    }
+    
+    // Функция для выхода
+    function logout() {
+      authToken = null;
+      localStorage.removeItem('dashboard_auth_token');
+      showLogin();
+    }
     
     // Функция для получения данных с сервера
     async function fetchData() {
       try {
         const response = await fetch('/api/leads/by-stage?t=' + Date.now(), {
           headers: {
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Authorization': `Bearer ${authToken}`
           }
         });
         
         if (!response.ok) {
+          if (response.status === 401) {
+            // Не авторизован
+            logout();
+            return false;
+          }
           throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
         }
         
@@ -382,7 +552,8 @@
         // Загружаем список операторов
         const operatorsResponse = await fetch('/api/leads/operators?t=' + Date.now(), {
           headers: {
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Authorization': `Bearer ${authToken}`
           }
         });
         
@@ -438,11 +609,19 @@
       try {
         const response = await fetch('/api/leads/updates?t=' + Date.now(), {
           headers: {
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Authorization': `Bearer ${authToken}`
           }
         });
         
-        if (!response.ok) throw new Error('Ошибка сети');
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Не авторизован
+            logout();
+            return;
+          }
+          throw new Error('Ошибка сети');
+        }
         
         const data = await response.json();
         
@@ -779,11 +958,19 @@
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      // Первая загрузка всех данных
-      fetchData();
+      // Проверяем авторизацию при загрузке
+      checkAuth();
       
-      // Запускаем проверку обновлений через минуту
-      setTimeout(checkForUpdates, 60000);
+      // Обработчик формы входа
+      document.getElementById('login-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        login(username, password);
+      });
+      
+      // Обработчик кнопки выхода
+      document.getElementById('logout-button').addEventListener('click', logout);
       
       // Обработчик фильтра операторов
       document.getElementById('operator-select').addEventListener('change', applyOperatorFilter);
