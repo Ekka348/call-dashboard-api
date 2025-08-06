@@ -139,28 +139,6 @@
       padding: 20px;
     }
     
-    .change-indicator {
-      margin-left: 10px;
-      font-weight: bold;
-    }
-    
-    .positive {
-      color: #2ecc71;
-    }
-    
-    .negative {
-      color: #e74c3c;
-    }
-    
-    .fade-out {
-      opacity: 1;
-      transition: opacity 0.5s ease-out;
-    }
-    
-    .fade-out {
-      opacity: 0;
-    }
-    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -234,19 +212,16 @@
       }
     };
     
-    const HIGHLIGHT_DURATION = 3000;
-    
     // Инициализация Socket.IO
     const socket = io({
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 5000,
-      reconnectionDelayMax: 30000,
-      timeout: 60000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
       transports: ['websocket']
     });
     
-    // Элементы UI
     const connectionStatus = document.getElementById('connection-status');
     const statusText = document.getElementById('status-text');
     const lastUpdate = document.getElementById('last-update');
@@ -255,7 +230,7 @@
     socket.on('connect', () => {
       console.log('Connected to server');
       updateConnectionStatus(true);
-      socket.emit('request_full_update');
+      lastUpdate.textContent = new Date().toLocaleTimeString();
     });
     
     socket.on('disconnect', (reason) => {
@@ -273,24 +248,18 @@
     socket.on('init', (data) => {
       console.log('Initial data received');
       updateDashboard(data);
-      updateLastUpdate(data.timestamp);
     });
     
     socket.on('full_update', (data) => {
       console.log('Data update received');
       updateDashboard(data);
-      updateLastUpdate(data.timestamp);
+      lastUpdate.textContent = data.timestamp || new Date().toLocaleTimeString();
     });
     
     // Функции обновления UI
     function updateConnectionStatus(connected) {
       connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
       statusText.textContent = connected ? 'Connected' : 'Disconnected';
-    }
-    
-    function updateLastUpdate(timestamp) {
-      // Просто отображаем полученное время как есть (уже отформатировано сервером)
-      lastUpdate.textContent = timestamp || '-';
     }
     
     function showLoading() {
@@ -309,35 +278,15 @@
         return;
       }
       
-      const changes = data.changes || [];
-      
-      // Обновляем все таблицы
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
         const stageData = data.data[stageName];
         if (stageData) {
-          updateStage(stageName, stageConfig, stageData, changes);
+          updateStage(stageName, stageConfig, stageData);
         }
       }
-      
-      // Подсвечиваем заголовки карточек с изменениями
-      highlightChangedStages(changes);
     }
     
-    function highlightChangedStages(changes) {
-      const changedStages = new Set(changes.map(c => c.stage));
-      
-      changedStages.forEach(stageName => {
-        const config = STAGES[stageName];
-        if (config && config.header) {
-          const header = document.getElementById(config.header);
-          header.classList.add('highlight');
-          setTimeout(() => header.classList.remove('highlight'), HIGHLIGHT_DURATION);
-        }
-      });
-    }
-    
-    function updateStage(stageName, config, data, changes) {
-      // Обновляем счетчик
+    function updateStage(stageName, config, data) {
       const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
       document.getElementById(config.count).textContent = totalCount;
       
@@ -348,50 +297,7 @@
         return;
       }
       
-      if (container.querySelector('table')) {
-        updateTable(container, data, changes.filter(c => c.stage === stageName));
-      } else {
-        createNewTable(container, data);
-      }
-    }
-    
-    function updateTable(container, data, changes) {
-      const tbody = container.querySelector('tbody');
-      const existingRows = Array.from(tbody.querySelectorAll('tr'));
-      
-      const existingData = new Map();
-      existingRows.forEach(row => {
-        existingData.set(row.cells[0].textContent, {
-          row,
-          count: parseInt(row.cells[1].textContent)
-        });
-      });
-      
-      data.details.forEach(item => {
-        const existing = existingData.get(item.operator);
-        const change = changes.find(c => c.operator === item.operator);
-        
-        if (existing) {
-          if (existing.count !== item.count) {
-            existing.row.cells[1].textContent = item.count;
-            highlightRow(existing.row, change?.diff);
-          }
-          existingData.delete(item.operator);
-        } else {
-          const row = createTableRow(item, change?.diff);
-          tbody.appendChild(row);
-        }
-      });
-      
-      // Удаляем старые строки
-      existingData.forEach(({row}) => {
-        row.classList.add('fade-out');
-        setTimeout(() => row.remove(), 500);
-      });
-    }
-    
-    function createNewTable(container, data) {
-      container.innerHTML = `
+      let html = `
         <table>
           <thead>
             <tr>
@@ -400,77 +306,43 @@
             </tr>
           </thead>
           <tbody>
-            ${data.details.map(item => `
-              <tr class="highlight">
-                <td>${item.operator}</td>
-                <td>${item.count}</td>
-              </tr>
-            `).join('')}
+      `;
+      
+      data.details.forEach(item => {
+        html += `
+          <tr>
+            <td>${item.operator}</td>
+            <td>${item.count}</td>
+          </tr>
+        `;
+      });
+      
+      html += `
           </tbody>
         </table>
       `;
       
-      setTimeout(() => {
-        container.querySelectorAll('.highlight').forEach(row => {
-          row.classList.remove('highlight');
-        });
-      }, HIGHLIGHT_DURATION);
-    }
-    
-    function createTableRow(item, diff) {
-      const row = document.createElement('tr');
-      row.className = 'highlight';
-      row.innerHTML = `
-        <td>${item.operator}</td>
-        <td>${item.count}</td>
-      `;
+      container.innerHTML = html;
       
-      if (diff) {
-        addChangeIndicator(row, diff);
-      }
-      
-      setTimeout(() => row.classList.remove('highlight'), HIGHLIGHT_DURATION);
-      return row;
+      // Добавляем анимацию для новых/измененных строк
+      const rows = container.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        row.classList.add('highlight');
+        setTimeout(() => row.classList.remove('highlight'), 1500);
+      });
     }
     
-    function highlightRow(row, diff) {
-      row.classList.add('highlight');
-      if (diff) {
-        addChangeIndicator(row, diff);
-      }
-      setTimeout(() => row.classList.remove('highlight'), HIGHLIGHT_DURATION);
-    }
-    
-    function addChangeIndicator(row, diff) {
-      const indicator = document.createElement('span');
-      indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
-      indicator.textContent = diff > 0 ? `+${diff}` : diff;
-      row.cells[1].appendChild(indicator);
-      
-      setTimeout(() => {
-        if (indicator.parentNode) {
-          indicator.remove();
-        }
-      }, HIGHLIGHT_DURATION);
-    }
-    
-    // Инициализация при загрузке страницы
+    // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      showLoading();
-      
       // Пытаемся подключиться через WebSocket
       socket.connect();
       
       // Fallback на HTTP запрос если WebSocket не подключится
-      const fallbackTimeout = setTimeout(() => {
+      setTimeout(() => {
         if (!socket.connected) {
           fetchInitialData();
         }
       }, 3000);
-      
-      socket.on('connect', () => {
-        clearTimeout(fallbackTimeout);
-      });
     });
     
     // Функция для получения данных через API
