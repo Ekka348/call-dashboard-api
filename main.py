@@ -352,17 +352,26 @@ def serve_static(path):
 def background_updater():
     while True:
         try:
-            get_lead_stats()
-            if time.time() - trend_cache["day"]["timestamp"] > CACHE_TIMEOUT:
+            # Обновляем данные по стадиям
+            leads_by_stage()
+            
+            # Обновляем тренды если нужно
+            current_time = time.time()
+            if current_time - trend_cache["day"]["timestamp"] > CACHE_TIMEOUT:
                 leads_trend()
+                
             time.sleep(UPDATE_INTERVAL)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            time.sleep(min(UPDATE_INTERVAL * 2, 300))
         except Exception as e:
             logger.error(f"Update error: {e}")
             time.sleep(min(UPDATE_INTERVAL * 2, 300))
 
 if __name__ == "__main__":
+    # Запускаем фоновое обновление
     threading.Thread(target=background_updater, daemon=True).start()
+    
+    # Запускаем Flask приложение
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False)
-
-# Продолжение в следующем сообщении...
