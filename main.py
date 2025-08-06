@@ -22,16 +22,10 @@ HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1dj
 UPDATE_INTERVAL = 10  # Интервал обновления в секундах
 
 STAGE_LABELS = {
-    "НДЗ": "5",
-    "НДЗ 2": "9",
+    "На согласовании": "UC_A2DF81",
     "Перезвонить": "IN_PROCESS",
     "Приглашен к рекрутеру": "CONVERTED",
-    "NEW": "NEW",
-    "OLD": "UC_VTOOIM",
-    "База ВВ": "11"
 }
-
-GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
 
 # Кеширование
 user_cache = {"data": {}, "last": 0}
