@@ -20,7 +20,7 @@ socketio = SocketIO(app,
 
 # Константы
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 10  # Интервал обновления в секундах
+UPDATE_INTERVAL = 120  # Интервал обновления в секундах
 
 STAGE_LABELS = {
     "НДЗ": "5",
