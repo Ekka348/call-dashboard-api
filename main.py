@@ -2,7 +2,7 @@ from flask import Flask, send_from_directory, jsonify, request
 from flask_socketio import SocketIO
 import requests, os, time, threading
 from datetime import datetime, timedelta
-from collections import Counter
+from collections import Counter, defaultdict
 from pytz import timezone
 from copy import deepcopy
 
@@ -38,6 +38,7 @@ GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
 user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
+last_operator_status = defaultdict(dict)
 last_emitted_data = None
 
 def get_range_dates(rtype):
@@ -134,6 +135,32 @@ def fetch_all_leads(stage):
     
     return leads
 
+def check_for_operator_changes(new_data):
+    """Сравниваем новые данные с предыдущими и возвращаем изменения"""
+    changes = []
+    for stage_name, stage_data in new_data['data'].items():
+        if stage_data.get('grouped'):
+            continue
+            
+        for operator in stage_data['details']:
+            operator_name = operator['operator']
+            new_count = operator['count']
+            
+            old_count = last_operator_status[stage_name].get(operator_name, 0)
+            
+            if new_count != old_count:
+                changes.append({
+                    'stage': stage_name,
+                    'operator': operator_name,
+                    'old_count': old_count,
+                    'new_count': new_count,
+                    'diff': new_count - old_count
+                })
+                
+            last_operator_status[stage_name][operator_name] = new_count
+            
+    return changes
+
 def get_lead_stats():
     global last_emitted_data
     with cache_lock:
@@ -164,11 +191,15 @@ def get_lead_stats():
                 data[name] = {"grouped": False, "details": details}
 
         result = {"range": "today", "data": data}
+        changes = check_for_operator_changes(result)
         
-        # Сравниваем с предыдущими данными
-        if result != last_emitted_data:
+        if changes or result != last_emitted_data:
             last_emitted_data = deepcopy(result)
-            socketio.emit('full_update', result)
+            socketio.emit('full_update', {
+                'data': result,
+                'changes': changes,
+                'timestamp': datetime.now().isoformat()
+            })
         else:
             socketio.emit('heartbeat', {'timestamp': datetime.now().isoformat()})
         
@@ -203,7 +234,7 @@ def handle_full_update_request():
 def background_updater():
     while True:
         try:
-            get_lead_stats()  # Данные сами отправятся при изменении
+            get_lead_stats()
             print(f"Data checked at {datetime.now()}")
         except Exception as e:
             print(f"Update error: {e}")
@@ -219,11 +250,7 @@ def serve_static(path):
     return send_from_directory(app.static_folder, path)
 
 if __name__ == "__main__":
-    # Запускаем фоновый поток для обновлений
     threading.Thread(target=background_updater, daemon=True).start()
-    
-    # Конфигурация для Railway
     port = int(os.environ.get("PORT", 8080))
     host = '0.0.0.0'
-    
     socketio.run(app, host=host, port=port, debug=False)
