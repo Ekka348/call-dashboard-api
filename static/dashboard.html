@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Leads Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --primary: #4285f4;
       --success: #34a853;
       --warning: #fbbc05;
       --danger: #ea4335;
+      --chart-blue: #4285f4;
+      --chart-yellow: #fbbc05;
+      --chart-green: #34a853;
+      --chart-red: #ea4335;
     }
     
     body {
@@ -253,6 +258,37 @@
       background: #3367d6;
     }
     
+    /* Стили для графика */
+    .time-filter {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .filter-btn {
+      padding: 4px 12px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 15px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.2s;
+    }
+    
+    .filter-btn.active {
+      background: rgba(255, 255, 255, 0.4);
+      font-weight: bold;
+    }
+    
+    #trendChart {
+      width: 100%;
+      height: 300px;
+    }
+    
+    .trend-card .card-body {
+      padding: 15px;
+    }
+    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -268,6 +304,15 @@
         bottom: 10px;
         left: 10px;
         padding: 6px 12px;
+      }
+      
+      #trendChart {
+        height: 250px;
+      }
+      
+      .filter-btn {
+        padding: 3px 8px;
+        font-size: 0.7rem;
       }
     }
   </style>
@@ -301,6 +346,19 @@
         </div>
         <div class="card-body">
           <div id="callback-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
+      
+      <div class="card trend-card" id="trend-card">
+        <div class="card-header">
+          <span>Динамика лидов</span>
+          <div class="time-filter">
+            <button class="filter-btn active" data-period="day">По дням</button>
+            <button class="filter-btn" data-period="hour">По часам</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <canvas id="trendChart"></canvas>
         </div>
       </div>
       
@@ -340,10 +398,17 @@
       }
     };
     
+    const CHART_COLORS = {
+      "На согласовании": '#4285f4',
+      "Перезвонить": '#fbbc05',
+      "Приглашен к рекрутеру": '#34a853'
+    };
+    
     let lastUpdateTime = 0;
     const POLLING_INTERVAL = 60000; // 60 секунд
     let retryDelay = 1000;
     let isFirstLoad = true;
+    let trendChart = null;
     
     // Инициализация перетаскивания карточек
     function initSortable() {
@@ -395,6 +460,106 @@
       }
     }
     
+    // Инициализация графика
+    function initTrendChart() {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      
+      trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: []
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12,
+                padding: 20,
+                usePointStyle: true,
+                pointStyle: 'circle'
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              bodySpacing: 5,
+              titleMarginBottom: 10
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                drawBorder: false,
+                color: 'rgba(0,0,0,0.05)'
+              },
+              ticks: {
+                stepSize: 5
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          },
+          interaction: {
+            intersect: false,
+            mode: 'nearest'
+          }
+        }
+      });
+      
+      // Обработчики для кнопок фильтра
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          updateChartData(this.dataset.period);
+        });
+      });
+    }
+    
+    // Обновление данных графика
+    async function updateChartData(period = 'day') {
+      try {
+        const response = await fetch(`/api/leads/trend?period=${period}&t=${Date.now()}`);
+        const data = await response.json();
+        
+        if (!trendChart) {
+          initTrendChart();
+        }
+        
+        const labels = period === 'day' 
+          ? data.days 
+          : Array.from({length: 24}, (_, i) => `${i}:00`);
+        
+        const datasets = Object.entries(data.stats).map(([stage, values]) => ({
+          label: stage,
+          data: values,
+          borderColor: CHART_COLORS[stage] || '#666',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          tension: 0.1,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#fff',
+          pointBorderWidth: 2
+        }));
+        
+        trendChart.data.labels = labels;
+        trendChart.data.datasets = datasets;
+        trendChart.update();
+      } catch (error) {
+        console.error('Error loading trend data:', error);
+      }
+    }
+    
     // Функция для получения данных с сервера
     async function fetchData() {
       try {
@@ -413,6 +578,7 @@
         
         if (isFirstLoad) {
           updateConnectionStatus(true);
+          updateChartData('day');
           isFirstLoad = false;
         }
         
