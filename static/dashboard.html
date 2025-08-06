@@ -74,7 +74,6 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 20px;
-      margin-bottom: 30px;
     }
     
     .card {
@@ -185,45 +184,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
     
-    .info-section {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 30px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    }
-    
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 15px;
-    }
-    
-    .info-item {
-      padding: 15px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      text-align: center;
-      transition: all 0.3s ease;
-    }
-    
-    .info-item.highlight {
-      background-color: #e8f5e9;
-      transform: scale(1.05);
-    }
-    
-    .info-item h3 {
-      margin-top: 0;
-      color: #666;
-      font-size: 1rem;
-    }
-    
-    .info-value {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--primary);
-    }
-    
     .loading {
       color: #999;
       text-align: center;
@@ -252,11 +212,6 @@
         <span id="status-text">Connecting...</span>
         <span class="last-update" id="last-update"></span>
       </div>
-    </div>
-    
-    <div class="info-section">
-      <h2>Инфо-стадии</h2>
-      <div id="info-stages" class="info-grid"></div>
     </div>
     
     <div class="dashboard-grid" id="content">
@@ -311,7 +266,6 @@
       "Приглашен к рекрутеру": { id: "invited", element: "invited-content", count: "invited-count", header: "invited-header" }
     };
     
-    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
     const HIGHLIGHT_DURATION = 3000;
     
     // Инициализация Socket.IO
@@ -327,7 +281,6 @@
     const connectionStatus = document.getElementById('connection-status');
     const statusText = document.getElementById('status-text');
     const lastUpdate = document.getElementById('last-update');
-    const infoStagesContainer = document.getElementById('info-stages');
     
     // Обработчики соединения
     socket.on('connect', () => {
@@ -387,7 +340,6 @@
       }
       
       const changes = data.changes || [];
-      updateInfoStages(data.data);
       
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
         const stageData = data.data[stageName];
@@ -396,7 +348,6 @@
         }
       }
       
-      // Подсвечиваем заголовки карточек с изменениями
       highlightChangedStages(changes);
     }
     
@@ -411,44 +362,6 @@
           setTimeout(() => header.classList.remove('highlight'), HIGHLIGHT_DURATION);
         }
       }
-    }
-    
-    function updateInfoStages(data) {
-      const items = {};
-      INFO_STAGES.forEach(stage => {
-        const stageData = data[stage];
-        if (!stageData) return;
-        
-        const itemId = `info-item-${stage}`;
-        let item = document.getElementById(itemId);
-        
-        if (!item) {
-          item = document.createElement('div');
-          item.className = 'info-item';
-          item.id = itemId;
-          item.innerHTML = `
-            <h3>${stage}</h3>
-            <div class="info-value">${stageData.count || 0}</div>
-          `;
-          infoStagesContainer.appendChild(item);
-        } else {
-          const valueElement = item.querySelector('.info-value');
-          if (parseInt(valueElement.textContent) !== stageData.count) {
-            valueElement.textContent = stageData.count;
-            item.classList.add('highlight');
-            setTimeout(() => item.classList.remove('highlight'), HIGHLIGHT_DURATION);
-          }
-        }
-        
-        items[stage] = item;
-      });
-      
-      // Удаляем устаревшие элементы
-      Array.from(infoStagesContainer.children).forEach(child => {
-        if (!Object.values(items).includes(child)) {
-          child.remove();
-        }
-      });
     }
     
     function updateStage(stageName, config, data, changes = []) {
@@ -566,7 +479,6 @@
     }
     
     function showChangeIndicator(row, diff) {
-      // Удаляем старый индикатор, если есть
       const oldIndicator = row.querySelector('.change-indicator');
       if (oldIndicator) oldIndicator.remove();
       
@@ -587,7 +499,6 @@
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      // Резервный запрос на случай проблем с WebSocket
       fetch('/api/leads/by-stage')
         .then(response => response.json())
         .then(data => updateDashboard(data))
