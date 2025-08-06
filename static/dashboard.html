@@ -139,40 +139,40 @@
       display: inline-block;
     }
     
-    .count-update {
+    .pulse-update {
+      animation: pulseUpdate 1s ease-out;
+    }
+    
+    @keyframes pulseUpdate {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); background-color: rgba(76, 175, 80, 0.2); }
+      100% { transform: scale(1); }
+    }
+    
+    .count-change {
       position: absolute;
       right: 0;
       font-size: 0.8em;
       padding: 2px 6px;
       border-radius: 10px;
-      background-color: #ffeb3b;
-      color: #000;
       opacity: 0;
-      transform: translateY(-20px);
-      animation: count-update-fade 2s forwards;
+      animation: countChangeFade 2s forwards;
     }
     
-    @keyframes count-update-fade {
-      0% { opacity: 1; transform: translateY(-20px); }
-      70% { opacity: 1; transform: translateY(-30px); }
-      100% { opacity: 0; transform: translateY(-40px); }
+    .count-up {
+      background-color: rgba(76, 175, 80, 0.2);
+      color: #2e7d32;
     }
     
-    .highlight-update {
-      animation: highlight-update 1.5s ease-out;
+    .count-down {
+      background-color: rgba(244, 67, 54, 0.2);
+      color: #c62828;
     }
     
-    @keyframes highlight-update {
-      0% { background-color: rgba(255, 235, 59, 0.5); }
-      100% { background-color: transparent; }
-    }
-    
-    .diff-up {
-      background-color: rgba(76, 175, 80, 0.1);
-    }
-    
-    .diff-down {
-      background-color: rgba(244, 67, 54, 0.1);
+    @keyframes countChangeFade {
+      0% { opacity: 1; transform: translateY(0); }
+      70% { opacity: 1; transform: translateY(-15px); }
+      100% { opacity: 0; transform: translateY(-25px); }
     }
     
     .loading {
@@ -357,26 +357,23 @@
     };
     
     let lastUpdateTime = 0;
-    const POLLING_INTERVAL = 60000; // 60 секунд
-    let retryDelay = 1000;
     let isFirstLoad = true;
     let allOperators = [];
     
     // Функция для получения данных с сервера
     async function fetchData() {
       try {
-        // Загружаем данные дашборда
-        const dashboardResponse = await fetch('/api/leads/by-stage?t=' + Date.now(), {
+        const response = await fetch('/api/leads/by-stage?t=' + Date.now(), {
           headers: {
             'Cache-Control': 'no-cache'
           }
         });
         
-        if (!dashboardResponse.ok) {
-          throw new Error(`Ошибка HTTP! Статус: ${dashboardResponse.status}`);
+        if (!response.ok) {
+          throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
         }
         
-        const data = await dashboardResponse.json();
+        const data = await response.json();
         
         if (data.status === "error") {
           throw new Error(data.message);
@@ -411,7 +408,6 @@
           isFirstLoad = false;
         }
         
-        retryDelay = 1000;
         return true;
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);
@@ -433,16 +429,107 @@
           }
         });
         
-        retryDelay = Math.min(retryDelay * 2, 60000);
         return false;
       }
     }
     
     // Функция для проверки обновлений
     async function checkForUpdates() {
-      const success = await fetchData();
-      const delay = success ? POLLING_INTERVAL : retryDelay;
-      setTimeout(checkForUpdates, delay);
+      try {
+        const response = await fetch('/api/leads/updates?t=' + Date.now(), {
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка сети');
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          processUpdates(data.updates);
+          lastUpdateTime = Date.now();
+          document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+          updateConnectionStatus(true);
+        }
+      } catch (error) {
+        console.error('Ошибка проверки обновлений:', error);
+        updateConnectionStatus(false);
+      } finally {
+        setTimeout(checkForUpdates, 60000); // Проверка каждую минуту
+      }
+    }
+    
+    // Функция для обработки обновлений
+    function processUpdates(updates) {
+      if (!updates) return;
+      
+      for (const [stageName, stageData] of Object.entries(updates)) {
+        const stageConfig = STAGES[stageName];
+        if (!stageConfig) continue;
+        
+        const container = document.getElementById(stageConfig.element);
+        const tbody = container?.querySelector('tbody');
+        if (!tbody) continue;
+        
+        // Обновляем счетчик в заголовке
+        const countElement = document.getElementById(stageConfig.count);
+        if (countElement && stageData.total_count !== undefined) {
+          countElement.textContent = stageData.total_count;
+        }
+        
+        // Обновляем данные операторов
+        if (stageData.operators) {
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          const rowMap = {};
+          
+          rows.forEach(row => {
+            const operator = row.cells[0].textContent;
+            rowMap[operator] = row;
+          });
+          
+          stageData.operators.forEach(operatorData => {
+            const row = rowMap[operatorData.operator];
+            const countCell = row?.querySelector('.count-cell');
+            
+            if (row && countCell) {
+              const countValue = countCell.querySelector('.count-value') || 
+                document.createElement('span');
+              
+              if (!countCell.contains(countValue)) {
+                countValue.className = 'count-value';
+                countCell.innerHTML = '';
+                countCell.appendChild(countValue);
+              }
+              
+              const oldCount = parseInt(countValue.textContent) || 0;
+              const newCount = operatorData.count;
+              
+              if (oldCount !== newCount) {
+                countValue.textContent = newCount;
+                
+                // Анимация изменения
+                countValue.classList.add('pulse-update');
+                setTimeout(() => countValue.classList.remove('pulse-update'), 1000);
+                
+                // Показываем разницу
+                const diff = newCount - oldCount;
+                const changeElement = document.createElement('span');
+                changeElement.className = `count-change ${diff > 0 ? 'count-up' : 'count-down'}`;
+                changeElement.textContent = (diff > 0 ? '+' : '') + diff;
+                countCell.appendChild(changeElement);
+                
+                // Удаляем элемент через 2 секунды
+                setTimeout(() => {
+                  if (changeElement.parentNode === countCell) {
+                    countCell.removeChild(changeElement);
+                  }
+                }, 2000);
+              }
+            }
+          });
+        }
+      }
     }
     
     // Функции обновления UI
@@ -451,7 +538,7 @@
       const statusText = document.getElementById('status-text');
       
       connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
-      statusText.textContent = connected ? 'Подключено (Polling)' : 'Отключено';
+      statusText.textContent = connected ? 'Подключено' : 'Отключено';
     }
     
     function updateDashboard(data) {
@@ -542,23 +629,7 @@
               countCell.appendChild(countValue);
             }
             
-            // Анимация изменения числа
             countValue.textContent = newCount;
-            countValue.classList.add('highlight-update');
-            setTimeout(() => countValue.classList.remove('highlight-update'), 1500);
-            
-            // Показываем разницу
-            const diff = newCount - oldCount;
-            const updateBadge = document.createElement('span');
-            updateBadge.className = 'count-update';
-            updateBadge.textContent = (diff > 0 ? '+' : '') + diff;
-            countCell.appendChild(updateBadge);
-            
-            // Подсветка строки
-            row.classList.add(diff > 0 ? 'diff-up' : 'diff-down');
-            setTimeout(() => {
-              row.classList.remove('diff-up', 'diff-down');
-            }, 1500);
           }
         } else {
           // Добавляем новую строку
@@ -570,10 +641,6 @@
             </td>
           `;
           tbody.appendChild(row);
-          
-          // Анимация для новой строки
-          row.classList.add('highlight-update');
-          setTimeout(() => row.classList.remove('highlight-update'), 1500);
         }
       });
       
@@ -581,8 +648,7 @@
       existingRows.forEach(row => {
         const operator = row.cells[0].textContent;
         if (!data.details.some(item => item.operator === operator)) {
-          row.classList.add('diff-down');
-          setTimeout(() => row.remove(), 1000);
+          row.remove();
         }
       });
       
@@ -632,7 +698,6 @@
     function applyOperatorFilter() {
       const selectedOperator = document.getElementById('operator-select').value;
       const tables = document.querySelectorAll('.card table tbody');
-      let anyVisible = false;
       
       tables.forEach(table => {
         const rows = table.querySelectorAll('tr');
@@ -643,12 +708,9 @@
           
           if (!selectedOperator || operatorName === selectedOperator) {
             row.classList.remove('hidden-row');
-            row.classList.add('highlight-operator');
             hasVisibleRows = true;
-            anyVisible = true;
           } else {
             row.classList.add('hidden-row');
-            row.classList.remove('highlight-operator');
           }
         });
         
@@ -717,13 +779,13 @@
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      // Первая загрузка данных
+      // Первая загрузка всех данных
       fetchData();
       
-      // Запускаем периодическую проверку
-      setTimeout(checkForUpdates, POLLING_INTERVAL);
+      // Запускаем проверку обновлений через минуту
+      setTimeout(checkForUpdates, 60000);
       
-      // Обработчик изменения селектора операторов
+      // Обработчик фильтра операторов
       document.getElementById('operator-select').addEventListener('change', applyOperatorFilter);
     });
   </script>
