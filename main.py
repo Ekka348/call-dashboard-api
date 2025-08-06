@@ -9,7 +9,7 @@ app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # Настройки подключения к Bitrix24
-HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
+HOOK = os.environ.get('BITRIX_HOOK', "https://example.bitrix24.ru/rest/1/abc123/")
 UPDATE_INTERVAL = 60  # Интервал обновления в секундах (1 минута)
 
 STAGE_LABELS = {
@@ -68,16 +68,20 @@ def load_users():
     user_cache["last"] = time.time()
     return users
 
-def fetch_leads(stage, start, end):
+def fetch_leads(stage, start, end, operator_id=None):
     leads = []
     try:
+        filters = {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage}
+        if operator_id:
+            filters["ASSIGNED_BY_ID"] = operator_id
+            
         offset = 0
         while True:
             response = requests.post(
                 f"{HOOK}crm.lead.list.json",
                 json={
-                    "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                    "select": ["ID", "ASSIGNED_BY_ID", "DATE_MODIFY"],
+                    "filter": filters,
+                    "select": ["ID", "DATE_MODIFY", "ASSIGNED_BY_ID"],
                     "start": offset
                 },
                 timeout=20
@@ -91,7 +95,7 @@ def fetch_leads(stage, start, end):
             if not offset:
                 break
     except Exception as e:
-        print(f"Error fetching leads for {stage}: {e}")
+        print(f"Error fetching leads: {e}")
     
     return leads
 
@@ -132,7 +136,7 @@ def get_lead_stats():
 
             data[name] = {
                 "details": [
-                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt, "id": uid}
                     for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
                 ]
             }
@@ -148,11 +152,72 @@ def get_lead_stats():
         data_cache["timestamp"] = time.time()
         return result
 
+@app.route("/api/operator/<int:operator_id>/stats")
+def operator_stats(operator_id):
+    try:
+        tz = timezone("Europe/Moscow")
+        now = datetime.now(tz)
+        users = load_users()
+        operator_name = users.get(operator_id, f"ID {operator_id}")
+        
+        # Текущее распределение по стадиям
+        current_stats = {}
+        start, end = get_range_dates()
+        for stage_name, stage_id in STAGE_LABELS.items():
+            leads = fetch_leads(stage_id, start, end, operator_id)
+            current_stats[stage_name] = len(leads)
+        
+        # Данные за последние 7 дней
+        daily_stats = defaultdict(list)
+        days = []
+        for i in range(7):
+            day = now - timedelta(days=6-i)
+            days.append(day.strftime("%d.%m"))
+            day_start = day.replace(hour=0, minute=0, second=0)
+            day_end = day.replace(hour=23, minute=59, second=59)
+            
+            for stage_name, stage_id in STAGE_LABELS.items():
+                leads = fetch_leads(stage_id, day_start.strftime("%Y-%m-%d %H:%M:%S"), 
+                                  day_end.strftime("%Y-%m-%d %H:%M:%S"), operator_id)
+                daily_stats[stage_name].append(len(leads))
+        
+        # Данные по часам за сегодня
+        hourly_stats = defaultdict(list)
+        today_start = now.replace(hour=0, minute=0, second=0)
+        for hour in range(24):
+            hour_start = today_start + timedelta(hours=hour)
+            hour_end = hour_start + timedelta(hours=1)
+            
+            for stage_name, stage_id in STAGE_LABELS.items():
+                leads = fetch_leads(stage_id, hour_start.strftime("%Y-%m-%d %H:%M:%S"),
+                                  hour_end.strftime("%Y-%m-%d %H:%M:%S"), operator_id)
+                hourly_stats[stage_name].append(len(leads))
+        
+        return jsonify({
+            "operator": {
+                "id": operator_id,
+                "name": operator_name
+            },
+            "current": current_stats,
+            "daily": {
+                "days": days,
+                "stats": daily_stats
+            },
+            "hourly": {
+                "hours": [f"{h}:00" for h in range(24)],
+                "stats": hourly_stats
+            },
+            "timestamp": now.strftime("%Y-%m-%d %H:%M:%S")
+        })
+        
+    except Exception as e:
+        print(f"Error getting operator stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/leads/trend")
 def leads_trend():
     period = request.args.get('period', 'day')
     
-    # Проверка кеша
     if time.time() - trend_cache[period]["timestamp"] < CACHE_TIMEOUT:
         return jsonify(trend_cache[period]["data"])
     
@@ -162,12 +227,10 @@ def leads_trend():
     
     try:
         if period == 'day':
-            # Данные за последние 7 дней
             days = []
             for i in range(7):
                 day = now - timedelta(days=6-i)
-                days.append(day.strftime("%a"))  # Сокращенные названия дней
-                
+                days.append(day.strftime("%d.%m"))
                 day_start = day.replace(hour=0, minute=0, second=0)
                 day_end = day.replace(hour=23, minute=59, second=59)
                 
@@ -178,25 +241,18 @@ def leads_trend():
             
             result = {"days": days, "stats": stats}
         else:
-            # Данные по часам за текущий день
-            day_start = now.replace(hour=0, minute=0, second=0)
-            
+            today_start = now.replace(hour=0, minute=0, second=0)
             for hour in range(24):
-                hour_start = day_start + timedelta(hours=hour)
+                hour_start = today_start + timedelta(hours=hour)
                 hour_end = hour_start + timedelta(hours=1)
                 
                 for name, stage_id in STAGE_LABELS.items():
-                    if hour not in range(9, 19):  # Только рабочее время (9:00-18:59)
-                        stats[name].append(0)
-                        continue
-                        
-                    leads = fetch_leads(stage_id, hour_start.strftime("%Y-%m-%d %H:%M:%S"), 
+                    leads = fetch_leads(stage_id, hour_start.strftime("%Y-%m-%d %H:%M:%S"),
                                       hour_end.strftime("%Y-%m-%d %H:%M:%S"))
                     stats[name].append(len(leads))
             
             result = {"stats": stats}
         
-        # Сохраняем в кеш
         trend_cache[period] = {
             "data": result,
             "timestamp": time.time()
@@ -207,6 +263,10 @@ def leads_trend():
     except Exception as e:
         print(f"Error generating trend data: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/users")
+def get_users():
+    return jsonify(load_users())
 
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
@@ -223,22 +283,15 @@ def serve_static(path):
 def background_updater():
     while True:
         try:
-            # Обновляем основные данные
             get_lead_stats()
-            
-            # Периодически обновляем кеш графиков
             if time.time() - trend_cache["day"]["timestamp"] > CACHE_TIMEOUT:
                 leads_trend()
-            
             time.sleep(UPDATE_INTERVAL)
         except Exception as e:
             print(f"Update error: {e}")
             time.sleep(10)
 
 if __name__ == "__main__":
-    # Запускаем фоновое обновление в отдельном потоке
     threading.Thread(target=background_updater, daemon=True).start()
-    
-    # Запускаем Flask-приложение
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False)
