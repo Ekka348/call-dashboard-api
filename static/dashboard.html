@@ -122,31 +122,50 @@
       border-bottom: 1px solid #f0f0f0;
     }
     
+    .count-cell {
+      position: relative;
+      min-width: 80px;
+    }
+    
+    .count-value {
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+    
+    .count-update {
+      position: absolute;
+      right: 0;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background-color: #ffeb3b;
+      color: #000;
+      opacity: 0;
+      transform: translateY(-20px);
+      animation: count-update-fade 2s forwards;
+    }
+    
+    @keyframes count-update-fade {
+      0% { opacity: 1; transform: translateY(-20px); }
+      70% { opacity: 1; transform: translateY(-30px); }
+      100% { opacity: 0; transform: translateY(-40px); }
+    }
+    
+    .highlight-update {
+      animation: highlight-update 1.5s ease-out;
+    }
+    
+    @keyframes highlight-update {
+      0% { background-color: rgba(255, 235, 59, 0.5); }
+      100% { background-color: transparent; }
+    }
+    
     .diff-up {
       background-color: rgba(76, 175, 80, 0.1);
     }
     
     .diff-down {
       background-color: rgba(244, 67, 54, 0.1);
-    }
-    
-    .highlight {
-      animation: highlight-fade 3s ease-out;
-    }
-    
-    .diff-badge {
-      display: inline-block;
-      margin-left: 8px;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 0.8em;
-      background-color: #ffeb3b;
-      color: #000;
-    }
-    
-    @keyframes highlight-fade {
-      0% { background-color: rgba(255, 235, 59, 0.5); }
-      100% { background-color: transparent; }
     }
     
     .loading {
@@ -348,69 +367,129 @@
     
     function updateStage(stageName, config, data) {
       const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
-      document.getElementById(config.count).textContent = totalCount;
+      
+      // Обновляем общее количество
+      const countElement = document.getElementById(config.count);
+      if (parseInt(countElement.textContent) !== totalCount) {
+        countElement.textContent = totalCount;
+      }
       
       const container = document.getElementById(config.element);
       
       if (!data.details || data.details.length === 0) {
-        container.innerHTML = '<div class="empty">Нет данных</div>';
+        if (!container.querySelector('.empty')) {
+          container.innerHTML = '<div class="empty">Нет данных</div>';
+        }
         return;
       }
       
-      // Сохраняем предыдущие значения для сравнения
-      const prevValues = {};
-      const rows = container.querySelectorAll('tbody tr');
-      rows.forEach(row => {
-        const operator = row.cells[0].textContent;
-        const count = parseInt(row.cells[1].textContent);
-        prevValues[operator] = count;
-      });
-      
-      let html = `
-        <table>
-          <thead>
-            <tr>
-              <th>Оператор</th>
-              <th>Количество</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      data.details.forEach(item => {
-        const prevCount = prevValues[item.operator] || 0;
-        const diff = item.count - prevCount;
-        const diffClass = diff > 0 ? 'diff-up' : diff < 0 ? 'diff-down' : '';
-        
-        html += `
-          <tr class="${diffClass}">
-            <td>${item.operator}</td>
-            <td>
-              ${item.count}
-              ${diff !== 0 ? `<span class="diff-badge">${diff > 0 ? '+' : ''}${diff}</span>` : ''}
-            </td>
-          </tr>
+      // Если таблицы нет - создаем ее
+      if (!container.querySelector('table')) {
+        container.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Оператор</th>
+                <th>Количество</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
         `;
+      }
+      
+      const tbody = container.querySelector('tbody');
+      const existingRows = Array.from(tbody.querySelectorAll('tr'));
+      const existingData = {};
+      
+      // Собираем текущие данные
+      existingRows.forEach(row => {
+        const operator = row.cells[0].textContent;
+        const countValue = row.cells[1].querySelector('.count-value');
+        const count = countValue ? parseInt(countValue.textContent) : 0;
+        existingData[operator] = {
+          element: row,
+          count: count
+        };
       });
       
-      html += `
-          </tbody>
-        </table>
-      `;
-      
-      container.innerHTML = html;
-      
-      // Добавляем анимацию для измененных строк
-      const changedRows = container.querySelectorAll('.diff-up, .diff-down');
-      changedRows.forEach(row => {
-        row.classList.add('highlight');
-        setTimeout(() => {
-          row.classList.remove('highlight');
-          row.classList.remove('diff-up', 'diff-down');
-        }, 3000);
+      // Обновляем или добавляем строки
+      data.details.forEach(item => {
+        const operator = item.operator;
+        const newCount = item.count;
+        
+        if (existingData[operator]) {
+          // Обновляем существующую строку
+          const row = existingData[operator].element;
+          const oldCount = existingData[operator].count;
+          
+          if (oldCount !== newCount) {
+            const countCell = row.cells[1];
+            let countValue = countCell.querySelector('.count-value');
+            
+            if (!countValue) {
+              countValue = document.createElement('span');
+              countValue.className = 'count-value';
+              countCell.innerHTML = '';
+              countCell.appendChild(countValue);
+            }
+            
+            // Анимация изменения числа
+            countValue.textContent = newCount;
+            countValue.classList.add('highlight-update');
+            setTimeout(() => countValue.classList.remove('highlight-update'), 1500);
+            
+            // Показываем разницу
+            const diff = newCount - oldCount;
+            const updateBadge = document.createElement('span');
+            updateBadge.className = 'count-update';
+            updateBadge.textContent = (diff > 0 ? '+' : '') + diff;
+            countCell.appendChild(updateBadge);
+            
+            // Подсветка строки
+            row.classList.add(diff > 0 ? 'diff-up' : 'diff-down');
+            setTimeout(() => {
+              row.classList.remove('diff-up', 'diff-down');
+            }, 1500);
+          }
+        } else {
+          // Добавляем новую строку
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${operator}</td>
+            <td class="count-cell">
+              <span class="count-value">${newCount}</span>
+            </td>
+          `;
+          tbody.appendChild(row);
+          
+          // Анимация для новой строки
+          row.classList.add('highlight-update');
+          setTimeout(() => row.classList.remove('highlight-update'), 1500);
+        }
       });
+      
+      // Удаляем отсутствующих операторов
+      existingRows.forEach(row => {
+        const operator = row.cells[0].textContent;
+        if (!data.details.some(item => item.operator === operator)) {
+          row.classList.add('diff-down');
+          setTimeout(() => row.remove(), 1000);
+        }
+      });
+      
+      // Сортируем строки по количеству (по убыванию)
+      const sortedRows = Array.from(tbody.querySelectorAll('tr'))
+        .sort((a, b) => {
+          const aCount = parseInt(a.cells[1].querySelector('.count-value')?.textContent || 0);
+          const bCount = parseInt(b.cells[1].querySelector('.count-value')?.textContent || 0);
+          return bCount - aCount;
+        });
+      
+      sortedRows.forEach(row => tbody.appendChild(row));
     }
-    
+
     function showChangesNotification(changes) {
       const notification = document.createElement('div');
       notification.className = 'changes-notification';
