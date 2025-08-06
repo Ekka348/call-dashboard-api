@@ -150,6 +150,15 @@
       color: #e74c3c;
     }
     
+    .fade-out {
+      opacity: 1;
+      transition: opacity 0.5s ease-out;
+    }
+    
+    .fade-out {
+      opacity: 0;
+    }
+    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -203,79 +212,136 @@
 
   <script>
     const STAGES = {
-      "На согласовании": { id: "agreement", element: "agreement-content", count: "agreement-count", header: "agreement-header" },
-      "Перезвонить": { id: "callback", element: "callback-content", count: "callback-count", header: "callback-header" },
-      "Приглашен к рекрутеру": { id: "invited", element: "invited-content", count: "invited-count", header: "invited-header" }
+      "На согласовании": { 
+        id: "agreement", 
+        element: "agreement-content", 
+        count: "agreement-count", 
+        header: "agreement-header" 
+      },
+      "Перезвонить": { 
+        id: "callback", 
+        element: "callback-content", 
+        count: "callback-count", 
+        header: "callback-header" 
+      },
+      "Приглашен к рекрутеру": { 
+        id: "invited", 
+        element: "invited-content", 
+        count: "invited-count", 
+        header: "invited-header" 
+      }
     };
     
     const HIGHLIGHT_DURATION = 3000;
     
+    // Инициализация Socket.IO с увеличенными таймаутами
     const socket = io({
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 5000,
+      reconnectionDelayMax: 30000,
       timeout: 60000,
       transports: ['websocket']
     });
     
+    // Элементы UI
     const connectionStatus = document.getElementById('connection-status');
     const statusText = document.getElementById('status-text');
     const lastUpdate = document.getElementById('last-update');
     
+    // Обработчики событий Socket.IO
     socket.on('connect', () => {
-      console.log('Connected');
+      console.log('Connected to server');
       updateConnectionStatus(true);
-      lastUpdate.textContent = new Date().toLocaleTimeString();
       socket.emit('request_full_update');
     });
     
     socket.on('disconnect', (reason) => {
       console.log('Disconnected:', reason);
       updateConnectionStatus(false);
+      showLoading();
     });
     
     socket.on('connect_error', (error) => {
-      console.log('Connection error:', error);
+      console.error('Connection error:', error);
       updateConnectionStatus(false);
+      showLoading();
     });
     
     socket.on('init', (data) => {
+      console.log('Initial data received');
       updateDashboard(data);
     });
     
     socket.on('full_update', (data) => {
+      console.log('Data update received');
       updateDashboard(data);
-      lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+      updateLastUpdate(data.timestamp);
     });
     
+    // Функции обновления UI
     function updateConnectionStatus(connected) {
       connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
       statusText.textContent = connected ? 'Connected' : 'Disconnected';
     }
     
+    function updateLastUpdate(timestamp) {
+      const date = new Date(timestamp * 1000);
+      lastUpdate.textContent = date.toLocaleTimeString();
+    }
+    
+    function showLoading() {
+      Object.values(STAGES).forEach(config => {
+        const container = document.getElementById(config.element);
+        if (!container.querySelector('.loading')) {
+          container.innerHTML = '<div class="loading">Загрузка...</div>';
+        }
+      });
+    }
+    
     function updateDashboard(data) {
-      if (!data?.data) return;
+      if (!data || !data.data) {
+        console.error('Invalid data received');
+        showLoading();
+        return;
+      }
       
+      const changes = data.changes || [];
+      
+      // Обновляем все таблицы
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
         const stageData = data.data[stageName];
-        if (stageData) updateStage(stageName, stageConfig, stageData, data.changes || []);
+        if (stageData) {
+          updateStage(stageName, stageConfig, stageData, changes);
+        }
       }
+      
+      // Подсвечиваем заголовки карточек с изменениями
+      highlightChangedStages(changes);
+    }
+    
+    function highlightChangedStages(changes) {
+      const changedStages = new Set(changes.map(c => c.stage));
+      
+      changedStages.forEach(stageName => {
+        const config = STAGES[stageName];
+        if (config && config.header) {
+          const header = document.getElementById(config.header);
+          header.classList.add('highlight');
+          setTimeout(() => header.classList.remove('highlight'), HIGHLIGHT_DURATION);
+        }
+      });
     }
     
     function updateStage(stageName, config, data, changes) {
+      // Обновляем счетчик
       const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
-      const countElement = document.getElementById(config.count);
-      
-      if (parseInt(countElement.textContent) !== totalCount) {
-        countElement.textContent = totalCount;
-      }
+      document.getElementById(config.count).textContent = totalCount;
       
       const container = document.getElementById(config.element);
       
-      if (!data.details?.length) {
-        if (!container.querySelector('.empty')) {
-          container.innerHTML = '<div class="empty">Нет данных</div>';
-        }
+      if (!data.details || data.details.length === 0) {
+        container.innerHTML = '<div class="empty">Нет данных</div>';
         return;
       }
       
@@ -314,6 +380,7 @@
         }
       });
       
+      // Удаляем старые строки
       existingData.forEach(({row}) => {
         row.classList.add('fade-out');
         setTimeout(() => row.remove(), 500);
@@ -321,22 +388,24 @@
     }
     
     function createNewTable(container, data) {
-      const table = document.createElement('table');
-      table.innerHTML = `
-        <thead>
-          <tr><th>Оператор</th><th>Количество</th></tr>
-        </thead>
-        <tbody>
-          ${data.details.map(item => 
-            `<tr class="highlight">
-              <td>${item.operator}</td>
-              <td>${item.count}</td>
-            </tr>`
-          ).join('')}
-        </tbody>
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Оператор</th>
+              <th>Количество</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.details.map(item => `
+              <tr class="highlight">
+                <td>${item.operator}</td>
+                <td>${item.count}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       `;
-      container.innerHTML = '';
-      container.appendChild(table);
       
       setTimeout(() => {
         container.querySelectorAll('.highlight').forEach(row => {
@@ -354,12 +423,7 @@
       `;
       
       if (diff) {
-        const indicator = document.createElement('span');
-        indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
-        indicator.textContent = diff > 0 ? `+${diff}` : diff;
-        row.cells[1].appendChild(indicator);
-        
-        setTimeout(() => indicator.remove(), HIGHLIGHT_DURATION);
+        addChangeIndicator(row, diff);
       }
       
       setTimeout(() => row.classList.remove('highlight'), HIGHLIGHT_DURATION);
@@ -368,26 +432,57 @@
     
     function highlightRow(row, diff) {
       row.classList.add('highlight');
-      
       if (diff) {
-        const indicator = document.createElement('span');
-        indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
-        indicator.textContent = diff > 0 ? `+${diff}` : diff;
-        row.cells[1].appendChild(indicator);
-        
-        setTimeout(() => indicator.remove(), HIGHLIGHT_DURATION);
+        addChangeIndicator(row, diff);
       }
-      
       setTimeout(() => row.classList.remove('highlight'), HIGHLIGHT_DURATION);
     }
     
-    // Инициализация
+    function addChangeIndicator(row, diff) {
+      const indicator = document.createElement('span');
+      indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
+      indicator.textContent = diff > 0 ? `+${diff}` : diff;
+      row.cells[1].appendChild(indicator);
+      
+      setTimeout(() => {
+        if (indicator.parentNode) {
+          indicator.remove();
+        }
+      }, HIGHLIGHT_DURATION);
+    }
+    
+    // Инициализация при загрузке страницы
     document.addEventListener('DOMContentLoaded', () => {
-      fetch('/api/leads/by-stage')
-        .then(response => response.json())
-        .then(data => updateDashboard(data))
-        .catch(console.error);
+      showLoading();
+      
+      // Пытаемся подключиться через WebSocket
+      socket.connect();
+      
+      // Fallback на HTTP запрос если WebSocket не подключится
+      const fallbackTimeout = setTimeout(() => {
+        if (!socket.connected) {
+          fetchInitialData();
+        }
+      }, 3000);
+      
+      socket.on('connect', () => {
+        clearTimeout(fallbackTimeout);
+      });
     });
+    
+    // Функция для получения данных через API
+    async function fetchInitialData() {
+      try {
+        const response = await fetch('/api/leads/by-stage');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        updateDashboard(data);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+        // Повторяем попытку через 5 секунд
+        setTimeout(fetchInitialData, 5000);
+      }
+    }
   </script>
 </body>
 </html>
