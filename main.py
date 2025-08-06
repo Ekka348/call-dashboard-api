@@ -1,9 +1,10 @@
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 from flask_socketio import SocketIO
 import requests, os, time, threading
 from datetime import datetime, timedelta
 from collections import Counter
 from pytz import timezone
+from copy import deepcopy
 
 # Инициализация приложения
 app = Flask(__name__, static_folder='static')
@@ -37,6 +38,7 @@ GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
 user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
+last_emitted_data = None
 
 def get_range_dates(rtype):
     tz = timezone("Europe/Moscow")
@@ -133,6 +135,7 @@ def fetch_all_leads(stage):
     return leads
 
 def get_lead_stats():
+    global last_emitted_data
     with cache_lock:
         if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
             return data_cache["data"]
@@ -161,6 +164,14 @@ def get_lead_stats():
                 data[name] = {"grouped": False, "details": details}
 
         result = {"range": "today", "data": data}
+        
+        # Сравниваем с предыдущими данными
+        if result != last_emitted_data:
+            last_emitted_data = deepcopy(result)
+            socketio.emit('full_update', result)
+        else:
+            socketio.emit('heartbeat', {'timestamp': datetime.now().isoformat()})
+        
         data_cache["data"] = result
         data_cache["timestamp"] = time.time()
         return result
@@ -185,12 +196,15 @@ def handle_connect():
     print(f'Client connected: {request.sid}')
     socketio.emit('init', get_lead_stats())
 
+@socketio.on('request_full_update')
+def handle_full_update_request():
+    socketio.emit('full_update', get_lead_stats())
+
 def background_updater():
     while True:
         try:
-            data = get_lead_stats()
-            socketio.emit('update', data)
-            print(f"Data updated at {datetime.now()}")
+            get_lead_stats()  # Данные сами отправятся при изменении
+            print(f"Data checked at {datetime.now()}")
         except Exception as e:
             print(f"Update error: {e}")
         time.sleep(UPDATE_INTERVAL)
