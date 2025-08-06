@@ -6,6 +6,8 @@
   <title>Real-Time Leads Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
   <style>
     :root {
       --primary: #4285f4;
@@ -106,13 +108,8 @@
     }
 
     .card:hover {
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 rgba(0,0,0,0.1); }
-      50% { box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
-      100% { box-shadow: 0 0 0 rgba(0,0,0,0.1); }
+      transform: translateY(-2px);
+      box-shadow: 0 7px 14px rgba(0,0,0,0.1);
     }
 
     .card-header {
@@ -134,6 +131,8 @@
 
     .card-body {
       padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
     }
 
     table {
@@ -202,7 +201,7 @@
 
     @keyframes highlight-update {
       0% { background-color: rgba(255, 235, 59, 0.5); }
-      100% { background-color: transparent;
+      100% { background-color: transparent; }
     }
 
     .diff-up {
@@ -221,6 +220,12 @@
 
     .empty {
       color: var(--text-light);
+      text-align: center;
+      padding: 20px;
+    }
+
+    .error {
+      color: var(--danger);
       text-align: center;
       padding: 20px;
     }
@@ -386,6 +391,25 @@
       font-weight: bold;
     }
 
+    .time-filter {
+      display: flex;
+      gap: 5px;
+    }
+
+    .filter-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .filter-btn.active {
+      background: rgba(255,255,255,0.4);
+    }
+
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -529,9 +553,11 @@
     };
     
     const POLLING_INTERVAL = 60000; // 60 секунд
+    const RETRY_DELAY = 5000; // 5 секунд при ошибках
     let lastUpdateTime = 0;
     let retryDelay = 1000;
     let isFirstLoad = true;
+    let connectionStatus = false;
     
     // Глобальные переменные
     let trendChart = null;
@@ -539,6 +565,7 @@
     let hourlyChart = null;
     let operatorModal = null;
     let usersData = {};
+    let failedAttempts = 0;
     
     // Инициализация при загрузке страницы
     document.addEventListener('DOMContentLoaded', function() {
@@ -546,11 +573,28 @@
       initSortable();
       loadDashboardLayout();
       setupEventListeners();
-      loadUsers().then(() => {
-        fetchData();
-        setTimeout(checkForUpdates, POLLING_INTERVAL);
-      });
+      
+      // Загружаем данные сразу при старте
+      loadInitialData();
     });
+    
+    // Загрузка начальных данных
+    async function loadInitialData() {
+      try {
+        await loadUsers();
+        await fetchData();
+        updateConnectionStatus(true);
+        updateChartData('day');
+        isFirstLoad = false;
+        
+        // Запускаем периодическую проверку обновлений
+        setTimeout(checkForUpdates, POLLING_INTERVAL);
+      } catch (error) {
+        console.error('Initial load error:', error);
+        updateConnectionStatus(false);
+        setTimeout(loadInitialData, RETRY_DELAY);
+      }
+    }
     
     // Инициализация модального окна оператора
     function initOperatorModal() {
@@ -572,11 +616,16 @@
     // Загрузка списка пользователей
     async function loadUsers() {
       try {
-        const response = await fetch('/api/users');
-        usersData = await response.json();
+        const response = await fetchWithRetry('/api/users');
+        if (response.ok) {
+          usersData = await response.json();
+        } else {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
       } catch (error) {
         console.error('Error loading users:', error);
         usersData = {};
+        throw error;
       }
     }
     
@@ -589,7 +638,11 @@
         document.getElementById('current-stats').innerHTML = '<div class="loading">Загрузка данных...</div>';
         
         // Загружаем данные
-        const response = await fetch(`/api/operator/${operatorId}/stats`);
+        const response = await fetchWithRetry(`/api/operator/${operatorId}/stats`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         // Обновляем текущую статистику
@@ -759,17 +812,22 @@
       const savedLayout = localStorage.getItem('dashboardLayout');
       
       if (savedLayout) {
-        const layout = JSON.parse(savedLayout);
-        const orderedCards = [];
-        
-        layout.forEach(cardId => {
-          const card = document.getElementById(cardId);
-          if (card) orderedCards.push(card);
-        });
-        
-        orderedCards.forEach(card => {
-          dashboardGrid.appendChild(card);
-        });
+        try {
+          const layout = JSON.parse(savedLayout);
+          const orderedCards = [];
+          
+          layout.forEach(cardId => {
+            const card = document.getElementById(cardId);
+            if (card) orderedCards.push(card);
+          });
+          
+          orderedCards.forEach(card => {
+            dashboardGrid.appendChild(card);
+          });
+        } catch (e) {
+          console.error('Error loading layout:', e);
+          localStorage.removeItem('dashboardLayout');
+        }
       }
     }
     
@@ -791,58 +849,81 @@
       });
     }
     
+    // Функция для повторных попыток запросов
+    async function fetchWithRetry(url, options = {}, retries = 3) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok && retries > 0) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response;
+      } catch (error) {
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return fetchWithRetry(url, options, retries - 1);
+        }
+        throw error;
+      }
+    }
+    
     // Загрузка данных с сервера
     async function fetchData() {
       try {
-        const response = await fetch('/api/leads/by-stage?t=' + Date.now(), {
+        const response = await fetchWithRetry('/api/leads/by-stage?t=' + Date.now(), {
           headers: {
             'Cache-Control': 'no-cache'
           }
         });
         
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const data = await response.json();
         updateDashboard(data);
         lastUpdateTime = Date.now();
         document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
         
-        if (isFirstLoad) {
-          updateConnectionStatus(true);
-          updateChartData('day');
-          isFirstLoad = false;
-        }
-        
-        retryDelay = 1000;
+        failedAttempts = 0;
         return true;
       } catch (error) {
         console.error('Error fetching data:', error);
+        failedAttempts++;
         updateConnectionStatus(false);
-        retryDelay = Math.min(retryDelay * 2, 60000);
-        return false;
+        throw error;
       }
     }
     
     // Проверка обновлений
     async function checkForUpdates() {
-      const success = await fetchData();
-      const delay = success ? POLLING_INTERVAL : retryDelay;
-      setTimeout(checkForUpdates, delay);
+      try {
+        await fetchData();
+        updateConnectionStatus(true);
+        setTimeout(checkForUpdates, POLLING_INTERVAL);
+      } catch (error) {
+        const delay = Math.min(RETRY_DELAY * failedAttempts, 30000); // Максимум 30 секунд
+        console.error(`Retrying in ${delay/1000} seconds...`);
+        setTimeout(checkForUpdates, delay);
+      }
     }
     
     // Обновление статуса подключения
     function updateConnectionStatus(connected) {
-      const connectionStatus = document.getElementById('connection-status');
-      const statusText = document.getElementById('status-text');
+      if (connectionStatus === connected) return;
       
-      connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
-      statusText.textContent = connected ? 'Connected (Polling)' : 'Disconnected';
+      const connectionStatusElement = document.getElementById('connection-status');
+      const statusTextElement = document.getElementById('status-text');
+      
+      connectionStatusElement.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
+      statusTextElement.textContent = connected ? 'Connected' : 'Disconnected';
+      connectionStatus = connected;
     }
     
     // Обновление всего дашборда
     function updateDashboard(data) {
       if (!data || !data.data) {
         console.error('Invalid data received');
+        showErrorNotification('Received invalid data from server');
         return;
       }
       
@@ -1002,16 +1083,33 @@
     
     // Показать уведомление об изменениях
     function showChangesNotification(changes) {
+      if (changes.length === 0) return;
+      
       const notification = document.createElement('div');
       notification.className = 'changes-notification';
       
       let html = '<h4>Изменения:</h4><ul>';
-      changes.forEach(change => {
+      changes.slice(0, 5).forEach(change => { // Ограничиваем количество изменений
         html += `<li>${change.operator}: ${change.old_count} → ${change.new_count} (${change.diff > 0 ? '+' : ''}${change.diff})</li>`;
       });
       html += '</ul>';
       
       notification.innerHTML = html;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 500);
+      }, 5000);
+    }
+    
+    // Показать уведомление об ошибке
+    function showErrorNotification(message) {
+      const notification = document.createElement('div');
+      notification.className = 'changes-notification';
+      notification.style.backgroundColor = '#ffebee';
+      
+      notification.innerHTML = `<h4 style="color: var(--danger);">Ошибка:</h4><p>${message}</p>`;
       document.body.appendChild(notification);
       
       setTimeout(() => {
@@ -1054,7 +1152,11 @@
     // Обновление данных графика трендов
     async function updateChartData(period = 'day') {
       try {
-        const response = await fetch(`/api/leads/trend?period=${period}&t=${Date.now()}`);
+        const response = await fetchWithRetry(`/api/leads/trend?period=${period}&t=${Date.now()}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (!trendChart) {
@@ -1062,8 +1164,8 @@
         }
         
         if (period === 'day') {
-          trendChart.data.labels = data.days;
-          trendChart.data.datasets = Object.entries(data.stats).map(([stage, values]) => {
+          trendChart.data.labels = data.days || [];
+          trendChart.data.datasets = Object.entries(data.stats || {}).map(([stage, values]) => {
             const stageConfig = STAGES[stage];
             return {
               label: stage,
@@ -1076,7 +1178,7 @@
           });
         } else {
           trendChart.data.labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-          trendChart.data.datasets = Object.entries(data.stats).map(([stage, values]) => {
+          trendChart.data.datasets = Object.entries(data.stats || {}).map(([stage, values]) => {
             const stageConfig = STAGES[stage];
             return {
               label: stage,
@@ -1092,6 +1194,7 @@
         trendChart.update();
       } catch (error) {
         console.error('Error loading trend data:', error);
+        showErrorNotification('Ошибка загрузки данных графика');
       }
     }
   </script>
