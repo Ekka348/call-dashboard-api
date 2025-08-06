@@ -220,6 +220,13 @@
       display: block;
     }
     
+    .error-message {
+      color: var(--danger);
+      text-align: center;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    
     .changes-notification {
       position: fixed;
       bottom: 20px;
@@ -365,8 +372,15 @@
           }
         });
         
-        if (!dashboardResponse.ok) throw new Error('Dashboard data not ok');
+        if (!dashboardResponse.ok) {
+          throw new Error(`Ошибка HTTP! Статус: ${dashboardResponse.status}`);
+        }
+        
         const data = await dashboardResponse.json();
+        
+        if (data.status === "error") {
+          throw new Error(data.message);
+        }
         
         // Загружаем список операторов
         const operatorsResponse = await fetch('/api/leads/operators?t=' + Date.now(), {
@@ -375,8 +389,15 @@
           }
         });
         
-        if (!operatorsResponse.ok) throw new Error('Operators data not ok');
+        if (!operatorsResponse.ok) {
+          throw new Error(`Ошибка HTTP! Статус: ${operatorsResponse.status}`);
+        }
+        
         const operatorsData = await operatorsResponse.json();
+        
+        if (operatorsData.status === "error") {
+          throw new Error(operatorsData.message);
+        }
         
         // Обновляем интерфейс
         updateDashboard(data);
@@ -390,12 +411,29 @@
           isFirstLoad = false;
         }
         
-        retryDelay = 1000; // Сброс задержки при успехе
+        retryDelay = 1000;
         return true;
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Ошибка загрузки данных:', error);
         updateConnectionStatus(false);
-        retryDelay = Math.min(retryDelay * 2, 60000); // Увеличиваем задержку до максимум 60 секунд
+        
+        // Показываем сообщение об ошибке
+        document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
+        document.getElementById('status-text').textContent = 'Ошибка соединения';
+        
+        // Показываем ошибки в каждой карточке
+        Object.values(STAGES).forEach(stage => {
+          const container = document.getElementById(stage.element);
+          if (!container.querySelector('.error-message')) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
+            container.innerHTML = '';
+            container.appendChild(errorDiv);
+          }
+        });
+        
+        retryDelay = Math.min(retryDelay * 2, 60000);
         return false;
       }
     }
@@ -413,12 +451,12 @@
       const statusText = document.getElementById('status-text');
       
       connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
-      statusText.textContent = connected ? 'Connected (Polling)' : 'Disconnected';
+      statusText.textContent = connected ? 'Подключено (Polling)' : 'Отключено';
     }
     
     function updateDashboard(data) {
       if (!data || !data.data) {
-        console.error('Invalid data received');
+        console.error('Получены неверные данные');
         return;
       }
       
@@ -439,9 +477,8 @@
       
       // Обновляем общее количество
       const countElement = document.getElementById(config.count);
-      if (parseInt(countElement.textContent) !== totalCount) {
-        countElement.textContent = totalCount;
-      }
+      countElement.textContent = totalCount;
+      countElement.dataset.originalCount = totalCount;
       
       const container = document.getElementById(config.element);
       
