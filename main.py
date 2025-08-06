@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, jsonify, request
+from flask import Flask, send_from_directory, jsonify
 from flask_socketio import SocketIO
 import requests, os, time, threading
 from datetime import datetime, timedelta
@@ -9,15 +9,14 @@ from copy import deepcopy
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Настройки SocketIO
+# Настройки SocketIO с увеличенными таймаутами
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    ping_timeout=300,
-    ping_interval=60,
-    engineio_logger=False,
-    async_mode='eventlet',
-    max_http_buffer_size=1e8
+    ping_timeout=60,
+    ping_interval=25,
+    engineio_logger=True,  # Включаем логирование для отладки
+    async_mode='eventlet'
 )
 
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
@@ -151,7 +150,7 @@ def get_lead_stats():
             socketio.emit('full_update', {
                 'data': result,
                 'changes': changes,
-                'timestamp': get_moscow_time().strftime("%H:%M:%S")  # Формат времени ЧЧ:ММ:СС
+                'timestamp': get_moscow_time().strftime("%H:%M:%S")
             })
         
         data_cache["data"] = result
@@ -167,9 +166,9 @@ def handle_connect():
     print(f'Client connected: {request.sid}')
     socketio.emit('init', get_lead_stats())
 
-@socketio.on('request_full_update')
-def handle_full_update_request():
-    socketio.emit('full_update', get_lead_stats())
+@socketio.on('disconnect')
+def handle_disconnect():
+    print(f'Client disconnected: {request.sid}')
 
 def background_updater():
     while True:
