@@ -1,10 +1,9 @@
-from flask import Flask, send_from_directory, jsonify, request
+from flask import Flask, send_from_directory, jsonify
 from flask_socketio import SocketIO
 import requests, os, time, threading
 from datetime import datetime, timedelta
-from collections import Counter, defaultdict
+from collections import Counter
 from pytz import timezone
-from copy import deepcopy
 
 # Инициализация приложения
 app = Flask(__name__, static_folder='static')
@@ -20,7 +19,7 @@ socketio = SocketIO(app,
 
 # Константы
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 120  # Интервал обновления в секундах
+UPDATE_INTERVAL = 10  # Интервал обновления в секундах
 
 STAGE_LABELS = {
     "НДЗ": "5",
@@ -32,12 +31,12 @@ STAGE_LABELS = {
     "База ВВ": "11"
 }
 
+GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
+
 # Кеширование
 user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
-last_operator_status = defaultdict(dict)
-last_emitted_data = None
 
 def get_range_dates(rtype):
     tz = timezone("Europe/Moscow")
@@ -133,34 +132,7 @@ def fetch_all_leads(stage):
     
     return leads
 
-def check_for_operator_changes(new_data):
-    """Сравниваем новые данные с предыдущими и возвращаем изменения"""
-    changes = []
-    for stage_name, stage_data in new_data['data'].items():
-        if stage_data.get('grouped'):
-            continue
-            
-        for operator in stage_data['details']:
-            operator_name = operator['operator']
-            new_count = operator['count']
-            
-            old_count = last_operator_status[stage_name].get(operator_name, 0)
-            
-            if new_count != old_count:
-                changes.append({
-                    'stage': stage_name,
-                    'operator': operator_name,
-                    'old_count': old_count,
-                    'new_count': new_count,
-                    'diff': new_count - old_count
-                })
-                
-            last_operator_status[stage_name][operator_name] = new_count
-            
-    return changes
-
 def get_lead_stats():
-    global last_emitted_data
     with cache_lock:
         if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
             return data_cache["data"]
@@ -170,20 +142,29 @@ def get_lead_stats():
         data = {}
 
         for name, stage_id in STAGE_LABELS.items():
-            leads = fetch_leads(stage_id, start, end)
-            stats = Counter()
-            for lead in leads:
-                uid = lead.get("ASSIGNED_BY_ID")
-                if uid:
-                    stats[int(uid)] += 1
+            if name in GROUPED_STAGES:
+                leads = fetch_all_leads(stage_id)
+                data[name] = {"grouped": True, "count": len(leads)}
+            else:
+                leads = fetch_leads(stage_id, start, end)
+                stats = Counter()
+                for lead in leads:
+                    uid = lead.get("ASSIGNED_BY_ID")
+                    if uid:
+                        stats[int(uid)] += 1
 
-            details = [
-                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-            ]
-            data[name] = {"details": details}
+                details = [
+                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                    for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+                ]
+
+                data[name] = {"grouped": False, "details": details}
 
         result = {"range": "today", "data": data}
+        data_cache["data"] = result
+        data_cache["timestamp"] = time.time()
+        return result
+
 # API Endpoints
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
@@ -204,15 +185,12 @@ def handle_connect():
     print(f'Client connected: {request.sid}')
     socketio.emit('init', get_lead_stats())
 
-@socketio.on('request_full_update')
-def handle_full_update_request():
-    socketio.emit('full_update', get_lead_stats())
-
 def background_updater():
     while True:
         try:
-            get_lead_stats()
-            print(f"Data checked at {datetime.now()}")
+            data = get_lead_stats()
+            socketio.emit('update', data)
+            print(f"Data updated at {datetime.now()}")
         except Exception as e:
             print(f"Update error: {e}")
         time.sleep(UPDATE_INTERVAL)
@@ -227,7 +205,11 @@ def serve_static(path):
     return send_from_directory(app.static_folder, path)
 
 if __name__ == "__main__":
+    # Запускаем фоновый поток для обновлений
     threading.Thread(target=background_updater, daemon=True).start()
+    
+    # Конфигурация для Railway
     port = int(os.environ.get("PORT", 8080))
     host = '0.0.0.0'
+    
     socketio.run(app, host=host, port=port, debug=False)
