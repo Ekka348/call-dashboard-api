@@ -11,8 +11,6 @@
       --success: #34a853;
       --warning: #fbbc05;
       --danger: #ea4335;
-      --light: #f8f9fa;
-      --dark: #343a40;
     }
     
     body {
@@ -20,7 +18,6 @@
       margin: 0;
       padding: 20px;
       background-color: #f5f7fa;
-      color: #333;
     }
     
     .container {
@@ -55,6 +52,10 @@
       animation: pulse 2s infinite;
     }
     
+    .indicator.disconnected {
+      background-color: var(--danger);
+    }
+    
     @keyframes pulse {
       0% { opacity: 1; }
       50% { opacity: 0.5; }
@@ -70,7 +71,6 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 20px;
-      margin-bottom: 30px;
     }
     
     .card {
@@ -78,12 +78,6 @@
       border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
       overflow: hidden;
-      transition: transform 0.3s ease;
-    }
-    
-    .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
     }
     
     .card-header {
@@ -126,52 +120,34 @@
       border-bottom: 1px solid #f0f0f0;
     }
     
-    tr:last-child td {
-      border-bottom: none;
-    }
-    
     tr.highlight {
       background-color: #f8fff0;
       transition: background-color 1.5s;
-    }
-    
-    .info-section {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 30px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    }
-    
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 15px;
-    }
-    
-    .info-item {
-      padding: 15px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      text-align: center;
-    }
-    
-    .info-item h3 {
-      margin-top: 0;
-      color: #666;
-      font-size: 1rem;
-    }
-    
-    .info-value {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--primary);
     }
     
     .loading {
       color: #999;
       text-align: center;
       padding: 20px;
+    }
+    
+    .empty {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .change-indicator {
+      margin-left: 10px;
+      font-weight: bold;
+    }
+    
+    .positive {
+      color: #2ecc71;
+    }
+    
+    .negative {
+      color: #e74c3c;
     }
     
     @media (max-width: 768px) {
@@ -192,34 +168,19 @@
       </div>
     </div>
     
-    <div class="info-section">
-      <h2>Инфо-стадии</h2>
-      <div id="info-stages" class="info-grid"></div>
-    </div>
-    
     <div class="dashboard-grid" id="content">
       <div class="card">
-        <div class="card-header">
-          <span>НДЗ</span>
-          <span class="card-count" id="ndz-count">0</span>
+        <div class="card-header" id="agreement-header">
+          <span>На согласовании</span>
+          <span class="card-count" id="agreement-count">0</span>
         </div>
         <div class="card-body">
-          <div id="ndz-content" class="loading">Загрузка...</div>
+          <div id="agreement-content" class="loading">Загрузка...</div>
         </div>
       </div>
       
       <div class="card">
-        <div class="card-header">
-          <span>НДЗ 2</span>
-          <span class="card-count" id="ndz2-count">0</span>
-        </div>
-        <div class="card-body">
-          <div id="ndz2-content" class="loading">Загрузка...</div>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-header">
+        <div class="card-header" id="callback-header">
           <span>Перезвонить</span>
           <span class="card-count" id="callback-count">0</span>
         </div>
@@ -229,7 +190,7 @@
       </div>
       
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" id="invited-header">
           <span>Приглашен к рекрутеру</span>
           <span class="card-count" id="invited-count">0</span>
         </div>
@@ -241,46 +202,36 @@
   </div>
 
   <script>
-    // Конфигурация
     const STAGES = {
-      "НДЗ": { id: "ndz", element: "ndz-content", count: "ndz-count" },
-      "НДЗ 2": { id: "ndz2", element: "ndz2-content", count: "ndz2-count" },
-      "Перезвонить": { id: "callback", element: "callback-content", count: "callback-count" },
-      "Приглашен к рекрутеру": { id: "invited", element: "invited-content", count: "invited-count" }
+      "На согласовании": { id: "agreement", element: "agreement-content", count: "agreement-count", header: "agreement-header" },
+      "Перезвонить": { id: "callback", element: "callback-content", count: "callback-count", header: "callback-header" },
+      "Приглашен к рекрутеру": { id: "invited", element: "invited-content", count: "invited-count", header: "invited-header" }
     };
     
-    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+    const HIGHLIGHT_DURATION = 3000;
     
-    // Инициализация Socket.IO
     const socket = io({
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000
+      reconnectionAttempts: 5,
+      reconnectionDelay: 5000,
+      timeout: 60000,
+      transports: ['websocket']
     });
     
-    // Элементы UI
     const connectionStatus = document.getElementById('connection-status');
     const statusText = document.getElementById('status-text');
     const lastUpdate = document.getElementById('last-update');
-    const infoStagesContainer = document.getElementById('info-stages');
     
-    // Обработчики соединения
     socket.on('connect', () => {
-      console.log('Connected to server with ID:', socket.id);
+      console.log('Connected');
       updateConnectionStatus(true);
       lastUpdate.textContent = new Date().toLocaleTimeString();
+      socket.emit('request_full_update');
     });
     
     socket.on('disconnect', (reason) => {
       console.log('Disconnected:', reason);
       updateConnectionStatus(false);
-      
-      if (reason === 'io server disconnect') {
-        // Переподключение при разрыве со стороны сервера
-        socket.connect();
-      }
     });
     
     socket.on('connect_error', (error) => {
@@ -289,119 +240,153 @@
     });
     
     socket.on('init', (data) => {
-      console.log('Initial data received');
       updateDashboard(data);
     });
     
-    socket.on('update', (data) => {
-      console.log('Data update received');
+    socket.on('full_update', (data) => {
       updateDashboard(data);
-      lastUpdate.textContent = new Date().toLocaleTimeString();
+      lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
     });
     
-    // Функции обновления UI
     function updateConnectionStatus(connected) {
-      if (connected) {
-        connectionStatus.classList.add('connected');
-        connectionStatus.classList.remove('disconnected');
-        statusText.textContent = 'Connected';
-      } else {
-        connectionStatus.classList.remove('connected');
-        connectionStatus.classList.add('disconnected');
-        statusText.textContent = 'Disconnected';
-      }
+      connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
     }
     
     function updateDashboard(data) {
-      if (!data || !data.data) {
-        console.error('Invalid data received');
-        return;
-      }
+      if (!data?.data) return;
       
-      // Обновляем инфо-стадии
-      updateInfoStages(data.data);
-      
-      // Обновляем данные по стадиям
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
         const stageData = data.data[stageName];
-        if (stageData) {
-          updateStage(stageName, stageConfig, stageData);
-        }
+        if (stageData) updateStage(stageName, stageConfig, stageData, data.changes || []);
       }
     }
     
-    function updateInfoStages(data) {
-      infoStagesContainer.innerHTML = '';
-      
-      INFO_STAGES.forEach(stage => {
-        const stageData = data[stage];
-        if (!stageData) return;
-        
-        const item = document.createElement('div');
-        item.className = 'info-item';
-        item.innerHTML = `
-          <h3>${stage}</h3>
-          <div class="info-value">${stageData.count || 0}</div>
-        `;
-        infoStagesContainer.appendChild(item);
-      });
-    }
-    
-    function updateStage(stageName, config, data) {
-      // Обновляем счетчик
+    function updateStage(stageName, config, data, changes) {
       const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
-      document.getElementById(config.count).textContent = totalCount;
+      const countElement = document.getElementById(config.count);
       
-      // Обновляем содержимое
+      if (parseInt(countElement.textContent) !== totalCount) {
+        countElement.textContent = totalCount;
+      }
+      
       const container = document.getElementById(config.element);
       
-      if (!data.details || data.details.length === 0) {
-        container.innerHTML = '<div class="empty">Нет данных</div>';
+      if (!data.details?.length) {
+        if (!container.querySelector('.empty')) {
+          container.innerHTML = '<div class="empty">Нет данных</div>';
+        }
         return;
       }
       
-      let html = `
-        <table>
-          <thead>
-            <tr>
-              <th>Оператор</th>
-              <th>Количество</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
+      if (container.querySelector('table')) {
+        updateTable(container, data, changes.filter(c => c.stage === stageName));
+      } else {
+        createNewTable(container, data);
+      }
+    }
+    
+    function updateTable(container, data, changes) {
+      const tbody = container.querySelector('tbody');
+      const existingRows = Array.from(tbody.querySelectorAll('tr'));
+      
+      const existingData = new Map();
+      existingRows.forEach(row => {
+        existingData.set(row.cells[0].textContent, {
+          row,
+          count: parseInt(row.cells[1].textContent)
+        });
+      });
       
       data.details.forEach(item => {
-        html += `
-          <tr>
-            <td>${item.operator}</td>
-            <td>${item.count}</td>
-          </tr>
-        `;
+        const existing = existingData.get(item.operator);
+        const change = changes.find(c => c.operator === item.operator);
+        
+        if (existing) {
+          if (existing.count !== item.count) {
+            existing.row.cells[1].textContent = item.count;
+            highlightRow(existing.row, change?.diff);
+          }
+          existingData.delete(item.operator);
+        } else {
+          const row = createTableRow(item, change?.diff);
+          tbody.appendChild(row);
+        }
       });
       
-      html += `
-          </tbody>
-        </table>
+      existingData.forEach(({row}) => {
+        row.classList.add('fade-out');
+        setTimeout(() => row.remove(), 500);
+      });
+    }
+    
+    function createNewTable(container, data) {
+      const table = document.createElement('table');
+      table.innerHTML = `
+        <thead>
+          <tr><th>Оператор</th><th>Количество</th></tr>
+        </thead>
+        <tbody>
+          ${data.details.map(item => 
+            `<tr class="highlight">
+              <td>${item.operator}</td>
+              <td>${item.count}</td>
+            </tr>`
+          ).join('')}
+        </tbody>
+      `;
+      container.innerHTML = '';
+      container.appendChild(table);
+      
+      setTimeout(() => {
+        container.querySelectorAll('.highlight').forEach(row => {
+          row.classList.remove('highlight');
+        });
+      }, HIGHLIGHT_DURATION);
+    }
+    
+    function createTableRow(item, diff) {
+      const row = document.createElement('tr');
+      row.className = 'highlight';
+      row.innerHTML = `
+        <td>${item.operator}</td>
+        <td>${item.count}</td>
       `;
       
-      container.innerHTML = html;
+      if (diff) {
+        const indicator = document.createElement('span');
+        indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
+        indicator.textContent = diff > 0 ? `+${diff}` : diff;
+        row.cells[1].appendChild(indicator);
+        
+        setTimeout(() => indicator.remove(), HIGHLIGHT_DURATION);
+      }
       
-      // Добавляем анимацию для новых/измененных строк
-      const rows = container.querySelectorAll('tbody tr');
-      rows.forEach(row => {
-        row.classList.add('highlight');
-        setTimeout(() => row.classList.remove('highlight'), 1500);
-      });
+      setTimeout(() => row.classList.remove('highlight'), HIGHLIGHT_DURATION);
+      return row;
+    }
+    
+    function highlightRow(row, diff) {
+      row.classList.add('highlight');
+      
+      if (diff) {
+        const indicator = document.createElement('span');
+        indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
+        indicator.textContent = diff > 0 ? `+${diff}` : diff;
+        row.cells[1].appendChild(indicator);
+        
+        setTimeout(() => indicator.remove(), HIGHLIGHT_DURATION);
+      }
+      
+      setTimeout(() => row.classList.remove('highlight'), HIGHLIGHT_DURATION);
     }
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      // Запрашиваем начальные данные через HTTP на случай проблем с WebSocket
       fetch('/api/leads/by-stage')
         .then(response => response.json())
         .then(data => updateDashboard(data))
-        .catch(error => console.error('Error fetching initial data:', error));
+        .catch(console.error);
     });
   </script>
 </body>
