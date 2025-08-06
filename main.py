@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 import requests, os, time, threading
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
@@ -71,7 +71,7 @@ def fetch_leads(stage, start, end):
                 f"{HOOK}crm.lead.list.json",
                 json={
                     "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                    "select": ["ID", "ASSIGNED_BY_ID"],
+                    "select": ["ID", "ASSIGNED_BY_ID", "TITLE", "STATUS_ID", "DATE_MODIFY"],
                     "start": offset
                 },
                 timeout=20
@@ -110,41 +110,81 @@ def check_for_operator_changes(new_data):
 
 def get_lead_stats():
     with cache_lock:
-        if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
-            return data_cache["data"]
-        
+        try:
+            if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
+                return data_cache["data"]
+            
+            start, end = get_range_dates()
+            users = load_users()
+            data = {}
+
+            for name, stage_id in STAGE_LABELS.items():
+                leads = fetch_leads(stage_id, start, end)
+                stats = Counter()
+                for lead in leads:
+                    if lead.get("ASSIGNED_BY_ID"):
+                        stats[int(lead["ASSIGNED_BY_ID"])] += 1
+
+                data[name] = {
+                    "details": [
+                        {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+                    ]
+                }
+
+            result = {
+                "status": "success",
+                "range": "today", 
+                "data": data,
+                "changes": check_for_operator_changes({"data": data}),
+                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            data_cache["data"] = result
+            data_cache["timestamp"] = time.time()
+            return result
+        except Exception as e:
+            print(f"Error in get_lead_stats: {e}")
+            raise
+
+@app.route("/api/leads/operators")
+def get_all_operators():
+    try:
         start, end = get_range_dates()
         users = load_users()
-        data = {}
-
-        for name, stage_id in STAGE_LABELS.items():
+        operators = set()
+        
+        # Получаем всех операторов, у которых есть лиды в любом из статусов
+        for stage_id in STAGE_LABELS.values():
             leads = fetch_leads(stage_id, start, end)
-            stats = Counter()
             for lead in leads:
                 if lead.get("ASSIGNED_BY_ID"):
-                    stats[int(lead["ASSIGNED_BY_ID"])] += 1
-
-            data[name] = {
-                "details": [
-                    {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                    for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-                ]
-            }
-
-        result = {
-            "range": "today", 
-            "data": data,
-            "changes": check_for_operator_changes({"data": data}),
-            "timestamp": get_moscow_time().strftime("%H:%M:%S")
-        }
+                    operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
+                    operators.add(operator_name)
         
-        data_cache["data"] = result
-        data_cache["timestamp"] = time.time()
-        return result
+        return jsonify({
+            "status": "success",
+            "operators": sorted(list(operators)),
+            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+        }), 500
 
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
-    return jsonify(get_lead_stats())
+    try:
+        data = get_lead_stats()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+        }), 500
 
 @app.route('/')
 def serve_index():
