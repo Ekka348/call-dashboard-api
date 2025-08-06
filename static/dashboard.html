@@ -122,9 +122,31 @@
       border-bottom: 1px solid #f0f0f0;
     }
     
-    tr.highlight {
-      background-color: #f8fff0;
-      transition: background-color 1.5s;
+    .diff-up {
+      background-color: rgba(76, 175, 80, 0.1);
+    }
+    
+    .diff-down {
+      background-color: rgba(244, 67, 54, 0.1);
+    }
+    
+    .highlight {
+      animation: highlight-fade 3s ease-out;
+    }
+    
+    .diff-badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 0.8em;
+      background-color: #ffeb3b;
+      color: #000;
+    }
+    
+    @keyframes highlight-fade {
+      0% { background-color: rgba(255, 235, 59, 0.5); }
+      100% { background-color: transparent; }
     }
     
     .loading {
@@ -139,9 +161,42 @@
       padding: 20px;
     }
     
+    .changes-notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      max-width: 300px;
+      transition: opacity 0.5s;
+    }
+    
+    .changes-notification.fade-out {
+      opacity: 0;
+    }
+    
+    .changes-notification h4 {
+      margin-top: 0;
+      color: var(--primary);
+    }
+    
+    .changes-notification ul {
+      padding-left: 20px;
+      margin-bottom: 0;
+    }
+    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
+      }
+      
+      .changes-notification {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
       }
     }
   </style>
@@ -230,18 +285,21 @@
     socket.on('connect', () => {
       console.log('Connected to server');
       updateConnectionStatus(true);
+      statusText.textContent = 'Connected';
       lastUpdate.textContent = new Date().toLocaleTimeString();
     });
     
     socket.on('disconnect', (reason) => {
       console.log('Disconnected:', reason);
       updateConnectionStatus(false);
+      statusText.textContent = 'Disconnected';
       showLoading();
     });
     
     socket.on('connect_error', (error) => {
       console.error('Connection error:', error);
       updateConnectionStatus(false);
+      statusText.textContent = 'Connection error';
       showLoading();
     });
     
@@ -252,6 +310,9 @@
     
     socket.on('full_update', (data) => {
       console.log('Data update received');
+      if (data.changes && data.changes.length > 0) {
+        showChangesNotification(data.changes);
+      }
       updateDashboard(data);
       lastUpdate.textContent = data.timestamp || new Date().toLocaleTimeString();
     });
@@ -259,7 +320,6 @@
     // Функции обновления UI
     function updateConnectionStatus(connected) {
       connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
-      statusText.textContent = connected ? 'Connected' : 'Disconnected';
     }
     
     function showLoading() {
@@ -297,6 +357,15 @@
         return;
       }
       
+      // Сохраняем предыдущие значения для сравнения
+      const prevValues = {};
+      const rows = container.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        const operator = row.cells[0].textContent;
+        const count = parseInt(row.cells[1].textContent);
+        prevValues[operator] = count;
+      });
+      
       let html = `
         <table>
           <thead>
@@ -309,10 +378,17 @@
       `;
       
       data.details.forEach(item => {
+        const prevCount = prevValues[item.operator] || 0;
+        const diff = item.count - prevCount;
+        const diffClass = diff > 0 ? 'diff-up' : diff < 0 ? 'diff-down' : '';
+        
         html += `
-          <tr>
+          <tr class="${diffClass}">
             <td>${item.operator}</td>
-            <td>${item.count}</td>
+            <td>
+              ${item.count}
+              ${diff !== 0 ? `<span class="diff-badge">${diff > 0 ? '+' : ''}${diff}</span>` : ''}
+            </td>
           </tr>
         `;
       });
@@ -324,17 +400,38 @@
       
       container.innerHTML = html;
       
-      // Добавляем анимацию для новых/измененных строк
-      const rows = container.querySelectorAll('tbody tr');
-      rows.forEach(row => {
+      // Добавляем анимацию для измененных строк
+      const changedRows = container.querySelectorAll('.diff-up, .diff-down');
+      changedRows.forEach(row => {
         row.classList.add('highlight');
-        setTimeout(() => row.classList.remove('highlight'), 1500);
+        setTimeout(() => {
+          row.classList.remove('highlight');
+          row.classList.remove('diff-up', 'diff-down');
+        }, 3000);
       });
+    }
+    
+    function showChangesNotification(changes) {
+      const notification = document.createElement('div');
+      notification.className = 'changes-notification';
+      
+      let html = '<h4>Изменения:</h4><ul>';
+      changes.forEach(change => {
+        html += `<li>${change.operator}: ${change.old_count} → ${change.new_count} (${change.diff > 0 ? '+' : ''}${change.diff})</li>`;
+      });
+      html += '</ul>';
+      
+      notification.innerHTML = html;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 500);
+      }, 5000);
     }
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
-      // Пытаемся подключиться через WebSocket
       socket.connect();
       
       // Fallback на HTTP запрос если WebSocket не подключится
@@ -354,7 +451,6 @@
         updateDashboard(data);
       } catch (error) {
         console.error('Error fetching initial data:', error);
-        // Повторяем попытку через 5 секунд
         setTimeout(fetchInitialData, 5000);
       }
     }
