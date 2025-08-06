@@ -55,10 +55,6 @@
       animation: pulse 2s infinite;
     }
     
-    .indicator.disconnected {
-      background-color: var(--danger);
-    }
-    
     @keyframes pulse {
       0% { opacity: 1; }
       50% { opacity: 0.5; }
@@ -74,6 +70,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 20px;
+      margin-bottom: 30px;
     }
     
     .card {
@@ -97,18 +94,6 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .card-header.highlight {
-      animation: headerHighlight 2s;
-    }
-    
-    @keyframes headerHighlight {
-      0% { background-color: var(--primary); }
-      50% { background-color: #5c6bc0; }
-      100% { background-color: var(--primary); }
     }
     
     .card-count {
@@ -116,12 +101,6 @@
       padding: 3px 10px;
       border-radius: 20px;
       font-size: 0.9rem;
-      transition: all 0.3s ease;
-    }
-    
-    .card-count.highlight-count {
-      animation: pulse 1s 3;
-      background-color: #ffeb3b;
     }
     
     .card-body {
@@ -151,46 +130,45 @@
       border-bottom: none;
     }
     
-    tr.highlight-change {
-      background-color: #fffde7 !important;
-      transition: all 0.5s ease;
+    tr.highlight {
+      background-color: #f8fff0;
+      transition: background-color 1.5s;
     }
     
-    .fade-out {
-      opacity: 1;
-      transition: opacity 0.5s ease-out;
+    .info-section {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     }
     
-    .fade-out {
-      opacity: 0;
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
     }
     
-    .change-indicator {
-      animation: fadeIn 0.5s;
-      margin-left: 10px;
-      font-weight: bold;
+    .info-item {
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      text-align: center;
     }
     
-    .positive {
-      color: #2ecc71;
+    .info-item h3 {
+      margin-top: 0;
+      color: #666;
+      font-size: 1rem;
     }
     
-    .negative {
-      color: #e74c3c;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-5px); }
-      to { opacity: 1; transform: translateY(0); }
+    .info-value {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--primary);
     }
     
     .loading {
-      color: #999;
-      text-align: center;
-      padding: 20px;
-    }
-    
-    .empty {
       color: #999;
       text-align: center;
       padding: 20px;
@@ -214,9 +192,14 @@
       </div>
     </div>
     
+    <div class="info-section">
+      <h2>Инфо-стадии</h2>
+      <div id="info-stages" class="info-grid"></div>
+    </div>
+    
     <div class="dashboard-grid" id="content">
       <div class="card">
-        <div class="card-header" id="ndz-header">
+        <div class="card-header">
           <span>НДЗ</span>
           <span class="card-count" id="ndz-count">0</span>
         </div>
@@ -226,7 +209,7 @@
       </div>
       
       <div class="card">
-        <div class="card-header" id="ndz2-header">
+        <div class="card-header">
           <span>НДЗ 2</span>
           <span class="card-count" id="ndz2-count">0</span>
         </div>
@@ -236,7 +219,7 @@
       </div>
       
       <div class="card">
-        <div class="card-header" id="callback-header">
+        <div class="card-header">
           <span>Перезвонить</span>
           <span class="card-count" id="callback-count">0</span>
         </div>
@@ -246,7 +229,7 @@
       </div>
       
       <div class="card">
-        <div class="card-header" id="invited-header">
+        <div class="card-header">
           <span>Приглашен к рекрутеру</span>
           <span class="card-count" id="invited-count">0</span>
         </div>
@@ -260,13 +243,13 @@
   <script>
     // Конфигурация
     const STAGES = {
-      "НДЗ": { id: "ndz", element: "ndz-content", count: "ndz-count", header: "ndz-header" },
-      "НДЗ 2": { id: "ndz2", element: "ndz2-content", count: "ndz2-count", header: "ndz2-header" },
-      "Перезвонить": { id: "callback", element: "callback-content", count: "callback-count", header: "callback-header" },
-      "Приглашен к рекрутеру": { id: "invited", element: "invited-content", count: "invited-count", header: "invited-header" }
+      "НДЗ": { id: "ndz", element: "ndz-content", count: "ndz-count" },
+      "НДЗ 2": { id: "ndz2", element: "ndz2-content", count: "ndz2-count" },
+      "Перезвонить": { id: "callback", element: "callback-content", count: "callback-count" },
+      "Приглашен к рекрутеру": { id: "invited", element: "invited-content", count: "invited-count" }
     };
     
-    const HIGHLIGHT_DURATION = 3000;
+    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
     
     // Инициализация Socket.IO
     const socket = io({
@@ -281,13 +264,13 @@
     const connectionStatus = document.getElementById('connection-status');
     const statusText = document.getElementById('status-text');
     const lastUpdate = document.getElementById('last-update');
+    const infoStagesContainer = document.getElementById('info-stages');
     
     // Обработчики соединения
     socket.on('connect', () => {
       console.log('Connected to server with ID:', socket.id);
       updateConnectionStatus(true);
       lastUpdate.textContent = new Date().toLocaleTimeString();
-      socket.emit('request_full_update');
     });
     
     socket.on('disconnect', (reason) => {
@@ -295,6 +278,7 @@
       updateConnectionStatus(false);
       
       if (reason === 'io server disconnect') {
+        // Переподключение при разрыве со стороны сервера
         socket.connect();
       }
     });
@@ -309,15 +293,10 @@
       updateDashboard(data);
     });
     
-    socket.on('full_update', (data) => {
-      console.log('Full data update received');
+    socket.on('update', (data) => {
+      console.log('Data update received');
       updateDashboard(data);
-      lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
-    });
-    
-    socket.on('heartbeat', (data) => {
-      console.log('Server heartbeat', data.timestamp);
-      lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+      lastUpdate.textContent = new Date().toLocaleTimeString();
     });
     
     // Функции обновления UI
@@ -339,111 +318,48 @@
         return;
       }
       
-      const changes = data.changes || [];
+      // Обновляем инфо-стадии
+      updateInfoStages(data.data);
       
+      // Обновляем данные по стадиям
       for (const [stageName, stageConfig] of Object.entries(STAGES)) {
         const stageData = data.data[stageName];
         if (stageData) {
-          updateStage(stageName, stageConfig, stageData, changes);
-        }
-      }
-      
-      highlightChangedStages(changes);
-    }
-    
-    function highlightChangedStages(changes) {
-      const changedStages = new Set(changes.map(c => c.stage));
-      
-      for (const stageName of changedStages) {
-        const config = STAGES[stageName];
-        if (config && config.header) {
-          const header = document.getElementById(config.header);
-          header.classList.add('highlight');
-          setTimeout(() => header.classList.remove('highlight'), HIGHLIGHT_DURATION);
+          updateStage(stageName, stageConfig, stageData);
         }
       }
     }
     
-    function updateStage(stageName, config, data, changes = []) {
+    function updateInfoStages(data) {
+      infoStagesContainer.innerHTML = '';
+      
+      INFO_STAGES.forEach(stage => {
+        const stageData = data[stage];
+        if (!stageData) return;
+        
+        const item = document.createElement('div');
+        item.className = 'info-item';
+        item.innerHTML = `
+          <h3>${stage}</h3>
+          <div class="info-value">${stageData.count || 0}</div>
+        `;
+        infoStagesContainer.appendChild(item);
+      });
+    }
+    
+    function updateStage(stageName, config, data) {
+      // Обновляем счетчик
       const totalCount = data.details?.reduce((sum, item) => sum + item.count, 0) || 0;
-      const countElement = document.getElementById(config.count);
+      document.getElementById(config.count).textContent = totalCount;
       
-      if (parseInt(countElement.textContent) !== totalCount) {
-        countElement.textContent = totalCount;
-        countElement.classList.add('highlight-count');
-        setTimeout(() => countElement.classList.remove('highlight-count'), HIGHLIGHT_DURATION);
-      }
-      
+      // Обновляем содержимое
       const container = document.getElementById(config.element);
       
       if (!data.details || data.details.length === 0) {
-        if (!container.querySelector('.empty')) {
-          container.innerHTML = '<div class="empty">Нет данных</div>';
-        }
+        container.innerHTML = '<div class="empty">Нет данных</div>';
         return;
       }
       
-      if (container.querySelector('table')) {
-        updateTable(container, data, changes.filter(c => c.stage === stageName));
-      } else {
-        createNewTable(container, data);
-      }
-    }
-    
-    function updateTable(container, data, changes) {
-      const table = container.querySelector('table');
-      const tbody = table.querySelector('tbody');
-      const existingRows = Array.from(tbody.querySelectorAll('tr'));
-      
-      const existingData = new Map();
-      existingRows.forEach(row => {
-        const operator = row.cells[0].textContent;
-        const count = parseInt(row.cells[1].textContent);
-        existingData.set(operator, { row, count });
-      });
-      
-      data.details.forEach(item => {
-        const existing = existingData.get(item.operator);
-        const change = changes.find(c => c.operator === item.operator);
-        
-        if (existing) {
-          if (existing.count !== item.count) {
-            existing.row.cells[1].textContent = item.count;
-            
-            existing.row.classList.add('highlight-change');
-            if (change) {
-              showChangeIndicator(existing.row, change.diff);
-            }
-            
-            setTimeout(() => {
-              existing.row.classList.remove('highlight-change');
-            }, HIGHLIGHT_DURATION);
-          }
-          existingData.delete(item.operator);
-        } else {
-          const row = document.createElement('tr');
-          row.className = 'highlight-change';
-          row.innerHTML = `
-            <td>${item.operator}</td>
-            <td>${item.count}</td>
-          `;
-          tbody.appendChild(row);
-          
-          if (change) {
-            showChangeIndicator(row, change.diff);
-          }
-          
-          setTimeout(() => row.classList.remove('highlight-change'), HIGHLIGHT_DURATION);
-        }
-      });
-      
-      existingData.forEach(({ row }) => {
-        row.classList.add('fade-out');
-        setTimeout(() => row.remove(), 500);
-      });
-    }
-    
-    function createNewTable(container, data) {
       let html = `
         <table>
           <thead>
@@ -457,7 +373,7 @@
       
       data.details.forEach(item => {
         html += `
-          <tr class="highlight-change">
+          <tr>
             <td>${item.operator}</td>
             <td>${item.count}</td>
           </tr>
@@ -471,34 +387,17 @@
       
       container.innerHTML = html;
       
-      setTimeout(() => {
-        container.querySelectorAll('.highlight-change').forEach(el => {
-          el.classList.remove('highlight-change');
-        });
-      }, HIGHLIGHT_DURATION);
-    }
-    
-    function showChangeIndicator(row, diff) {
-      const oldIndicator = row.querySelector('.change-indicator');
-      if (oldIndicator) oldIndicator.remove();
-      
-      if (diff === 0) return;
-      
-      const indicator = document.createElement('span');
-      indicator.className = `change-indicator ${diff > 0 ? 'positive' : 'negative'}`;
-      indicator.textContent = diff > 0 ? `+${diff}` : diff;
-      
-      row.cells[1].appendChild(indicator);
-      
-      setTimeout(() => {
-        if (indicator.parentNode) {
-          indicator.remove();
-        }
-      }, HIGHLIGHT_DURATION);
+      // Добавляем анимацию для новых/измененных строк
+      const rows = container.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        row.classList.add('highlight');
+        setTimeout(() => row.classList.remove('highlight'), 1500);
+      });
     }
     
     // Инициализация
     document.addEventListener('DOMContentLoaded', () => {
+      // Запрашиваем начальные данные через HTTP на случай проблем с WebSocket
       fetch('/api/leads/by-stage')
         .then(response => response.json())
         .then(data => updateDashboard(data))
