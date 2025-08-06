@@ -111,38 +111,58 @@ def check_for_operator_changes(new_data):
 def get_lead_stats():
     with cache_lock:
         try:
+            # Используем кеш, если данные свежие
             if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
                 return data_cache["data"]
             
             start, end = get_range_dates()
             users = load_users()
             data = {}
+            changes = []
 
             for name, stage_id in STAGE_LABELS.items():
                 leads = fetch_leads(stage_id, start, end)
                 stats = Counter()
+                
                 for lead in leads:
                     if lead.get("ASSIGNED_BY_ID"):
                         stats[int(lead["ASSIGNED_BY_ID"])] += 1
 
+                # Формируем данные по операторам
+                operators_data = []
+                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1]):
+                    operator_name = users.get(uid, f"ID {uid}")
+                    operators_data.append({
+                        "operator": operator_name,
+                        "count": cnt
+                    })
+                    
+                    # Проверяем изменения
+                    old_count = last_operator_status[name].get(operator_name, 0)
+                    if old_count != cnt:
+                        changes.append({
+                            'operator': operator_name,
+                            'old_count': old_count,
+                            'new_count': cnt,
+                            'diff': cnt - old_count
+                        })
+                    last_operator_status[name][operator_name] = cnt
+
                 data[name] = {
-                    "details": [
-                        {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-                    ]
+                    "details": operators_data
                 }
 
             result = {
                 "status": "success",
-                "range": "today", 
                 "data": data,
-                "changes": check_for_operator_changes({"data": data}),
-                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+                "changes": changes,
+                "timestamp": get_moscow_time().strftime("%H:%M:%S")
             }
             
             data_cache["data"] = result
             data_cache["timestamp"] = time.time()
             return result
+            
         except Exception as e:
             print(f"Error in get_lead_stats: {e}")
             raise
@@ -165,13 +185,40 @@ def get_all_operators():
         return jsonify({
             "status": "success",
             "operators": sorted(list(operators)),
-            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
         })
     except Exception as e:
         return jsonify({
             "status": "error",
             "message": str(e),
-            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
+        }), 500
+
+@app.route("/api/leads/updates")
+def get_updates():
+    try:
+        with cache_lock:
+            # Получаем текущие данные
+            current_data = get_lead_stats()
+            
+            # Создаем компактный ответ только с изменениями
+            updates = {}
+            for stage_name, stage_data in current_data['data'].items():
+                updates[stage_name] = {
+                    'total_count': sum(op['count'] for op in stage_data['details']),
+                    'operators': stage_data['details']
+                }
+            
+            return jsonify({
+                'status': 'success',
+                'updates': updates,
+                'timestamp': get_moscow_time().strftime("%H:%M:%S")
+            })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': get_moscow_time().strftime("%H:%M:%S")
         }), 500
 
 @app.route("/api/leads/by-stage")
@@ -183,7 +230,7 @@ def leads_by_stage():
         return jsonify({
             "status": "error",
             "message": str(e),
-            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
         }), 500
 
 @app.route('/')
