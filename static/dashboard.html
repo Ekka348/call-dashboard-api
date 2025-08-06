@@ -585,6 +585,14 @@
   </div>
 
   <script>
+    // Конфигурация API
+    const API_BASE_URL = window.location.origin;
+    const ENDPOINTS = {
+      leadsByStage: '/api/leads/by-stage',
+      operators: '/api/leads/operators',
+      updates: '/api/leads/updates'
+    };
+
     // Белый список пользователей (логин: пароль)
     const WHITE_LIST = {
       "admin": "admin123",
@@ -606,7 +614,7 @@
     // Ключ для localStorage
     const AUTH_KEY = 'dashboard_auth';
     
-    // Конфигурация этапов
+    // Конфигурация этапов (должна соответствовать STAGE_LABELS в Flask)
     const STAGES = {
       "На согласовании": { 
         id: "agreement", 
@@ -645,6 +653,8 @@
     const userInfo = document.getElementById('user-info');
     const userAvatar = document.getElementById('user-avatar');
     const usernameDisplay = document.getElementById('username-display');
+
+    // ==================== АВТОРИЗАЦИЯ ====================
 
     // Проверка авторизации при загрузке
     function checkAuth() {
@@ -748,10 +758,12 @@
       if (updateCheckInterval) clearTimeout(updateCheckInterval);
     }
 
-    // Функция для получения данных с сервера (заглушка)
+    // ==================== РАБОТА С API ====================
+
+    // Функция для получения данных с сервера
     async function fetchData() {
       try {
-        // Имитация загрузки
+        // Показываем состояние загрузки
         document.querySelectorAll('.card-body > div').forEach(el => {
           if (!el.classList.contains('error-message')) {
             el.className = 'loading';
@@ -759,127 +771,128 @@
           }
         });
         
-        // Имитация задержки сети
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Генерация тестовых данных
-        const mockData = generateMockData();
-        
+        // Параллельно запрашиваем данные лидов и список операторов
+        const [dataResponse, operatorsResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}${ENDPOINTS.leadsByStage}?t=${Date.now()}`),
+          fetch(`${API_BASE_URL}${ENDPOINTS.operators}?t=${Date.now()}`)
+        ]);
+
+        if (!dataResponse.ok || !operatorsResponse.ok) {
+          throw new Error(`Ошибка HTTP! Статусы: ${dataResponse.status}, ${operatorsResponse.status}`);
+        }
+
+        const data = await dataResponse.json();
+        const operatorsData = await operatorsResponse.json();
+
+        if (data.status === "error" || operatorsData.status === "error") {
+          throw new Error(data.message || operatorsData.message);
+        }
+
+        // Форматируем данные для фронтенда
+        const formattedData = {
+          status: "success",
+          timestamp: data.timestamp,
+          data: {},
+          operators: operatorsData.operators,
+          changes: data.changes || []
+        };
+
+        // Преобразуем структуру данных под фронтенд
+        for (const stageName in STAGES) {
+          if (data.data[stageName]) {
+            formattedData.data[stageName] = {
+              details: data.data[stageName].details.map(item => ({
+                operator: item.operator,
+                count: item.count
+              })),
+              total_count: data.data[stageName].details.reduce((sum, item) => sum + item.count, 0)
+            };
+          } else {
+            formattedData.data[stageName] = {
+              details: [],
+              total_count: 0
+            };
+          }
+        }
+
         // Обновляем интерфейс
-        updateDashboard(mockData);
-        updateOperatorSelect(mockData.operators || []);
+        updateDashboard(formattedData);
+        updateOperatorSelect(formattedData.operators || []);
         
         lastUpdateTime = Date.now();
-        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        document.getElementById('last-update').textContent = formattedData.timestamp || new Date().toLocaleTimeString();
         
         if (isFirstLoad) {
           updateConnectionStatus(true);
           isFirstLoad = false;
         }
         
+        // Показываем уведомления об изменениях
+        if (formattedData.changes && formattedData.changes.length > 0) {
+          showChangesNotification(formattedData.changes);
+        }
+        
         return true;
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);
-        updateConnectionStatus(false);
-        
-        document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
-        document.getElementById('status-text').textContent = 'Ошибка соединения';
-        
-        Object.values(STAGES).forEach(stage => {
-          const container = document.getElementById(stage.element);
-          if (!container.querySelector('.error-message')) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
-            container.innerHTML = '';
-            container.appendChild(errorDiv);
-          }
-        });
-        
+        handleDataError(error);
         return false;
       }
-    }
-
-    // Генерация mock-данных для демонстрации
-    function generateMockData() {
-      const operators = ['Иванов И.', 'Петров П.', 'Сидоров С.', 'Кузнецова А.', 'Смирнов Д.'];
-      const stages = Object.keys(STAGES);
-      
-      const data = {
-        status: "success",
-        timestamp: new Date().toLocaleTimeString(),
-        data: {},
-        operators: operators
-      };
-      
-      stages.forEach(stage => {
-        const operatorsData = [];
-        const count = Math.floor(Math.random() * 5) + 1;
-        
-        for (let i = 0; i < count; i++) {
-          const opIndex = Math.floor(Math.random() * operators.length);
-          operatorsData.push({
-            operator: operators[opIndex],
-            count: Math.floor(Math.random() * 20) + 1
-          });
-        }
-        
-        data.data[stage] = {
-          details: operatorsData,
-          total_count: operatorsData.reduce((sum, item) => sum + item.count, 0)
-        };
-      });
-      
-      return data;
     }
 
     // Функция для проверки обновлений
     async function checkForUpdates() {
       try {
-        // Имитация задержки сети
-        await new Promise(resolve => setTimeout(resolve, 800));
+        const response = await fetch(`${API_BASE_URL}${ENDPOINTS.updates}?t=${Date.now()}`);
         
-        // Генерация тестовых обновлений
-        const mockUpdates = generateMockUpdates();
-        processUpdates(mockUpdates);
+        if (!response.ok) {
+          throw new Error('Ошибка сети');
+        }
         
-        lastUpdateTime = Date.now();
-        document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
-        updateConnectionStatus(true);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          // Форматируем данные обновлений
+          const formattedUpdates = {};
+          for (const [stageName, stageData] of Object.entries(data.updates)) {
+            formattedUpdates[stageName] = {
+              operators: stageData.operators,
+              total_count: stageData.total_count
+            };
+          }
+          
+          processUpdates(formattedUpdates);
+          lastUpdateTime = Date.now();
+          document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+          updateConnectionStatus(true);
+        }
       } catch (error) {
         console.error('Ошибка проверки обновлений:', error);
         updateConnectionStatus(false);
       } finally {
-        updateCheckInterval = setTimeout(checkForUpdates, 60000); // Проверка каждую минуту
+        updateCheckInterval = setTimeout(checkForUpdates, 60000);
       }
     }
 
-    // Генерация mock-обновлений для демонстрации
-    function generateMockUpdates() {
-      const operators = allOperators.length ? allOperators : ['Иванов И.', 'Петров П.', 'Сидоров С.', 'Кузнецова А.', 'Смирнов Д.'];
-      const stages = Object.keys(STAGES);
-      const updates = {};
+    // Обработчик ошибок данных
+    function handleDataError(error) {
+      updateConnectionStatus(false);
+      document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
+      document.getElementById('status-text').textContent = 'Ошибка соединения';
       
-      stages.forEach(stage => {
-        const operatorsData = [];
-        const count = Math.floor(Math.random() * 3) + 1;
-        
-        for (let i = 0; i < count; i++) {
-          const opIndex = Math.floor(Math.random() * operators.length);
-          operatorsData.push({
-            operator: operators[opIndex],
-            count: Math.floor(Math.random() * 20) + 1
-          });
+      Object.values(STAGES).forEach(stage => {
+        const container = document.getElementById(stage.element);
+        if (!container.querySelector('.error-message')) {
+          const errorDiv = document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
+          container.innerHTML = '';
+          container.appendChild(errorDiv);
         }
-        
-        updates[stage] = {
-          operators: operatorsData,
-          total_count: operatorsData.reduce((sum, item) => sum + item.count, 0)
-        };
       });
-      
-      return updates;
     }
+
+    // ==================== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ====================
 
     // Функция для обработки обновлений
     function processUpdates(updates) {
@@ -1222,7 +1235,8 @@
       }, 5000);
     }
 
-    // Инициализация
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
     document.addEventListener('DOMContentLoaded', () => {
       // Проверяем авторизацию при загрузке
       checkAuth();
