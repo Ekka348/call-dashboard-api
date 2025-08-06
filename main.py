@@ -14,7 +14,7 @@ app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # Конфигурация из переменных окружения
-BITRIX_HOOK = os.environ.get('BITRIX_HOOK', "https://example.bitrix24.ru/rest/1/abc123/")
+BITRIX_HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
 UPDATE_INTERVAL = int(os.environ.get('UPDATE_INTERVAL', 60))  # 1 минута
 CACHE_TIMEOUT = int(os.environ.get('CACHE_TIMEOUT', 300))  # 5 минут
 MAX_RETRIES = int(os.environ.get('MAX_RETRIES', 3))
