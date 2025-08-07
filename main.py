@@ -10,8 +10,13 @@ from pytz import timezone
 from copy import deepcopy
 import logging
 from logging.handlers import RotatingFileHandler
+from flask import Flask
+from auth import init_auth_routes
+
 
 app = Flask(__name__, static_folder='static')
+
+init_auth_routes(app)
 
 # Конфигурация
 app.config.update({
