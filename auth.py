@@ -1,66 +1,59 @@
 import os
-import sqlite3
-import logging
+import json
 from datetime import timedelta
 from functools import wraps
-
-from flask import Flask, jsonify, request
 from werkzeug.security import generate_password_hash, check_password_hash
+from email_validator import validate_email, EmailNotValidError
+from flask import Flask, jsonify, request
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required,
     get_jwt_identity, create_refresh_token
 )
-from email_validator import validate_email, EmailNotValidError
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Инициализация приложения Flask
+# Настройка приложения
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET', 'super-secret-key')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 jwt = JWTManager(app)
 
-# Инициализация БД
-def init_db():
-    """Инициализация базы данных SQLite"""
-    with sqlite3.connect('users.db') as conn:
-        conn.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('Администратор', 'Менеджер', 'Оператор')),
-            full_name TEXT,
-            email TEXT,
-            is_active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP
-        )
-        ''')
-        
-        # Проверяем, есть ли хотя бы один администратор
-        cursor = conn.execute("SELECT 1 FROM users WHERE role = 'Администратор' LIMIT 1")
-        if not cursor.fetchone():
-            admin_hash = generate_password_hash('admin123')
-            conn.execute(
-                "INSERT INTO users (username, password_hash, role, full_name, email) VALUES (?, ?, ?, ?, ?)",
-                ('admin', admin_hash, 'Администратор', 'Главный Администратор', 'admin@example.com')
-            )
-        conn.commit()
+# Конфигурация файла пользователей
+USERS_FILE = 'users.json'
+DEFAULT_ADMIN = {
+    'username': 'admin',
+    'password_hash': generate_password_hash('admin123'),
+    'role': 'Администратор',
+    'full_name': 'Главный Администратор',
+    'email': 'admin@example.com',
+    'is_active': True,
+    'created_at': '2023-01-01 00:00:00',
+    'last_login': None
+}
 
-init_db()
+# Инициализация файла пользователей
+def init_users_file():
+    """Создает файл пользователей с администратором по умолчанию, если его нет"""
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'users': [DEFAULT_ADMIN]}, f, ensure_ascii=False, indent=2)
+
+init_users_file()
 
 # Вспомогательные функции
-def get_db_connection():
-    """Получение соединения с БД"""
-    conn = sqlite3.connect('users.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+def read_users():
+    """Чтение пользователей из файла"""
+    with open(USERS_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)['users']
+
+def write_users(users):
+    """Запись пользователей в файл"""
+    with open(USERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'users': users}, f, ensure_ascii=False, indent=2)
+
+def find_user(username):
+    """Поиск пользователя по имени"""
+    users = read_users()
+    return next((u for u in users if u['username'] == username), None)
 
 def validate_user_data(data, is_new_user=True):
     """Валидация данных пользователя"""
@@ -68,6 +61,8 @@ def validate_user_data(data, is_new_user=True):
     
     if is_new_user and not data.get('username'):
         errors['username'] = 'Имя пользователя обязательно'
+    elif is_new_user and find_user(data.get('username', '')):
+        errors['username'] = 'Пользователь с таким именем уже существует'
     
     if is_new_user and not data.get('password'):
         errors['password'] = 'Пароль обязателен'
@@ -85,34 +80,21 @@ def validate_user_data(data, is_new_user=True):
     
     return errors if errors else None
 
-def log_user_action(action, target_user=None):
-    """Логирование действий пользователей"""
-    current_user = get_jwt_identity()
-    message = f"User action: {current_user} | {action}"
-    if target_user:
-        message += f" | Target: {target_user}"
-    logger.info(message)
-
-# Декораторы для проверки прав
 def role_required(required_role):
     """Декоратор для проверки роли пользователя"""
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
             current_user = get_jwt_identity()
-            with get_db_connection() as conn:
-                user = conn.execute(
-                    "SELECT role FROM users WHERE username = ?", 
-                    (current_user,)
-                ).fetchone()
-                
+            user = find_user(current_user)
+            
             if not user or user['role'] != required_role:
                 return jsonify({"error": f"Требуется роль {required_role}"}), 403
             return f(*args, **kwargs)
         return wrapped
     return decorator
 
-# Маршруты API
+# API Endpoints
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """Аутентификация пользователя"""
@@ -123,31 +105,24 @@ def login():
     if not username or not password:
         return jsonify({"error": "Не указаны имя пользователя или пароль"}), 400
     
-    with get_db_connection() as conn:
-        user = conn.execute(
-            "SELECT username, password_hash, role, full_name, is_active FROM users WHERE username = ?", 
-            (username,)
-        ).fetchone()
-    
+    user = find_user(username)
     if not user or not check_password_hash(user['password_hash'], password):
         return jsonify({"error": "Неверные учетные данные"}), 401
     
-    if not user['is_active']:
+    if not user.get('is_active', True):
         return jsonify({"error": "Учетная запись деактивирована"}), 403
     
     # Обновляем время последнего входа
-    with get_db_connection() as conn:
-        conn.execute(
-            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE username = ?", 
-            (username,)
-        )
-        conn.commit()
+    users = read_users()
+    for u in users:
+        if u['username'] == username:
+            u['last_login'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            break
+    write_users(users)
     
     # Создаем JWT токены
     access_token = create_access_token(identity=username)
     refresh_token = create_refresh_token(identity=username)
-    
-    log_user_action("login")
     
     return jsonify({
         "access_token": access_token,
@@ -155,7 +130,7 @@ def login():
         "user": {
             "username": user['username'],
             "role": user['role'],
-            "full_name": user['full_name']
+            "full_name": user.get('full_name')
         }
     })
 
@@ -177,198 +152,120 @@ def create_user():
     if errors := validate_user_data(data):
         return jsonify({"errors": errors}), 400
     
-    password_hash = generate_password_hash(data['password'])
+    new_user = {
+        'username': data['username'],
+        'password_hash': generate_password_hash(data['password']),
+        'role': data['role'],
+        'full_name': data.get('full_name', ''),
+        'email': data.get('email', ''),
+        'is_active': True,
+        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'last_login': None
+    }
     
-    try:
-        with get_db_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO users 
-                (username, password_hash, role, full_name, email) 
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (data['username'], password_hash, data['role'], 
-                 data.get('full_name'), data.get('email'))
-            conn.commit()
-        
-        log_user_action("create user", data['username'])
-        return jsonify({"message": "Пользователь успешно создан"}), 201
+    users = read_users()
+    users.append(new_user)
+    write_users(users)
     
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Пользователь с таким именем уже существует"}), 400
+    return jsonify({"message": "Пользователь успешно создан"}), 201
 
 @app.route('/api/users', methods=['GET'])
 @jwt_required()
 def list_users():
-    """Получение списка пользователей (с пагинацией)"""
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 10))
+    """Получение списка пользователей"""
+    users = read_users()
+    # Фильтруем чувствительные данные
+    filtered_users = [{
+        'username': u['username'],
+        'role': u['role'],
+        'full_name': u.get('full_name'),
+        'email': u.get('email'),
+        'is_active': u.get('is_active', True),
+        'created_at': u.get('created_at'),
+        'last_login': u.get('last_login')
+    } for u in users]
     
-    with get_db_connection() as conn:
-        # Получаем общее количество пользователей
-        total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        
-        # Получаем пользователей для текущей страницы
-        users = conn.execute(
-            """
-            SELECT username, role, full_name, email, is_active, 
-                   strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at,
-                   strftime('%Y-%m-%d %H:%M:%S', last_login) as last_login
-            FROM users
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-            """,
-            (per_page, (page - 1) * per_page)
-        ).fetchall()
-    
-    users_list = [dict(user) for user in users]
-    
-    log_user_action("view users list")
-    
-    return jsonify({
-        "users": users_list,
-        "pagination": {
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "pages": (total + per_page - 1) // per_page
-        }
-    })
-
-@app.route('/api/users/<username>', methods=['GET'])
-@jwt_required()
-def get_user(username):
-    """Получение информации о конкретном пользователе"""
-    current_user = get_jwt_identity()
-    
-    # Пользователи могут получать только свою информацию, кроме администраторов
-    with get_db_connection() as conn:
-        current_user_role = conn.execute(
-            "SELECT role FROM users WHERE username = ?", 
-            (current_user,)
-        ).fetchone()
-        
-        if current_user_role['role'] != 'Администратор' and current_user != username:
-            return jsonify({"error": "Нет доступа"}), 403
-        
-        user = conn.execute(
-            """
-            SELECT username, role, full_name, email, is_active,
-                   strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at,
-                   strftime('%Y-%m-%d %H:%M:%S', last_login) as last_login
-            FROM users
-            WHERE username = ?
-            """,
-            (username,)
-        ).fetchone()
-    
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    
-    log_user_action("view user", username)
-    
-    return jsonify(dict(user))
+    return jsonify({"users": filtered_users})
 
 @app.route('/api/users/<username>', methods=['PUT'])
 @jwt_required()
 def update_user(username):
     """Обновление информации о пользователе"""
     current_user = get_jwt_identity()
+    user_to_update = find_user(username)
+    
+    if not user_to_update:
+        return jsonify({"error": "Пользователь не найден"}), 404
+    
+    current_user_data = find_user(current_user)
+    if current_user_data['role'] != 'Администратор' and current_user != username:
+        return jsonify({"error": "Нет доступа"}), 403
+    
     data = request.get_json()
+    if errors := validate_user_data(data, is_new_user=False):
+        return jsonify({"errors": errors}), 400
     
-    with get_db_connection() as conn:
-        # Проверяем права доступа
-        current_user_role = conn.execute(
-            "SELECT role FROM users WHERE username = ?", 
-            (current_user,)
-        ).fetchone()
-        
-        if current_user_role['role'] != 'Администратор' and current_user != username:
-            return jsonify({"error": "Нет доступа"}), 403
-        
-        # Администраторы могут менять роль, другие пользователи - нет
-        if 'role' in data and current_user_role['role'] != 'Администратор':
-            return jsonify({"error": "Только администратор может менять роли"}), 403
-        
-        # Валидация данных
-        if errors := validate_user_data(data, is_new_user=False):
-            return jsonify({"errors": errors}), 400
-        
-        # Подготовка данных для обновления
-        update_fields = []
-        update_values = []
-        
-        if 'full_name' in data:
-            update_fields.append("full_name = ?")
-            update_values.append(data['full_name'])
-        
-        if 'email' in data:
-            update_fields.append("email = ?")
-            update_values.append(data['email'])
-        
-        if 'role' in data:
-            update_fields.append("role = ?")
-            update_values.append(data['role'])
-        
-        if 'password' in data:
-            update_fields.append("password_hash = ?")
-            update_values.append(generate_password_hash(data['password']))
-        
-        if not update_fields:
-            return jsonify({"error": "Нет данных для обновления"}), 400
-        
-        # Выполняем обновление
-        update_query = f"UPDATE users SET {', '.join(update_fields)} WHERE username = ?"
-        update_values.append(username)
-        
-        conn.execute(update_query, update_values)
-        conn.commit()
+    users = read_users()
+    updated = False
     
-    log_user_action("update user", username)
+    for user in users:
+        if user['username'] == username:
+            if 'full_name' in data:
+                user['full_name'] = data['full_name']
+            if 'email' in data:
+                user['email'] = data['email']
+            if 'password' in data:
+                user['password_hash'] = generate_password_hash(data['password'])
+            if 'role' in data and current_user_data['role'] == 'Администратор':
+                user['role'] = data['role']
+            updated = True
+            break
     
-    return jsonify({"message": "Данные пользователя обновлены"})
+    if updated:
+        write_users(users)
+        return jsonify({"message": "Данные пользователя обновлены"})
+    
+    return jsonify({"error": "Ошибка при обновлении"}), 500
 
 @app.route('/api/users/<username>/status', methods=['PUT'])
 @jwt_required()
 @role_required('Администратор')
 def toggle_user_status(username):
     """Активация/деактивация пользователя"""
-    current_user = get_jwt_identity()
-    
-    if current_user == username:
+    if get_jwt_identity() == username:
         return jsonify({"error": "Нельзя изменить статус своей учетной записи"}), 400
     
     data = request.get_json()
     if 'is_active' not in data:
         return jsonify({"error": "Не указан статус"}), 400
     
-    with get_db_connection() as conn:
-        conn.execute(
-            "UPDATE users SET is_active = ? WHERE username = ?",
-            (bool(data['is_active']), username)
-        )
-        conn.commit()
+    users = read_users()
+    updated = False
     
-    action = "activate user" if data['is_active'] else "deactivate user"
-    log_user_action(action, username)
+    for user in users:
+        if user['username'] == username:
+            user['is_active'] = bool(data['is_active'])
+            updated = True
+            break
     
-    return jsonify({"message": f"Статус пользователя {username} обновлен"})
+    if updated:
+        write_users(users)
+        return jsonify({"message": f"Статус пользователя {username} обновлен"})
+    
+    return jsonify({"error": "Пользователь не найден"}), 404
 
 @app.route('/api/users/<username>', methods=['DELETE'])
 @jwt_required()
 @role_required('Администратор')
 def delete_user(username):
     """Удаление пользователя"""
-    current_user = get_jwt_identity()
-    
-    if current_user == username:
+    if get_jwt_identity() == username:
         return jsonify({"error": "Нельзя удалить свою учетную запись"}), 400
     
-    with get_db_connection() as conn:
-        conn.execute("DELETE FROM users WHERE username = ?", (username,))
-        conn.commit()
+    users = read_users()
+    users = [u for u in users if u['username'] != username]
     
-    log_user_action("delete user", username)
+    write_users(users)
     
     return jsonify({"message": "Пользователь удален"})
 
