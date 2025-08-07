@@ -1,16 +1,12 @@
-# Используем только Python-образ
 FROM python:3.9-slim
 
+# Установка зависимостей Python
 WORKDIR /app
-
-# Установка системных зависимостей
+COPY backend/requirements.txt .
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc python3-dev && \
+    pip install --no-cache-dir -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
-
-# Копируем Python-зависимости
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем бекенд
 COPY backend .
