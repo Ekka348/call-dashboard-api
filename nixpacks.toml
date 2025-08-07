@@ -1,6 +1,17 @@
-[phases]
-backend = { cmds = ["cd backend && pip install -r requirements.txt"] }
-frontend = { cmds = ["cd frontend && npm install"] }
+[build]
+# Указываем явно, что это мульти-приложение
+provider = "multi"
 
-[start]
-backend = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+# Конфигурация для бекенда
+[[build.sub_providers]]
+name = "backend"
+path = "backend"
+provider = "python"
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+
+# Конфигурация для фронтенда
+[[build.sub_providers]]
+name = "frontend"
+path = "frontend"
+provider = "node"
+cmd = "npm run start"
