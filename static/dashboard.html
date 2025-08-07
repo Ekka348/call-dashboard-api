@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    /* Ваши стили остаются без изменений */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
@@ -324,7 +325,10 @@
     const CONFIG = {
       refreshInterval: 300000, // 5 минут
       updateCheckInterval: 60000, // 1 минута
-      apiEndpoint: '/api/leads' // Эндпоинт API для получения данных
+      apiEndpoints: {
+        leads: '/api/leads/by-stage',
+        operators: '/api/leads/operators'
+      }
     };
 
     // Состояние приложения
@@ -373,21 +377,39 @@
       }
 
       static updateDashboard(data) {
+        if (!data || !data.data) return;
+        
+        // Рассчитываем общее количество лидов
+        const totalLeads = Object.values(data.data).reduce((sum, stage) => {
+          return sum + stage.details.reduce((stageSum, op) => stageSum + op.count, 0);
+        }, 0);
+        
+        // Получаем количество лидов по этапам
+        const pendingLeads = data.data["На согласовании"]?.details.reduce((sum, op) => sum + op.count, 0) || 0;
+        const recruiterLeads = data.data["Приглашен к рекрутеру"]?.details.reduce((sum, op) => sum + op.count, 0) || 0;
+        
         // Обновляем основные показатели
-        document.getElementById('total-leads').textContent = data.totalLeads;
-        document.getElementById('pending-leads').textContent = data.pendingLeads;
-        document.getElementById('recruiter-leads').textContent = data.recruiterLeads;
+        document.getElementById('total-leads').textContent = totalLeads;
+        document.getElementById('pending-leads').textContent = pendingLeads;
+        document.getElementById('recruiter-leads').textContent = recruiterLeads;
         
-        // Обновляем изменения показателей
-        UIManager.updateChangeIndicator('total-leads-change', data.totalLeadsChange);
-        UIManager.updateChangeIndicator('pending-leads-change', data.pendingLeadsChange);
-        UIManager.updateChangeIndicator('recruiter-leads-change', data.recruiterLeadsChange);
-        
-        // Обновляем таблицу лидов
-        UIManager.updateLeadsTable(data.recentLeads);
+        // Для изменений показателей используем данные из changes, если они есть
+        if (data.changes && data.changes.length > 0 && AppState.previousData) {
+          const totalChange = totalLeads - (AppState.previousData.totalLeads || 0);
+          const pendingChange = pendingLeads - (AppState.previousData.pendingLeads || 0);
+          const recruiterChange = recruiterLeads - (AppState.previousData.recruiterLeads || 0);
+          
+          const totalPercent = AppState.previousData.totalLeads ? Math.round(totalChange / AppState.previousData.totalLeads * 100) : 0;
+          const pendingPercent = AppState.previousData.pendingLeads ? Math.round(pendingChange / AppState.previousData.pendingLeads * 100) : 0;
+          const recruiterPercent = AppState.previousData.recruiterLeads ? Math.round(recruiterChange / AppState.previousData.recruiterLeads * 100) : 0;
+          
+          UIManager.updateChangeIndicator('total-leads-change', {value: totalChange, percent: totalPercent});
+          UIManager.updateChangeIndicator('pending-leads-change', {value: pendingChange, percent: pendingPercent});
+          UIManager.updateChangeIndicator('recruiter-leads-change', {value: recruiterChange, percent: recruiterPercent});
+        }
         
         // Обновляем список операторов
-        UIManager.updateOperatorFilter(data.allOperators);
+        DataController.fetchOperators();
         
         // Обновляем временные метки
         const now = new Date();
@@ -397,6 +419,13 @@
           document.getElementById('full-update-time').textContent = `Последнее полное обновление: ${timeString}`;
           AppState.isFirstLoad = false;
         }
+        
+        // Обновляем данные для графика
+        UIManager.updateHistoryData({
+          pendingLeads,
+          recruiterLeads,
+          callbackLeads: 0 // Можно добавить реальные данные, если они есть
+        });
       }
 
       static updateChangeIndicator(elementId, change) {
@@ -419,23 +448,10 @@
       }
 
       static updateLeadsTable(leads) {
+        // В реальном приложении здесь можно добавить вывод последних лидов
+        // если ваш API предоставляет такие данные
         const tbody = document.querySelector('#leads-table tbody');
-        tbody.innerHTML = '';
-        
-        leads.forEach(lead => {
-          const row = document.createElement('tr');
-          
-          row.innerHTML = `
-            <td>${lead.id}</td>
-            <td>${lead.name}</td>
-            <td>${lead.phone}</td>
-            <td>${lead.operator}</td>
-            <td><span class="status-badge status-${lead.statusClass}">${lead.status}</span></td>
-            <td>${new Date(lead.date).toLocaleString()}</td>
-          `;
-          
-          tbody.appendChild(row);
-        });
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Данные о последних лидах не загружены</td></tr>';
       }
 
       static updateOperatorFilter(operators) {
@@ -465,6 +481,8 @@
         const selectedOperator = document.getElementById('operator-select').value;
         // Здесь можно добавить логику фильтрации данных
         console.log(`Фильтр по оператору: ${selectedOperator}`);
+        // В реальном приложении здесь можно сделать новый запрос к API
+        // с параметром фильтра или отфильтровать уже загруженные данные
       }
 
       static updateHistoryChart() {
@@ -562,12 +580,11 @@
     class DataController {
       static async fetchData() {
         try {
-          // В реальном приложении здесь будет fetch к API
-          // const response = await fetch(CONFIG.apiEndpoint);
-          // const data = await response.json();
-          
-          // Для демонстрации используем моковые данные
-          const data = DataController.generateMockData();
+          const response = await fetch(CONFIG.apiEndpoints.leads);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
           
           // Сохраняем предыдущие данные для сравнения
           AppState.previousData = AppState.currentData;
@@ -575,89 +592,39 @@
           
           // Обновляем интерфейс
           UIManager.updateDashboard(data);
-          UIManager.updateHistoryData(data);
           
         } catch (error) {
           console.error('Ошибка при загрузке данных:', error);
         }
       }
 
+      static async fetchOperators() {
+        try {
+          const response = await fetch(CONFIG.apiEndpoints.operators);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          
+          if (data.operators && data.operators.length > 0) {
+            UIManager.updateOperatorFilter(data.operators);
+          }
+          
+        } catch (error) {
+          console.error('Ошибка при загрузке операторов:', error);
+        }
+      }
+
       static checkForUpdates() {
         // В реальном приложении здесь может быть проверка новых данных
         console.log('Проверка обновлений данных...');
+        DataController.fetchData();
         
         // Устанавливаем следующую проверку
         AppState.updateCheckInterval = setTimeout(
           DataController.checkForUpdates, 
           CONFIG.updateCheckInterval
         );
-      }
-
-      static generateMockData() {
-        // Генерация случайных данных для демонстрации
-        const totalLeads = Math.floor(Math.random() * 200) + 100;
-        const pendingLeads = Math.floor(totalLeads * (0.3 + Math.random() * 0.3));
-        const recruiterLeads = Math.floor(totalLeads * (0.1 + Math.random() * 0.2));
-        const callbackLeads = Math.floor(totalLeads * (0.05 + Math.random() * 0.1));
-        
-        // Генерация изменений по сравнению с предыдущими данными
-        let totalLeadsChange = { value: 0, percent: 0 };
-        let pendingLeadsChange = { value: 0, percent: 0 };
-        let recruiterLeadsChange = { value: 0, percent: 0 };
-        
-        if (AppState.previousData) {
-          totalLeadsChange = {
-            value: totalLeads - AppState.previousData.totalLeads,
-            percent: Math.round((totalLeads - AppState.previousData.totalLeads) / AppState.previousData.totalLeads * 100)
-          };
-          
-          pendingLeadsChange = {
-            value: pendingLeads - AppState.previousData.pendingLeads,
-            percent: Math.round((pendingLeads - AppState.previousData.pendingLeads) / AppState.previousData.pendingLeads * 100)
-          };
-          
-          recruiterLeadsChange = {
-            value: recruiterLeads - AppState.previousData.recruiterLeads,
-            percent: Math.round((recruiterLeads - AppState.previousData.recruiterLeads) / AppState.previousData.recruiterLeads * 100)
-          };
-        }
-        
-        // Генерация списка операторов
-        const operators = ['Иванов И.', 'Петрова С.', 'Сидоров А.', 'Кузнецова Е.', 'Смирнов Д.'];
-        
-        // Генерация последних лидов
-        const recentLeads = [];
-        const statuses = [
-          { name: 'На согласовании', class: 'pending' },
-          { name: 'Перезвонить', class: 'pending' },
-          { name: 'Приглашен к рекрутеру', class: 'completed' },
-          { name: 'Новый', class: 'new' }
-        ];
-        
-        for (let i = 0; i < 10; i++) {
-          const status = statuses[Math.floor(Math.random() * statuses.length)];
-          recentLeads.push({
-            id: Math.floor(Math.random() * 10000),
-            name: ['Алексей', 'Мария', 'Дмитрий', 'Елена', 'Андрей'][Math.floor(Math.random() * 5)],
-            phone: `+7${Math.floor(9000000000 + Math.random() * 1000000000)}`,
-            operator: operators[Math.floor(Math.random() * operators.length)],
-            status: status.name,
-            statusClass: status.class,
-            date: new Date(Date.now() - Math.floor(Math.random() * 48 * 60 * 60 * 1000))
-          });
-        }
-        
-        return {
-          totalLeads,
-          pendingLeads,
-          recruiterLeads,
-          callbackLeads,
-          totalLeadsChange,
-          pendingLeadsChange,
-          recruiterLeadsChange,
-          allOperators: operators,
-          recentLeads
-        };
       }
     }
 
