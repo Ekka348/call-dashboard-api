@@ -1,11 +1,5 @@
-# Python
+node_modules
+.env
 __pycache__
 *.pyc
-.env
-
-# Node
-node_modules
-npm-debug.log
-
-# Build
-frontend/build
+.DS_Store
