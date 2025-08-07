@@ -1,28 +1,34 @@
-# Этап сборки фронтенда
-FROM node:16 as frontend-builder
+# Используем официальный образ Python
+FROM python:3.9-slim
+
+# Устанавливаем Node.js для сборки фронтенда
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Установка бекенда
 WORKDIR /app
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Установка фронтенда
+WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install
+RUN npm install --silent
 COPY frontend .
 RUN npm run build
 
-# Основной образ
-FROM python:3.9
+# Возвращаемся в корень
 WORKDIR /app
-
-# Установка бекенда
-COPY backend/requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
 COPY backend .
 
-# Копируем собранный фронтенд
-COPY --from=frontend-builder /app/build ./frontend/build
-
 # Настройка статики
-RUN mkdir -p /app/static
-RUN cp -r /app/frontend/build/* /app/static/
+RUN mv /app/frontend/build /app/static
 
 # Порт и запуск
+ENV PORT=80
 EXPOSE 80
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "80"]
