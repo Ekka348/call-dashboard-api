@@ -1,4 +1,513 @@
-<!DOCTYPE html>
+  <script>
+    // Класс для управления интерфейсом
+    class UIManager {
+      static initEventListeners() {
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await AuthController.handleLogin();
+        });
+        
+        document.getElementById('logout-button').addEventListener('click', AuthController.handleLogout);
+        document.getElementById('operator-select').addEventListener('change', UIManager.applyOperatorFilter);
+        
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && AppState.isAuthenticated) {
+            AuthController.handleLogout();
+          }
+        });
+      }
+
+      static showLogin() {
+        clearIntervals();
+        document.getElementById('login-container').style.display = 'flex';
+        document.getElementById('dashboard-container').style.display = 'none';
+        document.getElementById('dashboard-container').classList.remove('show');
+        document.getElementById('login-error').textContent = '';
+        document.getElementById('password').value = '';
+        AppState.currentUser = null;
+        AppState.isAuthenticated = false;
+      }
+
+      static showDashboard() {
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('dashboard-container').style.display = 'block';
+        setTimeout(() => {
+          document.getElementById('dashboard-container').classList.add('show');
+        }, 10);
+        
+        UIManager.updateUserInfo();
+        DataController.fetchData();
+        
+        AppState.dataRefreshInterval = setInterval(
+          DataController.fetchData, 
+          CONFIG.refreshInterval
+        );
+        AppState.updateCheckInterval = setTimeout(
+          DataController.checkForUpdates, 
+          CONFIG.updateCheckInterval
+        );
+      }
+
+      static updateUserInfo() {
+        if (!AppState.currentUser) return;
+        
+        document.getElementById('username-display').textContent = AppState.currentUser.username;
+        const avatar = document.getElementById('user-avatar');
+        avatar.textContent = AppState.currentUser.username.charAt(0).toUpperCase();
+        
+        // Разные цвета аватаров для разных ролей
+        const roleColors = {
+          'admin': '#ea4335',
+          'manager': '#4285f4',
+          'supervisor': '#34a853'
+        };
+        
+        avatar.style.backgroundColor = 
+          roleColors[AppState.currentUser.role.toLowerCase()] || '#666';
+      }
+
+      static updateConnectionStatus(connected) {
+        const connectionStatus = document.getElementById('connection-status');
+        const statusText = document.getElementById('status-text');
+        
+        connectionStatus.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
+        statusText.textContent = connected ? 'Подключено' : 'Отключено';
+      }
+
+      static showLoading(show = true) {
+        const button = document.getElementById('login-button');
+        const spinner = document.getElementById('login-spinner');
+        const buttonText = button.querySelector('.button-text');
+        
+        if (show) {
+          button.disabled = true;
+          spinner.classList.remove('hidden');
+          buttonText.textContent = 'Вход...';
+        } else {
+          button.disabled = false;
+          spinner.classList.add('hidden');
+          buttonText.textContent = 'Войти';
+        }
+      }
+
+      static showLoginError(message) {
+        const errorElement = document.getElementById('login-error');
+        errorElement.textContent = message;
+        setTimeout(() => {
+          errorElement.textContent = '';
+        }, 5000);
+      }
+
+      static updateOperatorSelect(operators) {
+        const select = document.getElementById('operator-select');
+        const currentValue = select.value;
+        
+        select.innerHTML = '<option value="">Все операторы</option>';
+        
+        operators.forEach(operator => {
+          const option = document.createElement('option');
+          option.value = operator;
+          option.textContent = operator;
+          select.appendChild(option);
+        });
+        
+        if (currentValue && operators.includes(currentValue)) {
+          select.value = currentValue;
+        }
+        
+        AppState.allOperators = operators;
+        this.applyOperatorFilter();
+      }
+
+      static applyOperatorFilter() {
+        const selectedOperator = document.getElementById('operator-select').value;
+        const tables = document.querySelectorAll('.card table tbody');
+        
+        tables.forEach(table => {
+          const rows = table.querySelectorAll('tr');
+          let hasVisibleRows = false;
+          
+          rows.forEach(row => {
+            const operatorName = row.cells[0].textContent;
+            
+            if (!selectedOperator || operatorName === selectedOperator) {
+              row.classList.remove('hidden-row');
+              hasVisibleRows = true;
+            } else {
+              row.classList.add('hidden-row');
+            }
+          });
+          
+          const emptyMessage = table.nextElementSibling;
+          if (emptyMessage?.classList.contains('empty-message')) {
+            emptyMessage.classList.toggle('show-empty-message', !!selectedOperator && !hasVisibleRows);
+          }
+        });
+        
+        this.updateCardCounts(selectedOperator);
+      }
+
+      static updateCardCounts(selectedOperator) {
+        if (!selectedOperator) {
+          document.querySelectorAll('.card-count').forEach(el => {
+            const count = el.dataset.originalCount || '0';
+            el.textContent = count;
+          });
+          return;
+        }
+        
+        document.querySelectorAll('.card table tbody').forEach(tbody => {
+          const cardCount = tbody.closest('.card').querySelector('.card-count');
+          let count = 0;
+          
+          tbody.querySelectorAll('tr:not(.hidden-row)').forEach(row => {
+            const countValue = row.querySelector('.count-value');
+            if (countValue) {
+              count += parseInt(countValue.textContent) || 0;
+            }
+          });
+          
+          cardCount.textContent = count;
+        });
+      }
+
+      static showChangesNotification(changes) {
+        if (!changes.length) return;
+        
+        const notification = document.createElement('div');
+        notification.className = 'changes-notification';
+        notification.setAttribute('aria-live', 'polite');
+        
+        let html = '<h4>Обновления данных:</h4><ul>';
+        changes.slice(0, 5).forEach(change => {
+          html += `<li><strong>${change.operator}</strong> (${change.stage}): ${change.old_count} → ${change.new_count} 
+                  <span class="${change.diff > 0 ? 'count-up' : 'count-down'}">
+                    (${change.diff > 0 ? '+' : ''}${change.diff})
+                  </span></li>`;
+        });
+        
+        if (changes.length > 5) {
+          html += `<li>...и еще ${changes.length - 5} изменений</li>`;
+        }
+        
+        html += '</ul>';
+        notification.innerHTML = html;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+          notification.classList.add('show');
+          setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 500);
+          }, 5000);
+        }, 100);
+      }
+
+      static updateHistoryChart() {
+        const canvas = document.getElementById('history-chart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        const colors = {
+          "На согласовании": getComputedStyle(document.documentElement).getPropertyValue('--primary') || '#4285f4',
+          "Перезвонить": getComputedStyle(document.documentElement).getPropertyValue('--warning') || '#fbbc05',
+          "Приглашен к рекрутеру": getComputedStyle(document.documentElement).getPropertyValue('--success') || '#34a853'
+        };
+        
+        const datasets = Object.entries(AppState.historyData.stages).map(([stageName, data]) => ({
+          label: stageName,
+          data: data,
+          borderColor: colors[stageName],
+          backgroundColor: `${colors[stageName]}20`,
+          tension: 0.3,
+          fill: false
+        }));
+        
+        if (AppState.historyChart) {
+          AppState.historyChart.data.labels = AppState.historyData.timestamps;
+          AppState.historyChart.data.datasets = datasets;
+          AppState.historyChart.update();
+          return;
+        }
+        
+        if (AppState.historyData.timestamps.length > 0) {
+          AppState.historyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: AppState.historyData.timestamps,
+              datasets: datasets
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false }
+              },
+              scales: {
+                x: {
+                  title: { display: true, text: 'Время' },
+                  grid: { display: false }
+                },
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: 'Количество лидов' }
+                }
+              }
+            }
+          });
+        }
+      }
+    }
+
+    // Класс для управления данными
+    class DataController {
+      static async fetchData() {
+        try {
+          // Показываем состояние загрузки
+          document.querySelectorAll('.card-body > div').forEach(el => {
+            if (!el.classList.contains('error-message')) {
+              el.className = 'loading';
+              el.textContent = 'Загрузка';
+            }
+          });
+          
+          const [dataResponse, operatorsResponse] = await Promise.all([
+            DashboardAPI.getLeadsByStage(),
+            DashboardAPI.getOperators()
+          ]);
+
+          const formattedData = {
+            status: "success",
+            timestamp: dataResponse.timestamp,
+            data: {},
+            operators: operatorsResponse.operators,
+            changes: dataResponse.changes || []
+          };
+
+          // Обработка данных для каждого этапа
+          for (const stageName in STAGES) {
+            if (dataResponse.data[stageName]) {
+              formattedData.data[stageName] = {
+                details: dataResponse.data[stageName].details.map(item => ({
+                  operator: item.operator,
+                  count: item.count
+                })),
+                total_count: dataResponse.data[stageName].details.reduce((sum, item) => sum + item.count, 0)
+              };
+            } else {
+              formattedData.data[stageName] = {
+                details: [],
+                total_count: 0
+              };
+            }
+          }
+
+          UIManager.updateDashboard(formattedData);
+          UIManager.updateOperatorSelect(formattedData.operators || []);
+          
+          AppState.lastUpdateTime = Date.now();
+          document.getElementById('last-update').textContent = formattedData.timestamp || new Date().toLocaleTimeString();
+          
+          if (AppState.isFirstLoad) {
+            UIManager.updateConnectionStatus(true);
+            AppState.isFirstLoad = false;
+          }
+          
+          if (formattedData.changes?.length > 0) {
+            UIManager.showChangesNotification(formattedData.changes);
+          }
+          
+          return true;
+        } catch (error) {
+          console.error('Ошибка загрузки данных:', error);
+          UIManager.handleDataError(error);
+          return false;
+        }
+      }
+
+      static async checkForUpdates() {
+        try {
+          const data = await DashboardAPI.getUpdates();
+          const formattedUpdates = {};
+          
+          for (const [stageName, stageData] of Object.entries(data.updates)) {
+            formattedUpdates[stageName] = {
+              operators: stageData.operators,
+              total_count: stageData.total_count
+            };
+          }
+          
+          UIManager.processUpdates(formattedUpdates);
+          AppState.lastUpdateTime = Date.now();
+          document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+          UIManager.updateConnectionStatus(true);
+        } catch (error) {
+          console.error('Ошибка проверки обновлений:', error);
+          UIManager.updateConnectionStatus(false);
+        } finally {
+          AppState.updateCheckInterval = setTimeout(
+            this.checkForUpdates.bind(this), 
+            CONFIG.updateCheckInterval
+          );
+        }
+      }
+
+      static addToHistory(data) {
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        AppState.historyData.timestamps.push(timestamp);
+        
+        for (const stageName in STAGES) {
+          const stageData = data.data[stageName];
+          AppState.historyData.stages[stageName].push(stageData?.total_count || 0);
+        }
+        
+        // Ограничиваем историю 24 записями
+        if (AppState.historyData.timestamps.length > 24) {
+          AppState.historyData.timestamps.shift();
+          for (const stage in AppState.historyData.stages) {
+            AppState.historyData.stages[stage].shift();
+          }
+        }
+        
+        UIManager.updateHistoryChart();
+      }
+    }
+
+    // Класс для управления аутентификацией
+    class AuthController {
+      static async handleLogin() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        
+        if (!username || !password) {
+          UIManager.showLoginError('Введите логин и пароль');
+          return;
+        }
+        
+        // Проверка на блокировку после неудачных попыток
+        const now = Date.now();
+        if (AppState.loginAttempts >= CONFIG.maxLoginAttempts && 
+            now - AppState.lastFailedLogin < CONFIG.loginDelay) {
+          const remainingTime = Math.ceil((CONFIG.loginDelay - (now - AppState.lastFailedLogin)) / 1000);
+          UIManager.showLoginError(`Попробуйте снова через ${remainingTime} секунд`);
+          return;
+        }
+        
+        UIManager.showLoading(true);
+        
+        try {
+          const isAuthenticated = await AuthManager.verifyCredentials(username, password);
+          
+          if (isAuthenticated) {
+            const passwordHash = AuthManager.hashPassword(password);
+            AuthManager.setAuthData(username, passwordHash);
+            AppState.currentUser = { username, role: username === 'admin' ? 'Admin' : 'User' };
+            AppState.isAuthenticated = true;
+            AppState.loginAttempts = 0;
+            UIManager.showDashboard();
+          } else {
+            throw new Error('Неверный логин или пароль');
+          }
+        } catch (error) {
+          AppState.loginAttempts++;
+          AppState.lastFailedLogin = Date.now();
+          UIManager.showLoginError(error.message);
+          console.error('Ошибка входа:', error);
+        } finally {
+          UIManager.showLoading(false);
+        }
+      }
+
+      static handleLogout() {
+        if (confirm('Вы уверены, что хотите выйти?')) {
+          AuthManager.clearAuthData();
+          AppState.isAuthenticated = false;
+          UIManager.showLogin();
+        }
+      }
+
+      static checkAuth() {
+        const authData = AuthManager.getAuthData();
+        if (authData) {
+          // В реальном приложении здесь должна быть проверка с сервером
+          AppState.currentUser = { 
+            username: authData.username, 
+            role: authData.username === 'admin' ? 'Admin' : 'User' 
+          };
+          AppState.isAuthenticated = true;
+          UIManager.showDashboard();
+          return true;
+        }
+        UIManager.showLogin();
+        return false;
+      }
+    }
+
+    // Вспомогательные функции
+    function clearIntervals() {
+      if (AppState.dataRefreshInterval) clearInterval(AppState.dataRefreshInterval);
+      if (AppState.updateCheckInterval) clearTimeout(AppState.updateCheckInterval);
+    }
+
+    function handleDataError(error) {
+      UIManager.updateConnectionStatus(false);
+      document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
+      document.getElementById('status-text').textContent = 'Ошибка соединения';
+      
+      Object.values(STAGES).forEach(stage => {
+        const container = document.getElementById(stage.element);
+        if (!container.querySelector('.error-message')) {
+          const errorDiv = document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
+          container.innerHTML = '';
+          container.appendChild(errorDiv);
+        }
+      });
+    }
+
+    // Конфигурация этапов
+    const STAGES = {
+      "На согласовании": { 
+        id: "agreement", 
+        element: "agreement-content", 
+        count: "agreement-count", 
+        header: "agreement-header" 
+      },
+      "Перезвонить": { 
+        id: "callback", 
+        element: "callback-content", 
+        count: "callback-count", 
+        header: "callback-header" 
+      },
+      "Приглашен к рекрутеру": { 
+        id: "invited", 
+        element: "invited-content", 
+        count: "invited-count", 
+        header: "invited-header" 
+      }
+    };
+
+    // Инициализация приложения
+    document.addEventListener('DOMContentLoaded', () => {
+      UIManager.initEventListeners();
+      AuthController.checkAuth();
+      
+      // Инициализация графика после загрузки
+      setTimeout(() => {
+        if (document.getElementById('history-chart')) {
+          UIManager.updateHistoryChart();
+        }
+      }, 100);
+    });
+  </script>
+</body>
+</html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
