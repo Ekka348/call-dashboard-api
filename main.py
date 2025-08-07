@@ -19,7 +19,7 @@ app.config.update({
     'SECRET_KEY': os.environ.get('SECRET_KEY') or os.urandom(24),
     'CACHE_TYPE': 'SimpleCache',
     'CACHE_DEFAULT_TIMEOUT': 300,
-    'BITRIX_REQUEST_TIMEOUT': 30,
+    'BITRIX_REQUEST_TIMEOUT': 60,
     'MAX_PAGINATION_LIMIT': 500,
     'LOG_FILE': 'app.log',
     'LOG_LEVEL': logging.INFO,
