@@ -14,8 +14,6 @@ from flask import Flask
 from auth import init_auth_routes
 from auth import app
 
-if __name__ == '__main__':
-    app.run()
 
 app = Flask(__name__, static_folder='static')
 
