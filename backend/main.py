@@ -3,7 +3,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import os
-from pathlib import Path
 
 app = FastAPI()
 
@@ -16,15 +15,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Путь к статике (исправленный)
-static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-static_path = Path(static_dir).resolve()
+# Путь к статике (абсолютный путь в контейнере)
+static_dir = "/app/static"
 
 # Проверка существования папки
-if not static_path.exists():
-    raise RuntimeError(f"Static directory not found at {static_path}")
+if not os.path.exists(static_dir):
+    raise RuntimeError(f"Static directory not found at {static_dir}. Contents: {os.listdir('/app')}")
 
-app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 # Инициализация БД
 def init_db():
@@ -47,7 +45,6 @@ async def handle_webhook(request: Request):
         conn.execute(
             "INSERT INTO deals (deal_id, stage_id) VALUES (?, ?)",
             (data.get("deal_id"), data.get("stage_id"))
-        )
     return {"status": "ok"}
 
 @app.get("/api/deals")
