@@ -17,6 +17,24 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 jwt = JWTManager(app)
 
+
+def init_auth_routes(app):
+    """Инициализация маршрутов аутентификации"""
+    
+    @app.route('/api/auth/login', methods=['POST'])
+    def login():
+        # Ваша реализация логина
+        return jsonify({"message": "Login endpoint"})
+    
+    @app.route('/api/auth/refresh', methods=['POST'])
+    def refresh():
+        # Ваша реализация обновления токена
+        return jsonify({"message": "Refresh endpoint"})
+    
+    # Добавьте другие маршруты аутентификации по необходимости
+    
+    return app
+
 # Конфигурация файла пользователей
 USERS_FILE = 'users.json'
 DEFAULT_ADMIN = {
