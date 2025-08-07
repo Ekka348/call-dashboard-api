@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 # Конфиг
-BITRIX_WEBHOOK = os.getenv("BITRIX_WEBHOOK")
+BITRIX_WEBHOOK = os.getenv("https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
     "Перезвонить": "IN_PROCESS",
