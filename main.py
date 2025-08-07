@@ -312,36 +312,25 @@ def load_users():
     return users
 
 def fetch_leads(stage, start, end):
-    """Получение лидов по этапу"""
-    leads = []
+    """Получение лидов по этапу (оптимизированная версия)"""
     try:
         response = make_bitrix_request(
             "crm.lead.list.json",
             {
-                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                "select": ["ASSIGNED_BY_ID"],
-                "start": -1
+                "filter": {
+                    ">=DATE_MODIFY": start,
+                    "<=DATE_MODIFY": end,
+                    "STATUS_ID": stage,
+                },
+                "select": ["ASSIGNED_BY_ID"],  # Только нужные поля
+                "start": 0,  # Пагинация с начала
+                "order": {"DATE_MODIFY": "DESC"},
             }
         )
-        
-        if response.get("result"):
-            total = response.get("total", 0)
-            if total > 0:
-                response = make_bitrix_request(
-                    "crm.lead.list.json",
-                    {
-                        "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                        "select": ["ASSIGNED_BY_ID"],
-                        "start": 0,
-                        "order": {"DATE_MODIFY": "DESC"}
-                    }
-                )
-                leads = response.get("result", [])
-    
+        return response.get("result", [])
     except BitrixAPIError as e:
-        app.logger.error(f"Error fetching leads for {stage}: {e}")
-    
-    return leads
+        app.logger.error(f"Error fetching leads: {e}")
+        return []
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
