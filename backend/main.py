@@ -8,8 +8,16 @@ import os
 from datetime import timedelta
 from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI
+from pathlib import Path
 
 app = FastAPI()
+
+static_path = Path(__file__).parent / "static"
+app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+
+@app.get("/api/status")
+async def status():
+    return {"status": "ok"}
 
 app.mount("/", StaticFiles(directory="../frontend/build", html=True), name="static")
 # CORS (для фронтенда)
