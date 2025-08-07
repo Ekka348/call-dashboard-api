@@ -1,10 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import os
-from datetime import timedelta
+from pathlib import Path
 
 app = FastAPI()
 
@@ -17,56 +16,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Раздача статики
-static_path = Path(__file__).parent.parent / "static"
-app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+# Путь к статике (исправленный)
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+static_path = Path(static_dir).resolve()
+
+# Проверка существования папки
+if not static_path.exists():
+    raise RuntimeError(f"Static directory not found at {static_path}")
+
+app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
 
 # Инициализация БД
 def init_db():
-    conn = sqlite3.connect("deals.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS deals (
-            id INTEGER PRIMARY KEY,
-            deal_id TEXT,
-            stage_id TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+    with sqlite3.connect("deals.db") as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS deals (
+                id INTEGER PRIMARY KEY,
+                deal_id TEXT,
+                stage_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
 init_db()
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
-    """Эндпоинт для вебхука Битрикс24"""
     data = await request.json()
-    conn = sqlite3.connect("deals.db")
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO deals (deal_id, stage_id) VALUES (?, ?)",
-        (data.get("deal_id"), data.get("stage_id"))
-    )
-    conn.commit()
-    conn.close()
+    with sqlite3.connect("deals.db") as conn:
+        conn.execute(
+            "INSERT INTO deals (deal_id, stage_id) VALUES (?, ?)",
+            (data.get("deal_id"), data.get("stage_id"))
+        )
     return {"status": "ok"}
 
 @app.get("/api/deals")
 async def get_deals():
-    """Получает сделки из БД"""
-    conn = sqlite3.connect("deals.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT deal_id, stage_id FROM deals")
-    deals = cursor.fetchall()
-    conn.close()
+    with sqlite3.connect("deals.db") as conn:
+        deals = conn.execute("SELECT deal_id, stage_id FROM deals").fetchall()
     return {"deals": deals}
 
 @app.get("/api/status")
 async def status():
-    """Проверка статуса сервера"""
     return {"status": "ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=80)
