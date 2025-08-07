@@ -4,3 +4,8 @@
     "build": "react-scripts build"
   }
 }
+{
+  "dependencies": {
+    "react-scripts": "5.0.1"
+  }
+}
