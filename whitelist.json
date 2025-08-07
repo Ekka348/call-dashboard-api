@@ -1,0 +1,26 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "full_name": "Администратор Системы"
+    },
+    {
+      "username": "manager1",
+      "password": "mng123",
+      "role": "manager",
+      "full_name": "Менеджер Иванов"
+    },
+    {
+      "username": "operator1",
+      "password": "oper123",
+      "full_name": "Оператор Петрова"
+    },
+    {
+      "username": "test",
+      "password": "test123",
+      "role": "tester"
+    }
+  ]
+}
