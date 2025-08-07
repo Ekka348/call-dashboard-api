@@ -4,8 +4,12 @@ provider = "python"
 [phases]
 build = [
     "pip install -r backend/requirements.txt",
-    "cd frontend && npm install && npm run build"
+    "cd frontend && npm install",
+    "cd frontend && npm run build"
 ]
 
 [start]
-cmd = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT && cd frontend && npm start"
+cmd = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+
+[static]
+directory = "frontend/build"
