@@ -1,10 +1,15 @@
 import requests
 import streamlit as st
 import pandas as pd
+import warnings
+
+# Игнорируем предупреждения Streamlit
+warnings.filterwarnings("ignore", category=UserWarning, message=".*ScriptRunContext.*")
 
 # Вебхук Bitrix24
 BITRIX_WEBHOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
 
+@st.cache_data(ttl=300)  # Кэшируем на 5 минут
 def get_deals():
     """Получаем сделки из Bitrix24"""
     method = "crm.deal.list"
