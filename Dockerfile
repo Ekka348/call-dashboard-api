@@ -10,6 +10,9 @@ RUN apt-get update && \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Создаем папку для статики
+RUN mkdir -p /app/static
+
 # Копируем бекенд
 COPY backend .
 
