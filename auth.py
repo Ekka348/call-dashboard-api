@@ -288,5 +288,5 @@ def init_auth_routes(app):
     return app
 
 if __name__ == '__main__':
-    app = init_auth_routes(app)
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
