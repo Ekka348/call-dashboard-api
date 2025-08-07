@@ -1,8 +1,8 @@
 # Этап сборки фронтенда
-FROM node:16 as frontend-builder
+FROM node:16 as frontend
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install
+RUN npm install --silent
 COPY frontend .
 RUN npm run build
 
@@ -10,7 +10,7 @@ RUN npm run build
 FROM python:3.9-slim
 WORKDIR /app
 
-# Установка зависимостей бекенда
+# Установка зависимостей Python
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -19,11 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY backend .
 
 # Копируем собранный фронтенд
-COPY --from=frontend-builder /app/build ./frontend_build
-
-# Создаем директорию для статики
-RUN mkdir -p /app/static && \
-    cp -r /app/frontend_build/* /app/static/
+COPY --from=frontend /app/build ./static
 
 # Порт и запуск
 EXPOSE 80
