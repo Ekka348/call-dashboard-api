@@ -45,7 +45,7 @@ app.logger.setLevel(app.config['LOG_LEVEL'])
 
 # Конфигурация Bitrix24 API
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = int(os.environ.get('UPDATE_INTERVAL', 300))  # 5 минут
+UPDATE_INTERVAL = int(os.environ.get('UPDATE_INTERVAL', 60))  # 5 минут
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
