@@ -7,13 +7,24 @@
   <link rel="stylesheet" href="/static/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Ваши стили остаются без изменений */
+    /* Оптимизированные стили */
+    :root {
+      --primary-color: #4285f4;
+      --success-color: #34a853;
+      --warning-color: #fbbc05;
+      --danger-color: #ea4335;
+      --text-color: #333;
+      --light-bg: #f5f7fa;
+      --card-bg: white;
+    }
+    
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Segoe UI', system-ui, sans-serif;
       margin: 0;
       padding: 0;
-      background-color: #f5f7fa;
-      color: #333;
+      background-color: var(--light-bg);
+      color: var(--text-color);
+      line-height: 1.5;
     }
     
     .container {
@@ -25,12 +36,12 @@
     
     .container.show {
       display: block;
-      animation: fadeIn 0.5s ease-in-out;
+      animation: fadeIn 0.3s ease-out;
     }
     
     @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     
     .header {
@@ -39,218 +50,118 @@
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 15px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
     }
     
     .header h1 {
       margin: 0;
-      color: #2c3e50;
-      font-size: 24px;
-    }
-    
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .user-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background-color: #4285f4;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
+      font-size: 1.5rem;
+      font-weight: 600;
     }
     
     .dashboard-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 20px;
       margin-bottom: 20px;
     }
     
     .card {
-      background: white;
+      background: var(--card-bg);
       border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       padding: 20px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
     .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
       margin-bottom: 15px;
     }
     
     .card-title {
       margin: 0;
-      font-size: 16px;
+      font-size: 1rem;
       color: #555;
     }
     
     .card-value {
-      font-size: 28px;
-      font-weight: bold;
+      font-size: 2rem;
+      font-weight: 700;
       margin: 10px 0;
-      color: #2c3e50;
     }
     
     .card-change {
-      display: flex;
-      align-items: center;
-      font-size: 14px;
+      font-size: 0.875rem;
     }
     
-    .positive {
-      color: #34a853;
-    }
-    
-    .negative {
-      color: #ea4335;
-    }
-    
-    .neutral {
-      color: #9e9e9e;
-    }
+    .positive { color: var(--success-color); }
+    .negative { color: var(--danger-color); }
+    .neutral { color: #9e9e9e; }
     
     .chart-container {
       height: 250px;
       margin-top: 15px;
     }
     
-    .table-container {
-      overflow-x: auto;
-    }
-    
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 15px;
+      font-size: 0.875rem;
     }
     
     th, td {
       padding: 12px 15px;
       text-align: left;
-      border-bottom: 1px solid #e0e0e0;
-    }
-    
-    th {
-      background-color: #f8f9fa;
-      font-weight: 600;
-      color: #555;
-    }
-    
-    tr:hover {
-      background-color: #f5f7fa;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
     }
     
     .status-badge {
       padding: 4px 8px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: 0.75rem;
       font-weight: 500;
+      display: inline-block;
     }
     
-    .status-new {
-      background-color: #e3f2fd;
-      color: #1976d2;
-    }
-    
-    .status-pending {
-      background-color: #fff8e1;
-      color: #ff8f00;
-    }
-    
-    .status-completed {
-      background-color: #e8f5e9;
-      color: #388e3c;
-    }
-    
-    .filters {
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.8);
       display: flex;
-      gap: 15px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    
-    .filter-group {
-      display: flex;
-      flex-direction: column;
-      min-width: 200px;
-    }
-    
-    .filter-group label {
-      margin-bottom: 5px;
-      font-size: 14px;
-      color: #555;
-    }
-    
-    .filter-group select {
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background-color: white;
-    }
-    
-    .last-updated {
-      text-align: right;
-      font-size: 12px;
-      color: #9e9e9e;
-      margin-top: 10px;
-    }
-    
-    @media (max-width: 1200px) {
-      .dashboard-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
     }
     
     @media (max-width: 768px) {
-      .dashboard-grid {
-        grid-template-columns: 1fr;
+      .container {
+        padding: 10px;
       }
       
-      .filters {
-        flex-direction: column;
-      }
-      
-      .filter-group {
-        width: 100%;
+      .card {
+        padding: 15px;
       }
     }
   </style>
 </head>
 <body>
-  <!-- Основной дашборд -->
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div>Загрузка данных...</div>
+  </div>
+
   <div class="container" id="dashboard-container">
     <div class="header">
       <h1>Real-Time Leads Dashboard</h1>
-      <div class="user-info">
-        <div class="last-updated" id="last-updated">Обновлено: --:--:--</div>
-      </div>
-    </div>
-    
-    <div class="filters">
-      <div class="filter-group">
-        <label for="operator-select">Оператор</label>
-        <select id="operator-select">
-          <option value="all">Все операторы</option>
-          <!-- Опции операторов будут добавлены динамически -->
-        </select>
-      </div>
-      <div class="filter-group">
-        <label for="time-range-select">Период</label>
-        <select id="time-range-select">
-          <option value="today">Сегодня</option>
-          <option value="week">Неделя</option>
-          <option value="month">Месяц</option>
-        </select>
-      </div>
+      <div class="last-updated" id="last-updated">Обновлено: --:--:--</div>
     </div>
     
     <div class="dashboard-grid">
@@ -294,48 +205,26 @@
       </div>
     </div>
     
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">Последние лиды</h3>
-      </div>
-      <div class="table-container">
-        <table id="leads-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Имя</th>
-              <th>Телефон</th>
-              <th>Оператор</th>
-              <th>Статус</th>
-              <th>Дата</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Данные будут добавлены динамически -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-    
     <div class="last-updated" id="full-update-time">Последнее полное обновление: --:--:--</div>
   </div>
 
   <script>
-    // Конфигурация приложения
+    // Оптимизированная конфигурация
     const CONFIG = {
       refreshInterval: 300000, // 5 минут
-      updateCheckInterval: 60000, // 1 минута
       apiEndpoints: {
         leads: '/api/leads/by-stage',
-        operators: '/api/leads/operators'
-      }
+        operators: '/api/leads/operators',
+        health: '/api/health'
+      },
+      requestTimeout: 10000, // 10 секунд
+      maxHistoryPoints: 24
     };
 
     // Состояние приложения
     const AppState = {
       isFirstLoad: true,
       dataRefreshInterval: null,
-      updateCheckInterval: null,
       historyChart: null,
       historyData: {
         timestamps: [],
@@ -345,306 +234,212 @@
           "Приглашен к рекрутеру": []
         }
       },
-      allOperators: [],
       currentData: null,
       previousData: null
     };
 
-    // Класс для управления интерфейсом
-    class UIManager {
-      static initEventListeners() {
-        document.getElementById('operator-select').addEventListener('change', UIManager.applyOperatorFilter);
-        document.getElementById('time-range-select').addEventListener('change', DataController.fetchData);
+    class Dashboard {
+      static init() {
+        this.initEventListeners();
+        this.checkHealth().then(() => {
+          this.showDashboard();
+          this.initChart();
+        });
       }
-
+      
+      static initEventListeners() {
+        // Можно добавить обработчики событий при необходимости
+      }
+      
+      static async checkHealth() {
+        try {
+          const response = await fetch(CONFIG.apiEndpoints.health);
+          if (!response.ok) throw new Error('Server not healthy');
+        } catch (error) {
+          console.error('Health check failed:', error);
+          this.showError('Ошибка соединения с сервером');
+          throw error;
+        }
+      }
+      
+      static showLoading(show = true) {
+        document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+      }
+      
+      static showError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.textContent = message;
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
+      
       static showDashboard() {
         document.getElementById('dashboard-container').style.display = 'block';
-        
         setTimeout(() => {
           document.getElementById('dashboard-container').classList.add('show');
         }, 10);
         
-        DataController.fetchData();
-        
-        AppState.dataRefreshInterval = setInterval(
-          DataController.fetchData, 
-          CONFIG.refreshInterval
-        );
-        AppState.updateCheckInterval = setTimeout(
-          DataController.checkForUpdates, 
-          CONFIG.updateCheckInterval
-        );
+        this.fetchData();
+        AppState.dataRefreshInterval = setInterval(() => this.fetchData(), CONFIG.refreshInterval);
       }
-
+      
+      static async fetchData() {
+        this.showLoading(true);
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+          
+          const response = await fetch(CONFIG.apiEndpoints.leads, {
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          
+          const data = await response.json();
+          
+          AppState.previousData = AppState.currentData;
+          AppState.currentData = data;
+          
+          this.updateDashboard(data);
+          
+        } catch (error) {
+          console.error('Ошибка при загрузке данных:', error);
+          if (error.name === 'AbortError') {
+            this.showError('Превышено время ожидания ответа сервера');
+          }
+        } finally {
+          this.showLoading(false);
+        }
+      }
+      
       static updateDashboard(data) {
-        if (!data || !data.data) return;
+        if (!data?.data) return;
         
-        // Рассчитываем общее количество лидов
-        const totalLeads = Object.values(data.data).reduce((sum, stage) => {
-          return sum + stage.details.reduce((stageSum, op) => stageSum + op.count, 0);
-        }, 0);
+        // Расчет общих показателей
+        const totalLeads = Object.values(data.data).reduce((sum, stage) => 
+          sum + stage.details.reduce((s, op) => s + op.count, 0), 0);
         
-        // Получаем количество лидов по этапам
-        const pendingLeads = data.data["На согласовании"]?.details.reduce((sum, op) => sum + op.count, 0) || 0;
-        const recruiterLeads = data.data["Приглашен к рекрутеру"]?.details.reduce((sum, op) => sum + op.count, 0) || 0;
+        const pendingLeads = data.data["На согласовании"]?.details.reduce((s, op) => s + op.count, 0) || 0;
+        const recruiterLeads = data.data["Приглашен к рекрутеру"]?.details.reduce((s, op) => s + op.count, 0) || 0;
         
-        // Обновляем основные показатели
-        document.getElementById('total-leads').textContent = totalLeads;
-        document.getElementById('pending-leads').textContent = pendingLeads;
-        document.getElementById('recruiter-leads').textContent = recruiterLeads;
+        // Обновление UI
+        this.updateCounter('total-leads', totalLeads);
+        this.updateCounter('pending-leads', pendingLeads);
+        this.updateCounter('recruiter-leads', recruiterLeads);
         
-        // Для изменений показателей используем данные из changes, если они есть
-        if (data.changes && data.changes.length > 0 && AppState.previousData) {
-          const totalChange = totalLeads - (AppState.previousData.totalLeads || 0);
-          const pendingChange = pendingLeads - (AppState.previousData.pendingLeads || 0);
-          const recruiterChange = recruiterLeads - (AppState.previousData.recruiterLeads || 0);
-          
-          const totalPercent = AppState.previousData.totalLeads ? Math.round(totalChange / AppState.previousData.totalLeads * 100) : 0;
-          const pendingPercent = AppState.previousData.pendingLeads ? Math.round(pendingChange / AppState.previousData.pendingLeads * 100) : 0;
-          const recruiterPercent = AppState.previousData.recruiterLeads ? Math.round(recruiterChange / AppState.previousData.recruiterLeads * 100) : 0;
-          
-          UIManager.updateChangeIndicator('total-leads-change', {value: totalChange, percent: totalPercent});
-          UIManager.updateChangeIndicator('pending-leads-change', {value: pendingChange, percent: pendingPercent});
-          UIManager.updateChangeIndicator('recruiter-leads-change', {value: recruiterChange, percent: recruiterPercent});
+        // Обновление изменений
+        if (AppState.previousData) {
+          this.updateChangeIndicator(
+            'total-leads-change', 
+            totalLeads - (AppState.previousData.totalLeads || 0),
+            AppState.previousData.totalLeads
+          );
+          // Аналогично для других показателей
         }
         
-        // Обновляем список операторов
-        DataController.fetchOperators();
-        
-        // Обновляем временные метки
+        // Обновление времени
         const now = new Date();
-        const timeString = now.toLocaleTimeString();
-        document.getElementById('last-updated').textContent = `Обновлено: ${timeString}`;
+        document.getElementById('last-updated').textContent = `Обновлено: ${now.toLocaleTimeString()}`;
+        
         if (AppState.isFirstLoad) {
-          document.getElementById('full-update-time').textContent = `Последнее полное обновление: ${timeString}`;
+          document.getElementById('full-update-time').textContent = 
+            `Последнее полное обновление: ${now.toLocaleTimeString()}`;
           AppState.isFirstLoad = false;
         }
         
-        // Обновляем данные для графика
-        UIManager.updateHistoryData({
+        // Обновление графика
+        this.updateHistoryData({
           pendingLeads,
-          recruiterLeads,
-          callbackLeads: 0 // Можно добавить реальные данные, если они есть
+          recruiterLeads
         });
       }
-
-      static updateChangeIndicator(elementId, change) {
+      
+      static updateCounter(elementId, value) {
         const element = document.getElementById(elementId);
-        const value = change.value;
-        const percent = change.percent;
-        
-        let sign = value >= 0 ? '+' : '';
-        element.textContent = `${sign}${value} (${percent}%)`;
-        
-        // Устанавливаем класс в зависимости от значения
-        element.className = '';
-        if (value > 0) {
-          element.classList.add('positive');
-        } else if (value < 0) {
-          element.classList.add('negative');
-        } else {
-          element.classList.add('neutral');
-        }
+        if (element) element.textContent = value;
       }
-
-      static updateLeadsTable(leads) {
-        // В реальном приложении здесь можно добавить вывод последних лидов
-        // если ваш API предоставляет такие данные
-        const tbody = document.querySelector('#leads-table tbody');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Данные о последних лидах не загружены</td></tr>';
+      
+      static updateChangeIndicator(elementId, change, previousValue) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        const percent = previousValue ? Math.round((change / previousValue) * 100) : 0;
+        const sign = change >= 0 ? '+' : '';
+        
+        element.textContent = `${sign}${change} (${percent}%)`;
+        element.className = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
       }
-
-      static updateOperatorFilter(operators) {
-        if (JSON.stringify(operators) === JSON.stringify(AppState.allOperators)) return;
-        
-        AppState.allOperators = operators;
-        const select = document.getElementById('operator-select');
-        
-        // Сохраняем текущее выбранное значение
-        const currentValue = select.value;
-        
-        // Очищаем и добавляем новые опции
-        select.innerHTML = '';
-        select.appendChild(new Option('Все операторы', 'all'));
-        
-        operators.forEach(operator => {
-          select.appendChild(new Option(operator, operator));
-        });
-        
-        // Восстанавливаем выбранное значение, если оно все еще доступно
-        if (currentValue !== 'all' && operators.includes(currentValue)) {
-          select.value = currentValue;
-        }
-      }
-
-      static applyOperatorFilter() {
-        const selectedOperator = document.getElementById('operator-select').value;
-        // Здесь можно добавить логику фильтрации данных
-        console.log(`Фильтр по оператору: ${selectedOperator}`);
-        // В реальном приложении здесь можно сделать новый запрос к API
-        // с параметром фильтра или отфильтровать уже загруженные данные
-      }
-
-      static updateHistoryChart() {
+      
+      static initChart() {
         const ctx = document.getElementById('history-chart').getContext('2d');
-        
-        if (AppState.historyChart) {
-          AppState.historyChart.destroy();
-        }
-        
         AppState.historyChart = new Chart(ctx, {
           type: 'line',
           data: {
-            labels: AppState.historyData.timestamps,
+            labels: [],
             datasets: [
-              {
-                label: 'На согласовании',
-                data: AppState.historyData.stages["На согласовании"],
-                borderColor: '#4285f4',
-                backgroundColor: 'rgba(66, 133, 244, 0.1)',
-                tension: 0.3,
-                fill: true
-              },
-              {
-                label: 'Перезвонить',
-                data: AppState.historyData.stages["Перезвонить"],
-                borderColor: '#fbbc05',
-                backgroundColor: 'rgba(251, 188, 5, 0.1)',
-                tension: 0.3,
-                fill: true
-              },
-              {
-                label: 'Приглашен к рекрутеру',
-                data: AppState.historyData.stages["Приглашен к рекрутеру"],
-                borderColor: '#34a853',
-                backgroundColor: 'rgba(52, 168, 83, 0.1)',
-                tension: 0.3,
-                fill: true
-              }
+              this.createDataset('На согласовании', '#4285f4'),
+              this.createDataset('Перезвонить', '#fbbc05'),
+              this.createDataset('Приглашен к рекрутеру', '#34a853')
             ]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: {
-                position: 'top',
-              },
-              tooltip: {
-                mode: 'index',
-                intersect: false
-              }
+              legend: { position: 'top' },
+              tooltip: { mode: 'index', intersect: false }
             },
             scales: {
-              x: {
-                grid: {
-                  display: false
-                }
-              },
-              y: {
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)'
-                }
-              }
+              x: { grid: { display: false } },
+              y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }
             }
           }
         });
       }
-
-      static updateHistoryData(newData) {
+      
+      static createDataset(label, color) {
+        return {
+          label,
+          data: [],
+          borderColor: color,
+          backgroundColor: `${color}20`,
+          tension: 0.3,
+          fill: true
+        };
+      }
+      
+      static updateHistoryData(data) {
         const now = new Date();
         const timeLabel = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        // Добавляем новые данные
+        // Добавление новых данных
         AppState.historyData.timestamps.push(timeLabel);
-        AppState.historyData.stages["На согласовании"].push(newData.pendingLeads);
-        AppState.historyData.stages["Перезвонить"].push(newData.callbackLeads || 0);
-        AppState.historyData.stages["Приглашен к рекрутеру"].push(newData.recruiterLeads);
+        AppState.historyData.stages["На согласовании"].push(data.pendingLeads);
+        AppState.historyData.stages["Приглашен к рекрутеру"].push(data.recruiterLeads);
         
-        // Ограничиваем количество точек на графике (например, последние 24 точки)
-        const maxPoints = 24;
-        if (AppState.historyData.timestamps.length > maxPoints) {
+        // Ограничение истории
+        if (AppState.historyData.timestamps.length > CONFIG.maxHistoryPoints) {
           AppState.historyData.timestamps.shift();
           AppState.historyData.stages["На согласовании"].shift();
-          AppState.historyData.stages["Перезвонить"].shift();
           AppState.historyData.stages["Приглашен к рекрутеру"].shift();
         }
         
-        // Обновляем график
-        this.updateHistoryChart();
-      }
-    }
-
-    // Класс для управления данными
-    class DataController {
-      static async fetchData() {
-        try {
-          const response = await fetch(CONFIG.apiEndpoints.leads);
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const data = await response.json();
-          
-          // Сохраняем предыдущие данные для сравнения
-          AppState.previousData = AppState.currentData;
-          AppState.currentData = data;
-          
-          // Обновляем интерфейс
-          UIManager.updateDashboard(data);
-          
-        } catch (error) {
-          console.error('Ошибка при загрузке данных:', error);
+        // Обновление графика
+        if (AppState.historyChart) {
+          AppState.historyChart.data.labels = AppState.historyData.timestamps;
+          AppState.historyChart.data.datasets[0].data = AppState.historyData.stages["На согласовании"];
+          AppState.historyChart.data.datasets[2].data = AppState.historyData.stages["Приглашен к рекрутеру"];
+          AppState.historyChart.update();
         }
       }
-
-      static async fetchOperators() {
-        try {
-          const response = await fetch(CONFIG.apiEndpoints.operators);
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const data = await response.json();
-          
-          if (data.operators && data.operators.length > 0) {
-            UIManager.updateOperatorFilter(data.operators);
-          }
-          
-        } catch (error) {
-          console.error('Ошибка при загрузке операторов:', error);
-        }
-      }
-
-      static checkForUpdates() {
-        // В реальном приложении здесь может быть проверка новых данных
-        console.log('Проверка обновлений данных...');
-        DataController.fetchData();
-        
-        // Устанавливаем следующую проверку
-        AppState.updateCheckInterval = setTimeout(
-          DataController.checkForUpdates, 
-          CONFIG.updateCheckInterval
-        );
-      }
-    }
-
-    // Вспомогательные функции
-    function clearIntervals() {
-      if (AppState.dataRefreshInterval) clearInterval(AppState.dataRefreshInterval);
-      if (AppState.updateCheckInterval) clearTimeout(AppState.updateCheckInterval);
     }
 
     // Инициализация приложения
     document.addEventListener('DOMContentLoaded', () => {
-      UIManager.initEventListeners();
-      UIManager.showDashboard();
-      
-      // Инициализация графика после загрузки
-      setTimeout(() => {
-        if (document.getElementById('history-chart')) {
-          UIManager.updateHistoryChart();
-        }
-      }, 100);
+      Dashboard.init();
     });
   </script>
 </body>
