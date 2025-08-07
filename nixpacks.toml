@@ -1,17 +1,11 @@
 [build]
-# Указываем явно, что это мульти-приложение
-provider = "multi"
-
-# Конфигурация для бекенда
-[[build.sub_providers]]
-name = "backend"
-path = "backend"
 provider = "python"
-cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 
-# Конфигурация для фронтенда
-[[build.sub_providers]]
-name = "frontend"
-path = "frontend"
-provider = "node"
-cmd = "npm run start"
+[phases]
+build = [
+    "pip install -r backend/requirements.txt",
+    "cd frontend && npm install && npm run build"
+]
+
+[start]
+cmd = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT && cd frontend && npm start"
