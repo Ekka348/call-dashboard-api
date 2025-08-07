@@ -1,9 +1,14 @@
 [build]
 provider = "python"
+pythonVersion = "3.9"
 
-[phases.build]
-commands = [
-    "pip install -r backend/requirements.txt",
+[phases]
+setup = [
+    "python -m pip install --upgrade pip",
+    "pip install -r backend/requirements.txt"
+]
+
+build = [
     "cd frontend && npm install",
     "cd frontend && npm run build"
 ]
