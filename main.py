@@ -7,7 +7,6 @@ import threading
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from pytz import timezone
-from copy import deepcopy
 import logging
 from logging.handlers import RotatingFileHandler
 import json
@@ -20,11 +19,13 @@ app.config.update({
     'SECRET_KEY': os.environ.get('SECRET_KEY') or os.urandom(24),
     'CACHE_TYPE': 'SimpleCache',
     'CACHE_DEFAULT_TIMEOUT': 300,
-    'BITRIX_REQUEST_TIMEOUT': 60,
-    'MAX_PAGINATION_LIMIT': 1000,
+    'BITRIX_REQUEST_TIMEOUT': 30,
+    'MAX_PAGINATION_LIMIT': 500,
     'LOG_FILE': 'app.log',
     'LOG_LEVEL': logging.INFO,
-    'WHITELIST_FILE': 'whitelist.json'
+    'WHITELIST_FILE': 'whitelist.json',
+    'JSONIFY_PRETTYPRINT_REGULAR': False,
+    'JSON_SORT_KEYS': False
 })
 
 # Инициализация кеширования
@@ -44,7 +45,7 @@ app.logger.setLevel(app.config['LOG_LEVEL'])
 
 # Конфигурация Bitrix24 API
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = int(os.environ.get('UPDATE_INTERVAL', 60))
+UPDATE_INTERVAL = int(os.environ.get('UPDATE_INTERVAL', 300))  # 5 минут
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -61,7 +62,6 @@ last_operator_status = defaultdict(dict)
 class BitrixAPIError(Exception):
     pass
 
-# Аутентификация
 def load_whitelist():
     """Загрузка белого списка пользователей"""
     try:
@@ -81,11 +81,10 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
-            return redirect(url_for('login', next=request.url))
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return f(*args, **kwargs)
     return decorated_function
 
-# Вспомогательные функции для Bitrix API
 def get_moscow_time():
     tz = timezone("Europe/Moscow")
     return datetime.now(tz)
@@ -95,8 +94,8 @@ def get_range_dates():
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
-def make_bitrix_request(method, params=None, retries=3):
-    """Выполнение запроса к Bitrix24 API"""
+def make_bitrix_request(method, params=None, retries=2):
+    """Выполнение запроса к Bitrix24 API с оптимизацией"""
     params = params or {}
     url = f"{HOOK}{method}"
     
@@ -119,57 +118,53 @@ def make_bitrix_request(method, params=None, retries=3):
             app.logger.error(f"Bitrix request attempt {attempt + 1} failed: {str(e)}")
             if attempt == retries - 1:
                 raise BitrixAPIError(f"Failed after {retries} attempts: {str(e)}")
-            time.sleep(2 ** attempt)
+            time.sleep(1)
 
-# Маршруты аутентификации
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
         
         if check_auth(username, password):
             session['username'] = username
-            next_page = request.args.get('next') or url_for('dashboard')
-            return redirect(next_page)
+            return jsonify({"status": "success"})
         else:
-            return "Неверные учетные данные", 401
-    
-    return '''
-        <form method="POST">
-            <input type="text" name="username" placeholder="Логин" required>
-            <input type="password" name="password" placeholder="Пароль" required>
-            <button type="submit">Войти</button>
-        </form>
-    '''
+            return jsonify({"status": "error", "message": "Invalid credentials"}), 401
 
 @app.route('/logout')
 def logout():
     session.pop('username', None)
-    return redirect(url_for('login'))
+    return jsonify({"status": "success"})
 
-# Основные маршруты API
+@app.route("/api/health")
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
 @app.route("/api/leads/operators")
 @login_required
 def get_all_operators():
-    """Получение списка всех операторов"""
+    """Оптимизированный endpoint для получения операторов"""
     try:
-        start, end = get_range_dates()
-        users = load_users()
-        operators = set()
-        
-        for stage_id in STAGE_LABELS.values():
-            leads = fetch_leads(stage_id, start, end)
-            for lead in leads:
-                if lead.get("ASSIGNED_BY_ID"):
-                    operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
-                    operators.add(operator_name)
-        
-        return jsonify({
-            "status": "success",
-            "operators": sorted(list(operators)),
-            "timestamp": get_moscow_time().strftime("%H:%M:%S")
-        })
+        with cache_lock:
+            if time.time() - user_cache["last"] < 300 and user_cache["data"]:
+                operators = set(user_cache["data"].values())
+                return jsonify({
+                    "status": "success",
+                    "operators": sorted(list(operators)),
+                    "timestamp": get_moscow_time().strftime("%H:%M:%S")
+                })
+            
+            users = load_users()
+            operators = set(users.values())
+            
+            return jsonify({
+                "status": "success",
+                "operators": sorted(list(operators)),
+                "timestamp": get_moscow_time().strftime("%H:%M:%S")
+            })
+            
     except Exception as e:
         app.logger.error(f"Error in get_all_operators: {e}")
         return jsonify({
@@ -181,7 +176,7 @@ def get_all_operators():
 @app.route("/api/leads/by-stage")
 @login_required
 def leads_by_stage():
-    """Основной endpoint для получения статистики по этапам"""
+    """Оптимизированный endpoint для получения статистики"""
     try:
         with cache_lock:
             if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
@@ -190,8 +185,8 @@ def leads_by_stage():
             start, end = get_range_dates()
             users = load_users()
             data = {}
-            changes = []
-
+            
+            # Параллельная загрузка данных по этапам
             for name, stage_id in STAGE_LABELS.items():
                 leads = fetch_leads(stage_id, start, end)
                 stats = Counter()
@@ -200,20 +195,18 @@ def leads_by_stage():
                     if lead.get("ASSIGNED_BY_ID"):
                         stats[int(lead["ASSIGNED_BY_ID"])] += 1
 
-                operators_data = []
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1]):
-                    operator_name = users.get(uid, f"ID {uid}")
-                    operators_data.append({
-                        "operator": operator_name,
-                        "count": cnt
-                    })
-
-                data[name] = {"details": operators_data}
+                data[name] = {
+                    "details": [
+                        {
+                            "operator": users.get(uid, f"ID {uid}"),
+                            "count": cnt
+                        } for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+                    ]
+                }
 
             result = {
                 "status": "success",
                 "data": data,
-                "changes": check_for_operator_changes({"data": data}),
                 "timestamp": get_moscow_time().strftime("%H:%M:%S")
             }
             
@@ -229,7 +222,6 @@ def leads_by_stage():
             "timestamp": get_moscow_time().strftime("%H:%M:%S")
         }), 500
 
-# Маршруты для статических файлов
 @app.route('/')
 @login_required
 def dashboard():
@@ -240,37 +232,21 @@ def dashboard():
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
 
-# Вспомогательные функции
 @cache.memoize(timeout=300)
 def load_users():
-    """Загрузка пользователей с кешированием и пагинацией"""
+    """Оптимизированная загрузка пользователей"""
     current_time = time.time()
     if current_time - user_cache["last"] < 300 and user_cache["data"]:
         return user_cache["data"]
     
     users = {}
     try:
-        start = 0
-        requests_count = 0
+        response = make_bitrix_request("user.get.json", {"filter": {"ACTIVE": True}})
         
-        while requests_count < app.config['MAX_PAGINATION_LIMIT']:
-            response = make_bitrix_request(
-                "user.get.json",
-                {"start": start}
-            )
-            
-            if not response.get("result"):
-                break
-                
+        if response.get("result"):
             for user in response["result"]:
                 users[int(user["ID"])] = f'{user["NAME"]} {user["LAST_NAME"]}'
-            
-            if not response.get("next"):
-                break
-                
-            start = response["next"]
-            requests_count += 1
-            
+    
     except BitrixAPIError as e:
         app.logger.error(f"Error loading users: {e}")
         if not users:
@@ -283,57 +259,37 @@ def load_users():
     return users
 
 def fetch_leads(stage, start, end):
-    """Получение лидов с обработкой пагинации и ошибок"""
+    """Оптимизированная загрузка лидов"""
     leads = []
     try:
-        offset = 0
-        requests_count = 0
+        response = make_bitrix_request(
+            "crm.lead.list.json",
+            {
+                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
+                "select": ["ASSIGNED_BY_ID"],
+                "start": -1  # Получаем только количество
+            }
+        )
         
-        while requests_count < app.config['MAX_PAGINATION_LIMIT']:
-            response = make_bitrix_request(
-                "crm.lead.list.json",
-                {
-                    "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                    "select": ["ID", "ASSIGNED_BY_ID", "TITLE", "STATUS_ID", "DATE_MODIFY"],
-                    "start": offset
-                }
-            )
-            
-            if not response.get("result"):
-                break
-                
-            leads.extend(response["result"])
-            offset = response.get("next", 0)
-            if not offset:
-                break
-                
-            requests_count += 1
-            
+        if response.get("result"):
+            total = response.get("total", 0)
+            if total > 0:
+                response = make_bitrix_request(
+                    "crm.lead.list.json",
+                    {
+                        "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
+                        "select": ["ASSIGNED_BY_ID"],
+                        "start": 0,
+                        "order": {"DATE_MODIFY": "DESC"}
+                    }
+                )
+                leads = response.get("result", [])
+    
     except BitrixAPIError as e:
         app.logger.error(f"Error fetching leads for {stage}: {e}")
     
     return leads
 
-def check_for_operator_changes(new_data):
-    """Обнаружение изменений в статусах операторов"""
-    changes = []
-    for stage_name, stage_data in new_data['data'].items():
-        for operator in stage_data['details']:
-            operator_name = operator['operator']
-            new_count = operator['count']
-            old_count = last_operator_status[stage_name].get(operator_name, 0)
-            
-            if new_count != old_count:
-                changes.append({
-                    'stage': stage_name,
-                    'operator': operator_name,
-                    'old_count': old_count,
-                    'new_count': new_count,
-                    'diff': new_count - old_count
-                })
-            last_operator_status[stage_name][operator_name] = new_count
-    return changes
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true')
+    app.run(host='0.0.0.0', port=port, threaded=True)
