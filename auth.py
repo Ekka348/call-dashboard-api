@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta  # Добавлен импорт datetime
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from email_validator import validate_email, EmailNotValidError
@@ -17,24 +17,6 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 jwt = JWTManager(app)
 
-
-def init_auth_routes(app):
-    """Инициализация маршрутов аутентификации"""
-    
-    @app.route('/api/auth/login', methods=['POST'])
-    def login():
-        # Ваша реализация логина
-        return jsonify({"message": "Login endpoint"})
-    
-    @app.route('/api/auth/refresh', methods=['POST'])
-    def refresh():
-        # Ваша реализация обновления токена
-        return jsonify({"message": "Refresh endpoint"})
-    
-    # Добавьте другие маршруты аутентификации по необходимости
-    
-    return app
-
 # Конфигурация файла пользователей
 USERS_FILE = 'users.json'
 DEFAULT_ADMIN = {
@@ -44,7 +26,7 @@ DEFAULT_ADMIN = {
     'full_name': 'Главный Администратор',
     'email': 'admin@example.com',
     'is_active': True,
-    'created_at': '2023-01-01 00:00:00',
+    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Исправлено
     'last_login': None
 }
 
@@ -300,5 +282,11 @@ def invalid_token_callback(error):
 def missing_token_callback(error):
     return jsonify({"error": "Требуется авторизация"}), 401
 
+def init_auth_routes(app):
+    """Инициализация маршрутов аутентификации"""
+    # Все маршруты уже зарегистрированы через декоратор @app.route
+    return app
+
 if __name__ == '__main__':
+    app = init_auth_routes(app)
     app.run(debug=True)
