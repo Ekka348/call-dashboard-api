@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, jsonify, request
+from flask import Flask, send_from_directory, jsonify, request, session, redirect, url_for
 from flask_caching import Cache
 import requests
 import os
@@ -10,16 +10,12 @@ from pytz import timezone
 from copy import deepcopy
 import logging
 from logging.handlers import RotatingFileHandler
-from flask import Flask
-from auth import init_auth_routes
-from auth import app
-
+import json
+from functools import wraps
 
 app = Flask(__name__, static_folder='static')
 
-init_auth_routes(app)
-
-# Конфигурация
+# Конфигурация приложения
 app.config.update({
     'SECRET_KEY': os.environ.get('SECRET_KEY') or os.urandom(24),
     'CACHE_TYPE': 'SimpleCache',
@@ -27,8 +23,12 @@ app.config.update({
     'BITRIX_REQUEST_TIMEOUT': 30,
     'MAX_PAGINATION_LIMIT': 1000,
     'LOG_FILE': 'app.log',
-    'LOG_LEVEL': logging.INFO
+    'LOG_LEVEL': logging.INFO,
+    'WHITELIST_FILE': 'whitelist.json'
 })
+
+# Инициализация кеширования
+cache = Cache(app)
 
 # Настройка логирования
 handler = RotatingFileHandler(
@@ -42,8 +42,7 @@ handler.setFormatter(logging.Formatter(
 app.logger.addHandler(handler)
 app.logger.setLevel(app.config['LOG_LEVEL'])
 
-cache = Cache(app)
-
+# Конфигурация Bitrix24 API
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
 UPDATE_INTERVAL = int(os.environ.get('UPDATE_INTERVAL', 60))
 
@@ -53,7 +52,7 @@ STAGE_LABELS = {
     "Приглашен к рекрутеру": "CONVERTED"
 }
 
-# Кеширование
+# Кеширование данных
 user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
@@ -62,6 +61,31 @@ last_operator_status = defaultdict(dict)
 class BitrixAPIError(Exception):
     pass
 
+# Аутентификация
+def load_whitelist():
+    """Загрузка белого списка пользователей"""
+    try:
+        with open(app.config['WHITELIST_FILE']) as f:
+            return json.load(f)['users']
+    except Exception as e:
+        app.logger.error(f"Error loading whitelist: {e}")
+        return []
+
+def check_auth(username, password):
+    """Проверка учетных данных"""
+    users = load_whitelist()
+    return any(user['username'] == username and user['password'] == password for user in users)
+
+def login_required(f):
+    """Декоратор для защиты маршрутов"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Вспомогательные функции для Bitrix API
 def get_moscow_time():
     tz = timezone("Europe/Moscow")
     return datetime.now(tz)
@@ -72,6 +96,7 @@ def get_range_dates():
     return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
 def make_bitrix_request(method, params=None, retries=3):
+    """Выполнение запроса к Bitrix24 API"""
     params = params or {}
     url = f"{HOOK}{method}"
     
@@ -94,8 +119,128 @@ def make_bitrix_request(method, params=None, retries=3):
             app.logger.error(f"Bitrix request attempt {attempt + 1} failed: {str(e)}")
             if attempt == retries - 1:
                 raise BitrixAPIError(f"Failed after {retries} attempts: {str(e)}")
-            time.sleep(2 ** attempt)  # Exponential backoff
+            time.sleep(2 ** attempt)
 
+# Маршруты аутентификации
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if check_auth(username, password):
+            session['username'] = username
+            next_page = request.args.get('next') or url_for('dashboard')
+            return redirect(next_page)
+        else:
+            return "Неверные учетные данные", 401
+    
+    return '''
+        <form method="POST">
+            <input type="text" name="username" placeholder="Логин" required>
+            <input type="password" name="password" placeholder="Пароль" required>
+            <button type="submit">Войти</button>
+        </form>
+    '''
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+# Основные маршруты API
+@app.route("/api/leads/operators")
+@login_required
+def get_all_operators():
+    """Получение списка всех операторов"""
+    try:
+        start, end = get_range_dates()
+        users = load_users()
+        operators = set()
+        
+        for stage_id in STAGE_LABELS.values():
+            leads = fetch_leads(stage_id, start, end)
+            for lead in leads:
+                if lead.get("ASSIGNED_BY_ID"):
+                    operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
+                    operators.add(operator_name)
+        
+        return jsonify({
+            "status": "success",
+            "operators": sorted(list(operators)),
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
+        })
+    except Exception as e:
+        app.logger.error(f"Error in get_all_operators: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Internal server error",
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
+        }), 500
+
+@app.route("/api/leads/by-stage")
+@login_required
+def leads_by_stage():
+    """Основной endpoint для получения статистики по этапам"""
+    try:
+        with cache_lock:
+            if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
+                return jsonify(data_cache["data"])
+            
+            start, end = get_range_dates()
+            users = load_users()
+            data = {}
+            changes = []
+
+            for name, stage_id in STAGE_LABELS.items():
+                leads = fetch_leads(stage_id, start, end)
+                stats = Counter()
+                
+                for lead in leads:
+                    if lead.get("ASSIGNED_BY_ID"):
+                        stats[int(lead["ASSIGNED_BY_ID"])] += 1
+
+                operators_data = []
+                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1]):
+                    operator_name = users.get(uid, f"ID {uid}")
+                    operators_data.append({
+                        "operator": operator_name,
+                        "count": cnt
+                    })
+
+                data[name] = {"details": operators_data}
+
+            result = {
+                "status": "success",
+                "data": data,
+                "changes": check_for_operator_changes({"data": data}),
+                "timestamp": get_moscow_time().strftime("%H:%M:%S")
+            }
+            
+            data_cache["data"] = result
+            data_cache["timestamp"] = time.time()
+            return jsonify(result)
+            
+    except Exception as e:
+        app.logger.error(f"Error in leads_by_stage: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "Internal server error",
+            "timestamp": get_moscow_time().strftime("%H:%M:%S")
+        }), 500
+
+# Маршруты для статических файлов
+@app.route('/')
+@login_required
+def dashboard():
+    return send_from_directory(app.static_folder, 'dashboard.html')
+
+@app.route('/<path:path>')
+@login_required
+def serve_static(path):
+    return send_from_directory(app.static_folder, path)
+
+# Вспомогательные функции
 @cache.memoize(timeout=300)
 def load_users():
     """Загрузка пользователей с кешированием и пагинацией"""
@@ -128,7 +273,7 @@ def load_users():
             
     except BitrixAPIError as e:
         app.logger.error(f"Error loading users: {e}")
-        if not users:  # Если нет данных вообще - пробрасываем ошибку
+        if not users:
             raise
     
     with cache_lock:
@@ -188,92 +333,6 @@ def check_for_operator_changes(new_data):
                 })
             last_operator_status[stage_name][operator_name] = new_count
     return changes
-
-@app.route("/api/leads/operators")
-def get_all_operators():
-    """Получение списка всех операторов"""
-    try:
-        start, end = get_range_dates()
-        users = load_users()
-        operators = set()
-        
-        for stage_id in STAGE_LABELS.values():
-            leads = fetch_leads(stage_id, start, end)
-            for lead in leads:
-                if lead.get("ASSIGNED_BY_ID"):
-                    operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
-                    operators.add(operator_name)
-        
-        return jsonify({
-            "status": "success",
-            "operators": sorted(list(operators)),
-            "timestamp": get_moscow_time().strftime("%H:%M:%S")
-        })
-    except Exception as e:
-        app.logger.error(f"Error in get_all_operators: {e}")
-        return jsonify({
-            "status": "error",
-            "message": "Internal server error",
-            "timestamp": get_moscow_time().strftime("%H:%M:%S")
-        }), 500
-
-@app.route("/api/leads/by-stage")
-def leads_by_stage():
-    """Основной endpoint для получения статистики по этапам"""
-    try:
-        with cache_lock:
-            if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
-                return jsonify(data_cache["data"])
-            
-            start, end = get_range_dates()
-            users = load_users()
-            data = {}
-            changes = []
-
-            for name, stage_id in STAGE_LABELS.items():
-                leads = fetch_leads(stage_id, start, end)
-                stats = Counter()
-                
-                for lead in leads:
-                    if lead.get("ASSIGNED_BY_ID"):
-                        stats[int(lead["ASSIGNED_BY_ID"])] += 1
-
-                operators_data = []
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1]):
-                    operator_name = users.get(uid, f"ID {uid}")
-                    operators_data.append({
-                        "operator": operator_name,
-                        "count": cnt
-                    })
-
-                data[name] = {"details": operators_data}
-
-            result = {
-                "status": "success",
-                "data": data,
-                "changes": check_for_operator_changes({"data": data}),
-                "timestamp": get_moscow_time().strftime("%H:%M:%S")
-            }
-            
-            data_cache["data"] = result
-            data_cache["timestamp"] = time.time()
-            return jsonify(result)
-            
-    except Exception as e:
-        app.logger.error(f"Error in leads_by_stage: {e}")
-        return jsonify({
-            "status": "error",
-            "message": "Internal server error",
-            "timestamp": get_moscow_time().strftime("%H:%M:%S")
-        }), 500
-
-@app.route('/')
-def serve_index():
-    return send_from_directory(app.static_folder, 'dashboard.html')
-
-@app.route('/<path:path>')
-def serve_static(path):
-    return send_from_directory(app.static_folder, path)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
