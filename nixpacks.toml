@@ -1,0 +1,7 @@
+[phases]
+backend = { cmds = ["cd backend && pip install -r requirements.txt"] }
+frontend = { cmds = ["cd frontend && npm install"] }
+
+[start]
+backend = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+frontend = "cd frontend && npm start"
