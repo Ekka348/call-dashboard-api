@@ -9,9 +9,13 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required,
     get_jwt_identity, create_refresh_token
 )
-
-# Настройка приложения
+from auth import blueprint as auth_blueprint
+from auth import app as auth_app
+app = auth_app
 app = Flask(__name__)
+app.register_blueprint(auth_blueprint, url_prefix='/auth')
+# Настройка приложения
+blueprint = Blueprint('auth', __name__)
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET', 'super-secret-key')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
