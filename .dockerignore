@@ -1,8 +1,11 @@
-.git
-.env
-**/node_modules
-**/__pycache__
+# Python
+__pycache__
 *.pyc
-.DS_Store
-frontend/node_modules
+.env
+
+# Node
+node_modules
+npm-debug.log
+
+# Build
 frontend/build
