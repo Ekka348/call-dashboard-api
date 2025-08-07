@@ -6,9 +6,12 @@ import requests
 import sqlite3
 import os
 from datetime import timedelta
+from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI
 
 app = FastAPI()
 
+app.mount("/", StaticFiles(directory="../frontend/build", html=True), name="static")
 # CORS (для фронтенда)
 app.add_middleware(
     CORSMiddleware,
