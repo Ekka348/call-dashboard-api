@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="/static/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Оптимизированные стили */
     :root {
       --primary-color: #4285f4;
       --success-color: #34a853;
@@ -28,20 +27,9 @@
     }
     
     .container {
-      display: none;
       padding: 20px;
       max-width: 1400px;
       margin: 0 auto;
-    }
-    
-    .container.show {
-      display: block;
-      animation: fadeIn 0.3s ease-out;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
     }
     
     .header {
@@ -57,6 +45,22 @@
       margin: 0;
       font-size: 1.5rem;
       font-weight: 600;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .logout-btn {
+      background: var(--danger-color);
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.875rem;
     }
     
     .dashboard-grid {
@@ -108,27 +112,6 @@
       margin-top: 15px;
     }
     
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-      font-size: 0.875rem;
-    }
-    
-    th, td {
-      padding: 12px 15px;
-      text-align: left;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-    }
-    
-    .status-badge {
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      display: inline-block;
-    }
-    
     .loading-overlay {
       position: fixed;
       top: 0;
@@ -142,14 +125,16 @@
       z-index: 1000;
     }
     
-    @media (max-width: 768px) {
-      .container {
-        padding: 10px;
-      }
-      
-      .card {
-        padding: 15px;
-      }
+    .error-message {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--danger-color);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      z-index: 1001;
     }
   </style>
 </head>
@@ -158,10 +143,13 @@
     <div>Загрузка данных...</div>
   </div>
 
-  <div class="container" id="dashboard-container">
+  <div class="container">
     <div class="header">
       <h1>Real-Time Leads Dashboard</h1>
-      <div class="last-updated" id="last-updated">Обновлено: --:--:--</div>
+      <div class="user-info">
+        <div class="last-updated" id="last-updated">Обновлено: --:--:--</div>
+        <button id="logout-btn" class="logout-btn">Выйти</button>
+      </div>
     </div>
     
     <div class="dashboard-grid">
@@ -209,12 +197,12 @@
   </div>
 
   <script>
-    // Оптимизированная конфигурация
+    // Конфигурация приложения
     const CONFIG = {
       refreshInterval: 300000, // 5 минут
       apiEndpoints: {
         leads: '/api/leads/by-stage',
-        operators: '/api/leads/operators',
+        logout: '/logout',
         health: '/api/health'
       },
       requestTimeout: 10000, // 10 секунд
@@ -248,7 +236,7 @@
       }
       
       static initEventListeners() {
-        // Можно добавить обработчики событий при необходимости
+        document.getElementById('logout-btn').addEventListener('click', () => this.logout());
       }
       
       static async checkHealth() {
@@ -275,13 +263,20 @@
       }
       
       static showDashboard() {
-        document.getElementById('dashboard-container').style.display = 'block';
-        setTimeout(() => {
-          document.getElementById('dashboard-container').classList.add('show');
-        }, 10);
-        
         this.fetchData();
         AppState.dataRefreshInterval = setInterval(() => this.fetchData(), CONFIG.refreshInterval);
+      }
+      
+      static async logout() {
+        try {
+          const response = await fetch(CONFIG.apiEndpoints.logout);
+          if (response.ok) {
+            window.location.href = '/';
+          }
+        } catch (error) {
+          console.error('Logout failed:', error);
+          this.showError('Ошибка при выходе из системы');
+        }
       }
       
       static async fetchData() {
@@ -337,7 +332,16 @@
             totalLeads - (AppState.previousData.totalLeads || 0),
             AppState.previousData.totalLeads
           );
-          // Аналогично для других показателей
+          this.updateChangeIndicator(
+            'pending-leads-change',
+            pendingLeads - (AppState.previousData.pendingLeads || 0),
+            AppState.previousData.pendingLeads
+          );
+          this.updateChangeIndicator(
+            'recruiter-leads-change',
+            recruiterLeads - (AppState.previousData.recruiterLeads || 0),
+            AppState.previousData.recruiterLeads
+          );
         }
         
         // Обновление времени
