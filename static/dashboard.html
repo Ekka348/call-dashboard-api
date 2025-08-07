@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Leads Dashboard</title>
+  <!-- Подключаем Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --primary: #4285f4;
@@ -206,6 +208,16 @@
     .card:hover {
       transform: translateY(-5px);
       box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card.full-width {
+      grid-column: 1 / -1;
+    }
+    
+    .chart-container {
+      position: relative;
+      height: 300px;
+      width: 100%;
     }
     
     .card-header {
@@ -581,6 +593,18 @@
           <div id="invited-content" class="loading">Загрузка</div>
         </div>
       </div>
+      
+      <!-- Новая карточка с графиком -->
+      <div class="card full-width">
+        <div class="card-header">
+          <span>Динамика лидов за последние 24 часа</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-container">
+            <canvas id="history-chart"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -643,6 +667,15 @@
     let currentUser = null;
     let dataRefreshInterval = null;
     let updateCheckInterval = null;
+    let historyChart = null;
+    const historyData = {
+      timestamps: [],
+      stages: {
+        "На согласовании": [],
+        "Перезвонить": [],
+        "Приглашен к рекрутеру": []
+      }
+    };
 
     // DOM элементы
     const loginContainer = document.getElementById('login-container');
@@ -892,6 +925,107 @@
       });
     }
 
+    // ==================== ИСТОРИЯ ДАННЫХ И ГРАФИК ====================
+
+    // Функция для добавления данных в историю
+    function addToHistory(data) {
+      const now = new Date();
+      const timestamp = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      
+      // Добавляем новую запись
+      historyData.timestamps.push(timestamp);
+      
+      // Сохраняем данные по каждой стадии
+      for (const stageName in STAGES) {
+        const stageData = data.data[stageName];
+        historyData.stages[stageName].push(stageData.total_count);
+      }
+      
+      // Ограничиваем историю 24 записями (1 запись = 1 часу)
+      if (historyData.timestamps.length > 24) {
+        historyData.timestamps.shift();
+        for (const stage in historyData.stages) {
+          historyData.stages[stage].shift();
+        }
+      }
+      
+      // Обновляем график
+      updateHistoryChart();
+    }
+
+    // Функция создания/обновления графика
+    function updateHistoryChart() {
+      const ctx = document.getElementById('history-chart').getContext('2d');
+      
+      // Цвета для линий графика
+      const colors = {
+        "На согласовании": getComputedStyle(document.documentElement).getPropertyValue('--primary') || '#4285f4',
+        "Перезвонить": getComputedStyle(document.documentElement).getPropertyValue('--warning') || '#fbbc05',
+        "Приглашен к рекрутеру": getComputedStyle(document.documentElement).getPropertyValue('--success') || '#34a853'
+      };
+      
+      // Создаем наборы данных для графика
+      const datasets = [];
+      for (const stageName in historyData.stages) {
+        datasets.push({
+          label: stageName,
+          data: historyData.stages[stageName],
+          borderColor: colors[stageName],
+          backgroundColor: `${colors[stageName]}20`,
+          tension: 0.3,
+          fill: false
+        });
+      }
+      
+      // Если график уже существует - обновляем его данные
+      if (historyChart) {
+        historyChart.data.labels = historyData.timestamps;
+        historyChart.data.datasets = datasets;
+        historyChart.update();
+        return;
+      }
+      
+      // Создаем новый график
+      historyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: historyData.timestamps,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Время'
+              },
+              grid: {
+                display: false
+              }
+            },
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Количество лидов'
+              }
+            }
+          }
+        }
+      });
+    }
+
     // ==================== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ====================
 
     // Функция для обработки обновлений
@@ -1003,6 +1137,9 @@
           updateStage(stageName, stageConfig, stageData);
         }
       }
+      
+      // Добавляем текущие данные в историю
+      addToHistory(data);
     }
     
     function updateStage(stageName, config, data) {
@@ -1266,6 +1403,9 @@
           logout();
         }
       });
+      
+      // Инициализируем пустой график при загрузке
+      updateHistoryChart();
     });
   </script>
 </body>
