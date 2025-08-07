@@ -1,28 +1,35 @@
-# Этап 1: Сборка фронтенда с кэшированием
-FROM node:16-alpine as frontend
+# Этап 1: Сборка фронтенда
+FROM node:16 AS frontend-builder
 WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm config set registry https://registry.npmmirror.com && \
-    npm install --silent --no-optional --no-fund
+
+# Копируем только файлы зависимостей для кэширования
+COPY frontend/package.json frontend/package-lock.json ./
+
+# Установка зависимостей (с явной установкой react-scripts)
+RUN npm install react-scripts --global && \
+    npm install --silent
+
+# Копируем остальные файлы и собираем
 COPY frontend .
 RUN npm run build
 
 # Этап 2: Продакшен-сборка
-FROM python:3.9-alpine
+FROM python:3.9-slim
 WORKDIR /app
 
-# Настройка альтернативных репозиториев
-RUN echo -e "https://mirrors.aliyun.com/alpine/v3.16/main\nhttps://mirrors.aliyun.com/alpine/v3.16/community" > /etc/apk/repositories && \
-    apk add --no-cache gcc musl-dev libffi-dev
+# Установка системных зависимостей (без alpine)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc python3-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# Установка Python-зависимостей с кэшированием
+# Установка Python-зависимостей
 COPY backend/requirements.txt .
-RUN pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
-    --retries 3 --timeout 60 --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Копирование приложения
 COPY backend .
-COPY --from=frontend /app/build ./static
+COPY --from=frontend-builder /app/build ./static
 
 # Запуск
 EXPOSE 80
