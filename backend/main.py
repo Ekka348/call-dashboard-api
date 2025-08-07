@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import os
+from pathlib import Path
 
 app = FastAPI()
 
@@ -15,14 +16,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Путь к статике (абсолютный путь в контейнере)
-static_dir = "/app/static"
+# Путь к статическим файлам
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+static_path = Path(static_dir).resolve()
 
-# Проверка существования папки
-if not os.path.exists(static_dir):
-    raise RuntimeError(f"Static directory not found at {static_dir}. Contents: {os.listdir('/app')}")
+# Проверка существования папки со статикой
+if not static_path.exists():
+    raise RuntimeError(f"Static directory not found at {static_path}")
 
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+# Монтирование статики
+app.mount("/", StaticFiles(directory=str(static_path), name="static")
 
 # Инициализация БД
 def init_db():
@@ -40,6 +43,7 @@ init_db()
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
+    """Обработчик вебхука"""
     data = await request.json()
     with sqlite3.connect("deals.db") as conn:
         conn.execute(
@@ -49,10 +53,16 @@ async def handle_webhook(request: Request):
 
 @app.get("/api/deals")
 async def get_deals():
+    """Получение списка сделок"""
     with sqlite3.connect("deals.db") as conn:
         deals = conn.execute("SELECT deal_id, stage_id FROM deals").fetchall()
     return {"deals": deals}
 
 @app.get("/api/status")
 async def status():
+    """Проверка статуса сервера"""
     return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
