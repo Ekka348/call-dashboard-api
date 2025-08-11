@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from pytz import timezone
 from copy import deepcopy
-from auth import requires_auth  # Импортируем декоратор аутентификации
+from functools import wraps
+from flask import Response
 
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
@@ -23,6 +24,34 @@ user_cache = {"data": {}, "last": 0}
 data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
+
+def check_auth(username, password):
+    """Проверка учетных данных"""
+    auth_users = os.environ.get('AUTH_USERS', '').split(',')
+    for user in auth_users:
+        if not user.strip():
+            continue
+        parts = user.strip().split(':')
+        if len(parts) == 3:
+            u, p, role = parts
+            if username == u and password == p:
+                return role
+    return None
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return Response(
+                'Неверные учетные данные\n',
+                401,
+                {'WWW-Authenticate': 'Basic realm="Login Required"'}
+            )
+        kwargs['user_role'] = check_auth(auth.username, auth.password)
+        kwargs['username'] = auth.username
+        return f(*args, **kwargs)
+    return decorated
 
 def get_moscow_time():
     tz = timezone("Europe/Moscow")
@@ -150,8 +179,15 @@ def get_lead_stats():
 
 @app.route("/api/leads/operators")
 @requires_auth
-def get_all_operators():
+def get_all_operators(user_role, username):
     try:
+        if user_role == 'operator':
+            return jsonify({
+                "status": "success",
+                "operators": [username],
+                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
         start, end = get_range_dates()
         users = load_users()
         operators = set()
@@ -177,9 +213,21 @@ def get_all_operators():
 
 @app.route("/api/leads/by-stage")
 @requires_auth
-def leads_by_stage():
+def leads_by_stage(user_role, username):
     try:
         data = get_lead_stats()
+        
+        if user_role == 'operator':
+            filtered_data = {"data": {}, "status": "success", "range": "today"}
+            for stage_name, stage_data in data['data'].items():
+                filtered_details = [detail for detail in stage_data['details'] 
+                                 if detail['operator'] == username]
+                if filtered_details:
+                    filtered_data['data'][stage_name] = {
+                        "details": filtered_details
+                    }
+            return jsonify(filtered_data)
+            
         return jsonify(data)
     except Exception as e:
         return jsonify({
