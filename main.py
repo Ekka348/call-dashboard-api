@@ -13,7 +13,7 @@ app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
 # Конфигурация
-HOOK = os.environ.get('BITRIX_HOOK')
+HOOK = os.environ.get(https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/)
 UPDATE_INTERVAL = 60
 HISTORY_HOURS = 24
 DATA_RETENTION_DAYS = 7
