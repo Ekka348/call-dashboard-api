@@ -5,17 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Leads Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
   <style>
     :root {
       --primary: #4285f4;
       --success: #34a853;
       --warning: #fbbc05;
       --danger: #ea4335;
-      --chart-blue: rgba(66, 133, 244, 0.2);
-      --chart-green: rgba(52, 168, 83, 0.2);
-      --chart-yellow: rgba(251, 188, 5, 0.2);
     }
     
     body {
@@ -120,27 +115,6 @@
       height: 250px;
       margin-bottom: 20px;
       position: relative;
-    }
-    
-    .chart-actions {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    
-    .chart-actions button {
-      background: rgba(255,255,255,0.2);
-      border: none;
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8rem;
-    }
-    
-    .chart-actions button.active {
-      background: white;
-      color: var(--primary);
     }
     
     table {
@@ -287,69 +261,6 @@
       margin-bottom: 0;
     }
     
-    .login-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    
-    .login-form {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 400px;
-    }
-    
-    .login-form h2 {
-      margin-top: 0;
-      color: var(--primary);
-      text-align: center;
-    }
-    
-    .form-group {
-      margin-bottom: 20px;
-    }
-    
-    .form-group label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-    
-    .form-group input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 1rem;
-    }
-    
-    .login-btn {
-      width: 100%;
-      padding: 12px;
-      background-color: var(--primary);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-    
-    .login-btn:hover {
-      background-color: #3367d6;
-    }
-    
-    .login-error {
-      color: var(--danger);
-      text-align: center;
-      margin-top: 15px;
-      display: none;
-    }
-    
     @media (max-width: 768px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
@@ -376,15 +287,11 @@
         left: 5%;
         right: 5%;
       }
-      
-      .login-form {
-        padding: 20px;
-      }
     }
   </style>
 </head>
 <body>
-  <div id="app-container" style="display: none;">
+  <div id="app-container">
     <div class="container">
       <div class="header">
         <h1>📊 Real-Time Leads Dashboard</h1>
@@ -403,7 +310,6 @@
       </div>
       
       <div class="dashboard-grid" id="content">
-        <!-- Карточка с трендами -->
         <div class="card" style="grid-column: 1 / -1;">
           <div class="card-header">
             <span>📈 Динамика лидов</span>
@@ -419,7 +325,6 @@
           </div>
         </div>
         
-        <!-- Остальные карточки -->
         <div class="card">
           <div class="card-header" id="agreement-header">
             <span>На согласовании</span>
@@ -462,22 +367,6 @@
     </div>
   </div>
 
-  <div id="login-container" class="login-container">
-    <div class="login-form">
-      <h2>Авторизация</h2>
-      <div class="form-group">
-        <label for="username">Логин</label>
-        <input type="text" id="username" placeholder="Введите ваш логин">
-      </div>
-      <div class="form-group">
-        <label for="password">Пароль</label>
-        <input type="password" id="password" placeholder="Введите ваш пароль">
-      </div>
-      <button class="login-btn" id="login-btn">Войти</button>
-      <div class="login-error" id="login-error">Неверные учетные данные</div>
-    </div>
-  </div>
-
   <script>
     const STAGES = {
       "На согласовании": { 
@@ -507,20 +396,14 @@
     };
     
     let lastUpdateTime = 0;
-    const POLLING_INTERVAL = 60000; // 60 секунд
+    const POLLING_INTERVAL = 60000;
     let retryDelay = 1000;
     let isFirstLoad = true;
     let allOperators = [];
-    let authCredentials = {
-      username: '',
-      password: ''
-    };
     let charts = {};
     let currentPeriod = 'hourly';
     
-    // Инициализация графиков
     function initCharts() {
-      // Трендовый график
       charts.trend = new Chart(
         document.getElementById('trendChart'),
         {
@@ -528,34 +411,13 @@
           data: { datasets: [] },
           options: {
             responsive: true,
-            maintainAspectRatio: false,
             plugins: {
-              legend: { position: 'top' },
-              tooltip: {
-                mode: 'index',
-                intersect: false
-              }
-            },
-            scales: {
-              x: {
-                type: 'time',
-                time: {
-                  unit: currentPeriod === 'hourly' ? 'hour' : 'day',
-                  displayFormats: {
-                    hour: 'HH:mm',
-                    day: 'dd MMM'
-                  }
-                },
-                grid: { display: false }
-              },
-              y: { beginAtZero: true }
-            },
-            interaction: { mode: 'nearest' }
+              legend: { position: 'top' }
+            }
           }
         }
       );
       
-      // Графики по статусам
       Object.entries(STAGES).forEach(([stageName, stageConfig]) => {
         charts[stageConfig.id] = new Chart(
           document.getElementById(`${stageConfig.id}Chart`),
@@ -564,30 +426,69 @@
             data: { labels: [], datasets: [] },
             options: {
               responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: ctx => `${ctx.dataset.label}: ${ctx.raw}`
-                  }
-                }
-              },
-              scales: {
-                y: { beginAtZero: true }
-              }
+              plugins: { legend: { display: false } }
             }
           }
         );
       });
     }
     
-    // Обновление графиков
+    async function fetchData() {
+      try {
+        const dashboardResponse = await fetch('/api/leads/by-stage?t=' + Date.now());
+        
+        if (!dashboardResponse.ok) {
+          throw new Error(`Ошибка HTTP! Статус: ${dashboardResponse.status}`);
+        }
+        
+        const data = await dashboardResponse.json();
+        
+        if (data.status === "error") {
+          throw new Error(data.message);
+        }
+        
+        const operatorsResponse = await fetch('/api/leads/operators?t=' + Date.now());
+        const operatorsData = await operatorsResponse.json();
+        
+        updateDashboard(data);
+        updateOperatorSelect(operatorsData.operators);
+        
+        lastUpdateTime = Date.now();
+        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+        
+        if (isFirstLoad) {
+          updateConnectionStatus(true);
+          isFirstLoad = false;
+        }
+        
+        retryDelay = 1000;
+        return true;
+      } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        updateConnectionStatus(false);
+        document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
+        document.getElementById('status-text').textContent = 'Ошибка соединения';
+        
+        Object.values(STAGES).forEach(stage => {
+          const container = document.getElementById(stage.element);
+          if (!container.querySelector('.error-message')) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
+            container.innerHTML = '';
+            container.appendChild(errorDiv);
+          }
+        });
+        
+        retryDelay = Math.min(retryDelay * 2, 60000);
+        return false;
+      }
+    }
+    
     function updateCharts(data) {
       if (!data.history) return;
       
-      // Обновляем трендовый график
-      const trendData = {
+      charts.trend.data = {
         labels: data.history[currentPeriod].labels,
         datasets: Object.entries(data.history[currentPeriod].data).map(([stage, values]) => ({
           label: stage,
@@ -599,22 +500,15 @@
           fill: true
         }))
       };
-      
-      charts.trend.data = trendData;
-      charts.trend.options.scales.x.time.unit = currentPeriod === 'hourly' ? 'hour' : 'day';
       charts.trend.update();
       
-      // Обновляем графики по статусам
       Object.entries(data.current).forEach(([stageName, stageData]) => {
         const stageConfig = STAGES[stageName];
-        const operators = stageData.details.map(d => d.operator);
-        const counts = stageData.details.map(d => d.count);
-        
         charts[stageConfig.id].data = {
-          labels: operators,
+          labels: stageData.details.map(d => d.operator),
           datasets: [{
             label: 'Лиды',
-            data: counts,
+            data: stageData.details.map(d => d.count),
             backgroundColor: stageConfig.color,
             borderColor: stageConfig.color,
             borderWidth: 1
@@ -624,12 +518,12 @@
       });
     }
     
-    // Остальной код остается таким же, как в предыдущей версии...
-    // (функции fetchData, updateDashboard, updateStage и т.д.)
+    // Остальные функции (updateDashboard, updateStage и т.д.) остаются без изменений
     
-    // Добавляем обработчик переключения периода
     document.addEventListener('DOMContentLoaded', () => {
       initCharts();
+      fetchData();
+      setInterval(fetchData, POLLING_INTERVAL);
       
       document.querySelectorAll('.chart-actions button').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -640,7 +534,7 @@
         });
       });
       
-      // Остальная инициализация...
+      document.getElementById('operator-select').addEventListener('change', applyOperatorFilter);
     });
   </script>
 </body>
