@@ -1,15 +1,22 @@
 from flask import Flask, send_from_directory, jsonify, request
-import requests, os, time, threading
+import requests, os, time, threading, bcrypt
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from pytz import timezone
-from copy import deepcopy
+from functools import wraps
+from dotenv import load_dotenv
+
+# Загрузка переменных окружения
+load_dotenv()
 
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 60  # Интервал обновления в секундах
+# Конфигурация
+HOOK = os.environ.get('BITRIX_HOOK')
+UPDATE_INTERVAL = 60
+HISTORY_HOURS = 24
+DATA_RETENTION_DAYS = 7
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -19,19 +26,54 @@ STAGE_LABELS = {
 
 # Кеширование
 user_cache = {"data": {}, "last": 0}
-data_cache = {"data": {}, "timestamp": 0}
+data_cache = {
+    "current": {},
+    "hourly": defaultdict(list),
+    "daily": defaultdict(list),
+    "timestamp": 0
+}
 cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
 
+# Аутентификация
+def parse_auth_users():
+    users = {}
+    for line in os.environ.get('AUTH_USERS', '').split('\\n'):
+        if not line.strip():
+            continue
+        username, pwd_hash, role = line.split(':')
+        users[username] = {'hash': pwd_hash, 'role': role}
+    return users
+
+def check_auth(username, password):
+    users = parse_auth_users()
+    if username in users:
+        stored_hash = users[username]['hash']
+        return bcrypt.checkpw(password.encode(), stored_hash.encode())
+    return False
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+# Вспомогательные функции
 def get_moscow_time():
-    tz = timezone("Europe/Moscow")
-    return datetime.now(tz)
+    return datetime.now(timezone("Europe/Moscow"))
 
-def get_range_dates():
+def get_date_ranges():
     now = get_moscow_time()
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return {
+        'today': (today_start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")),
+        'hourly': [(now - timedelta(hours=i)).strftime("%Y-%m-%d %H:00:00") for i in range(HISTORY_HOURS)][::-1]
+    }
 
+# API функции
 def load_users():
     if time.time() - user_cache["last"] < 300:
         return user_cache["data"]
@@ -89,9 +131,9 @@ def fetch_leads(stage, start, end):
     
     return leads
 
-def check_for_operator_changes(new_data):
+def check_for_changes(new_data):
     changes = []
-    for stage_name, stage_data in new_data['data'].items():
+    for stage_name, stage_data in new_data.items():
         for operator in stage_data['details']:
             operator_name = operator['operator']
             new_count = operator['count']
@@ -108,55 +150,100 @@ def check_for_operator_changes(new_data):
             last_operator_status[stage_name][operator_name] = new_count
     return changes
 
+def update_history_data(current_data):
+    now = get_moscow_time()
+    current_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:00:00")
+    
+    # Обновляем почасовые данные
+    for stage, data in current_data.items():
+        total = sum(item['count'] for item in data['details'])
+        data_cache['hourly'][stage].append({
+            'timestamp': current_hour,
+            'count': total
+        })
+        
+        # Сохраняем только последние HISTORY_HOURS записей
+        if len(data_cache['hourly'][stage]) > HISTORY_HOURS:
+            data_cache['hourly'][stage] = data_cache['hourly'][stage][-HISTORY_HOURS:]
+    
+    # Обновляем дневные данные (один раз в день)
+    if now.hour == 0 and now.minute < 5:
+        for stage, data in current_data.items():
+            total = sum(item['count'] for item in data['details'])
+            data_cache['daily'][stage].append({
+                'timestamp': now.strftime("%Y-%m-%d"),
+                'count': total
+            })
+            
+            # Сохраняем только последние DATA_RETENTION_DAYS записей
+            if len(data_cache['daily'][stage]) > DATA_RETENTION_DAYS:
+                data_cache['daily'][stage] = data_cache['daily'][stage][-DATA_RETENTION_DAYS:]
+
 def get_lead_stats():
     with cache_lock:
         try:
             if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
-                return data_cache["data"]
+                return data_cache["current"]
             
-            start, end = get_range_dates()
+            ranges = get_date_ranges()
             users = load_users()
-            data = {}
+            current_data = {}
 
+            # Получаем текущие данные
             for name, stage_id in STAGE_LABELS.items():
-                leads = fetch_leads(stage_id, start, end)
+                leads = fetch_leads(stage_id, *ranges['today'])
                 stats = Counter()
                 for lead in leads:
                     if lead.get("ASSIGNED_BY_ID"):
                         stats[int(lead["ASSIGNED_BY_ID"])] += 1
 
-                data[name] = {
+                current_data[name] = {
                     "details": [
                         {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
                         for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
                     ]
                 }
 
-            result = {
+            # Обновляем исторические данные
+            update_history_data(current_data)
+            
+            # Сохраняем в кэш
+            data_cache["current"] = current_data
+            data_cache["timestamp"] = time.time()
+            
+            return {
                 "status": "success",
-                "range": "today", 
-                "data": data,
-                "changes": check_for_operator_changes({"data": data}),
+                "current": current_data,
+                "changes": check_for_changes(current_data),
+                "history": {
+                    "hourly": {
+                        "labels": [t['timestamp'][11:16] for t in data_cache['hourly'].get(list(STAGE_LABELS.keys())[0], [])],
+                        "data": {stage: [d['count'] for d in data_cache['hourly'].get(stage, [])] 
+                                for stage in STAGE_LABELS.keys()}
+                    },
+                    "daily": {
+                        "labels": [t['timestamp'] for t in data_cache['daily'].get(list(STAGE_LABELS.keys())[0], [])],
+                        "data": {stage: [d['count'] for d in data_cache['daily'].get(stage, [])] 
+                                for stage in STAGE_LABELS.keys()}
+                    }
+                },
                 "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
             }
-            
-            data_cache["data"] = result
-            data_cache["timestamp"] = time.time()
-            return result
         except Exception as e:
             print(f"Error in get_lead_stats: {e}")
             raise
 
+# API Endpoints
 @app.route("/api/leads/operators")
+@requires_auth
 def get_all_operators():
     try:
-        start, end = get_range_dates()
+        ranges = get_date_ranges()
         users = load_users()
         operators = set()
         
-        # Получаем всех операторов, у которых есть лиды в любом из статусов
         for stage_id in STAGE_LABELS.values():
-            leads = fetch_leads(stage_id, start, end)
+            leads = fetch_leads(stage_id, *ranges['today'])
             for lead in leads:
                 if lead.get("ASSIGNED_BY_ID"):
                     operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
@@ -175,6 +262,7 @@ def get_all_operators():
         }), 500
 
 @app.route("/api/leads/by-stage")
+@requires_auth
 def leads_by_stage():
     try:
         data = get_lead_stats()
