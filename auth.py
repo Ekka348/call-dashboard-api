@@ -1,40 +1,35 @@
+# auth.py
 from functools import wraps
-from flask import request, Response
+from flask import request, jsonify
 import os
 from dotenv import load_dotenv
 
 # Загрузка переменных окружения
 load_dotenv()
 
+# Whitelist допустимых пользователей (логин: пароль)
+USER_WHITELIST = {
+    os.getenv('AUTH_USERNAME', 'admin'): os.getenv('AUTH_PASSWORD', 'admin123'),
+    "manager": "manager123"
+}
+
 def check_auth(username, password):
-    """Проверка учетных данных из .env"""
-    auth_users = os.environ.get('AUTH_USERS', '').split(',')
-    for user in auth_users:
-        if not user.strip():
-            continue
-        parts = user.strip().split(':')
-        if len(parts) == 3:
-            u, p, role = parts
-            if username == u and password == p:
-                return role
-    return None
+    """Проверяет, есть ли пользователь в белом списке"""
+    return USER_WHITELIST.get(username) == password
+
+def authenticate():
+    """Отправляет ответ 401 с требованием аутентификации"""
+    return jsonify({
+        "status": "error",
+        "message": "Authentication required"
+    }), 401
 
 def requires_auth(f):
     """Декоратор для защиты маршрутов"""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
-        user_role = check_auth(auth.username, auth.password) if auth else None
-        
-        if not user_role:
-            return Response(
-                'Неверные учетные данные\n',
-                401,
-                {'WWW-Authenticate': 'Basic realm="Login Required"'}
-            )
-        
-        # Добавляем роль пользователя в kwargs
-        kwargs['user_role'] = user_role
-        kwargs['username'] = auth.username
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
         return f(*args, **kwargs)
     return decorated
