@@ -7,7 +7,7 @@ from pytz import timezone
 app = Flask(__name__, static_folder='static')
 
 # Конфигурация
-HOOK = os.environ.get('BITRIX_HOOK', "https://example.bitrix24.ru/rest/1/xxx/")
+HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
 UPDATE_INTERVAL = 60 
 HISTORY_HOURS = 24
 DATA_RETENTION_DAYS = 7
