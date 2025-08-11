@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from pytz import timezone
 from copy import deepcopy
-from auth import requires_auth  # Импортируем декоратор аутентификации
 
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
@@ -149,13 +148,13 @@ def get_lead_stats():
             raise
 
 @app.route("/api/leads/operators")
-@requires_auth
 def get_all_operators():
     try:
         start, end = get_range_dates()
         users = load_users()
         operators = set()
         
+        # Получаем всех операторов, у которых есть лиды в любом из статусов
         for stage_id in STAGE_LABELS.values():
             leads = fetch_leads(stage_id, start, end)
             for lead in leads:
@@ -176,7 +175,6 @@ def get_all_operators():
         }), 500
 
 @app.route("/api/leads/by-stage")
-@requires_auth
 def leads_by_stage():
     try:
         data = get_lead_stats()
