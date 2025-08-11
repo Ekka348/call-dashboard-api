@@ -1,5 +1,5 @@
 from flask import Flask, send_from_directory, jsonify, request
-import requests, os, time, threading, bcrypt
+import requests, os, time, threading, hashlib, secrets
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from pytz import timezone
@@ -35,21 +35,39 @@ data_cache = {
 cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
 
+# Функции для работы с паролями
+def hash_password(password: str, salt: str = None) -> str:
+    """Генерация хэша пароля"""
+    if not salt:
+        salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    return f"{salt}${dk.hex()}"
+
+def check_password(password: str, hashed: str) -> bool:
+    """Проверка пароля"""
+    try:
+        salt, stored_hash = hashed.split('$')
+    except ValueError:
+        return False
+    new_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+    return secrets.compare_digest(new_hash, stored_hash)
+
 # Аутентификация
 def parse_auth_users():
     users = {}
     for line in os.environ.get('AUTH_USERS', '').split('\\n'):
-        if not line.strip():
-            continue
-        username, pwd_hash, role = line.split(':')
-        users[username] = {'hash': pwd_hash, 'role': role}
+        if line.strip():
+            parts = line.split(':')
+            if len(parts) >= 3:
+                username, pwd_hash, role = parts[:3]
+                users[username] = {'hash': pwd_hash, 'role': role}
     return users
 
 def check_auth(username, password):
     users = parse_auth_users()
     if username in users:
         stored_hash = users[username]['hash']
-        return bcrypt.checkpw(password.encode(), stored_hash.encode())
+        return check_password(password, stored_hash)
     return False
 
 def requires_auth(f):
