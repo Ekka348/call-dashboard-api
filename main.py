@@ -1,143 +1,265 @@
-from flask import Flask, request, render_template_string
-import requests, os, time
+from flask import Flask, send_from_directory, jsonify
+import requests, os, time, threading
 from datetime import datetime, timedelta
-from collections import Counter
-from pytz import timezone  # 🕒 для московского времени
+from collections import Counter, defaultdict
+from pytz import timezone
 
-app = Flask(__name__)
-HOOK = "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/"
+app = Flask(__name__, static_folder='static')
+
+# Конфигурация
+HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
+UPDATE_INTERVAL = 60
+HISTORY_HOURS = 24
+DATA_RETENTION_DAYS = 7
+MINUTE_INTERVAL = 5
 
 STAGE_LABELS = {
-    "НДЗ": "5",
-    "НДЗ 2": "9",
+    "На согласовании": "UC_A2DF81",
     "Перезвонить": "IN_PROCESS",
-    "Приглашен к рекрутеру": "CONVERTED",
-    "NEW": "NEW",
-    "OLD": "UC_VTOOIM",
-    "База ВВ": "11"
+    "Приглашен к рекрутеру": "CONVERTED"
 }
 
-GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
-
+# Кеширование
 user_cache = {"data": {}, "last": 0}
+data_cache = {
+    "current": {},
+    "minutes": defaultdict(list),
+    "hourly": defaultdict(list),
+    "daily": defaultdict(list),
+    "timestamp": 0
+}
+cache_lock = threading.Lock()
+last_operator_status = defaultdict(dict)
 
-def get_range_dates(rtype):
-    tz = timezone("Europe/Moscow")
-    now = datetime.now(tz)
-    if rtype == "week":
-        start = now - timedelta(days=now.weekday())
-    elif rtype == "month":
-        start = now.replace(day=1)
-    else:
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
+def get_moscow_time():
+    return datetime.now(timezone("Europe/Moscow"))
+
+def get_date_ranges():
+    now = get_moscow_time()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    minute_labels = [
+        (now - timedelta(minutes=i*MINUTE_INTERVAL)).strftime("%Y-%m-%d %H:%M:%S")
+        for i in range(0, (HISTORY_HOURS*60)//MINUTE_INTERVAL)
+    ][::-1]
+    
+    return {
+        'today': (today_start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")),
+        'minutes': minute_labels,
+        'hourly': [(now - timedelta(hours=i)).strftime("%Y-%m-%d %H:00:00") for i in range(HISTORY_HOURS)][::-1]
+    }
 
 def load_users():
     if time.time() - user_cache["last"] < 300:
         return user_cache["data"]
-    users, start = {}, 0
+    
+    users = {}
     try:
+        start = 0
         while True:
-            r = requests.post(HOOK + "user.get.json", json={"start": start}, timeout=10).json()
-            for u in r.get("result", []):
-                users[int(u["ID"])] = f'{u["NAME"]} {u["LAST_NAME"]}'
-            if "next" not in r: break
-            start = r["next"]
-    except Exception: pass
-    user_cache["data"], user_cache["last"] = users, time.time()
+            response = requests.post(f"{HOOK}user.get.json", json={"start": start}, timeout=20).json()
+            if "result" not in response:
+                break
+            for user in response["result"]:
+                users[int(user["ID"])] = f'{user["NAME"]} {user["LAST_NAME"]}'
+            start = response.get("next", 0)
+            if not start:
+                break
+    except Exception as e:
+        print(f"Error loading users: {e}")
+    
+    user_cache["data"] = users
+    user_cache["last"] = time.time()
     return users
 
 def fetch_leads(stage, start, end):
-    leads, offset = [], 0
+    leads = []
     try:
+        offset = 0
         while True:
-            r = requests.post(HOOK + "crm.lead.list.json", json={
-                "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
-                "select": ["ID", "ASSIGNED_BY_ID", "DATE_CREATE", "DATE_MODIFY", "STATUS_ID"],
-                "start": offset
-            }, timeout=10).json()
-            page = r.get("result", [])
-            if not page: break
-            leads.extend(page)
-            offset = r.get("next", 0)
-            if not offset: break
-    except Exception: pass
+            response = requests.post(
+                f"{HOOK}crm.lead.list.json",
+                json={
+                    "filter": {">=DATE_MODIFY": start, "<=DATE_MODIFY": end, "STATUS_ID": stage},
+                    "select": ["ID", "ASSIGNED_BY_ID", "TITLE", "STATUS_ID", "DATE_MODIFY"],
+                    "start": offset
+                },
+                timeout=20
+            ).json()
+            
+            if "result" not in response:
+                break
+            leads.extend(response["result"])
+            offset = response.get("next", 0)
+            if not offset:
+                break
+    except Exception as e:
+        print(f"Error fetching leads for {stage}: {e}")
     return leads
 
-def fetch_all_leads(stage):
-    leads, offset = [], 0
+def check_for_changes(new_data):
+    changes = []
+    for stage_name, stage_data in new_data.items():
+        for operator in stage_data['details']:
+            operator_name = operator['operator']
+            new_count = operator['count']
+            old_count = last_operator_status[stage_name].get(operator_name, 0)
+            if new_count != old_count:
+                changes.append({
+                    'stage': stage_name,
+                    'operator': operator_name,
+                    'old_count': old_count,
+                    'new_count': new_count,
+                    'diff': new_count - old_count
+                })
+            last_operator_status[stage_name][operator_name] = new_count
+    return changes
+
+def update_history_data(current_data):
+    now = get_moscow_time()
+    current_minute = now.replace(second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+    current_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:00:00")
+    
+    for stage, data in current_data.items():
+        total = sum(item['count'] for item in data['details'])
+        
+        data_cache['minutes'][stage].append({'timestamp': current_minute, 'count': total})
+        if len(data_cache['minutes'][stage]) > (HISTORY_HOURS*60)/MINUTE_INTERVAL:
+            data_cache['minutes'][stage] = data_cache['minutes'][stage][-(HISTORY_HOURS*60)//MINUTE_INTERVAL:]
+        
+        data_cache['hourly'][stage].append({'timestamp': current_hour, 'count': total})
+        if len(data_cache['hourly'][stage]) > HISTORY_HOURS:
+            data_cache['hourly'][stage] = data_cache['hourly'][stage][-HISTORY_HOURS:]
+    
+    if now.hour == 0 and now.minute < 5:
+        for stage, data in current_data.items():
+            total = sum(item['count'] for item in data['details'])
+            data_cache['daily'][stage].append({'timestamp': now.strftime("%Y-%m-%d"), 'count': total})
+            if len(data_cache['daily'][stage]) > DATA_RETENTION_DAYS:
+                data_cache['daily'][stage] = data_cache['daily'][stage][-DATA_RETENTION_DAYS:]
+
+def get_lead_stats():
+    with cache_lock:
+        try:
+            if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
+                return data_cache["current"]
+            
+            ranges = get_date_ranges()
+            users = load_users()
+            current_data = {}
+            minute_data = defaultdict(dict)
+
+            for i in range(len(ranges['minutes'])-1):
+                start_time = ranges['minutes'][i]
+                end_time = ranges['minutes'][i+1]
+                
+                for name, stage_id in STAGE_LABELS.items():
+                    leads = fetch_leads(stage_id, start_time, end_time)
+                    minute_data[name][start_time] = len(leads)
+
+            for name, stage_id in STAGE_LABELS.items():
+                leads = fetch_leads(stage_id, *ranges['today'])
+                stats = Counter()
+                for lead in leads:
+                    if lead.get("ASSIGNED_BY_ID"):
+                        stats[int(lead["ASSIGNED_BY_ID"])] += 1
+
+                current_data[name] = {
+                    "details": [
+                        {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
+                        for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
+                    ]
+                }
+
+            update_history_data(current_data)
+            data_cache["current"] = current_data
+            data_cache["timestamp"] = time.time()
+            
+            minute_history = {
+                "labels": list(minute_data[list(STAGE_LABELS.keys())[0]].keys()),
+                "data": {stage: list(values.values()) for stage, values in minute_data.items()}
+            }
+            
+            return {
+                "status": "success",
+                "current": current_data,
+                "changes": check_for_changes(current_data),
+                "history": {
+                    "minutes": minute_history,
+                    "hourly": {
+                        "labels": [t['timestamp'][11:16] for t in data_cache['hourly'].get(list(STAGE_LABELS.keys())[0], [])],
+                        "data": {stage: [d['count'] for d in data_cache['hourly'].get(stage, [])] 
+                                for stage in STAGE_LABELS.keys()}
+                    },
+                    "daily": {
+                        "labels": [t['timestamp'] for t in data_cache['daily'].get(list(STAGE_LABELS.keys())[0], [])],
+                        "data": {stage: [d['count'] for d in data_cache['daily'].get(stage, [])] 
+                                for stage in STAGE_LABELS.keys()}
+                    }
+                },
+                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        except Exception as e:
+            print(f"Error in get_lead_stats: {e}")
+            return {
+                "status": "error",
+                "message": str(e),
+                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+@app.route("/api/leads/operators")
+def get_all_operators():
     try:
-        while True:
-            r = requests.post(HOOK + "crm.lead.list.json", json={
-                "filter": {"STATUS_ID": stage},
-                "select": ["ID"],
-                "start": offset
-            }, timeout=10).json()
-            page = r.get("result", [])
-            if not page: break
-            leads.extend(page)
-            offset = r.get("next", 0)
-            if not offset: break
-    except Exception: pass
-    return leads
+        ranges = get_date_ranges()
+        users = load_users()
+        operators = set()
+        
+        for stage_id in STAGE_LABELS.values():
+            leads = fetch_leads(stage_id, *ranges['today'])
+            for lead in leads:
+                if lead.get("ASSIGNED_BY_ID"):
+                    operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
+                    operators.add(operator_name)
+        
+        return jsonify({
+            "status": "success",
+            "operators": sorted(list(operators)),
+            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+        }), 500
 
 @app.route("/api/leads/by-stage")
 def leads_by_stage():
-    start, end = get_range_dates("today")
-    users = load_users()
-    data = {}
+    try:
+        data = get_lead_stats()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+        }), 500
 
-    for name, stage_id in STAGE_LABELS.items():
-        if name in GROUPED_STAGES:
-            leads = fetch_all_leads(stage_id)
-            data[name] = {"grouped": True, "count": len(leads)}
-        else:
-            leads = fetch_leads(stage_id, start, end)
-            stats = Counter()
-            for lead in leads:
-                uid = lead.get("ASSIGNED_BY_ID")
-                if uid: stats[int(uid)] += 1
+@app.route('/')
+def serve_index():
+    return send_from_directory(app.static_folder, 'dashboard.html')
 
-            details = [
-                {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
-                for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
-            ]
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory(app.static_folder, path)
 
-            data[name] = {"grouped": False, "details": details}
-
-    return {"range": "today", "data": data}
-
-@app.route("/api/leads/info-stages-today")
-def info_stages_today():
-    result = []
-    for name in GROUPED_STAGES:
-        stage = STAGE_LABELS[name]
-        leads = fetch_all_leads(stage)
-        result.append({"name": name, "count": len(leads)})
-    return {"range": "total", "info": result}
-
-@app.route("/ping")
-def ping(): return {"status": "ok"}
-
-@app.route("/clock")
-def clock():
-    tz = timezone("Europe/Moscow")
-    moscow_now = datetime.now(tz)
-    utc_now = datetime.utcnow()
-    return {
-        "moscow": moscow_now.strftime("%Y-%m-%d %H:%M:%S"),
-        "utc": utc_now.strftime("%Y-%m-%d %H:%M:%S")
-    }
-
-@app.route("/")
-def home(): return app.send_static_file("dashboard.html")
-
-@app.route("/active_operators_list")
-def active_operators_list():
-    operators = get_active_operators()
-    return jsonify(operators)
-
-
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port, debug=False)
