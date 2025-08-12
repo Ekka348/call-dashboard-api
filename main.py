@@ -135,7 +135,25 @@ def active_operators_list():
     operators = get_active_operators()
     return jsonify(operators)
 
+from flask_caching import Cache
 
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
+
+@app.route('/dashboard')
+@cache.cached(timeout=300)  # Кеш на 5 минут
+def dashboard():
+    ...
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html'), 500
+
+class Lead(db.Model):
+    # ...
+    __table_args__ = (
+        db.Index('idx_lead_stage', 'stage_id'),
+        db.Index('idx_lead_modified', 'modified_date'),
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
