@@ -1,6 +1,6 @@
 from flask import render_template, request, jsonify
-from . import db
-from .models import Lead
+from app import db
+from app.models import Lead
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 from io import BytesIO
@@ -62,10 +62,10 @@ def init_routes(app):
         plot_url = generate_plot(hourly_stats, time_ranges)
         
         return render_template('dashboard.html', 
-                             stage_stats=stage_stats,
-                             operator_stats=operator_stats,
-                             plot_url=plot_url,
-                             current_date=datetime.now().strftime('%d.%m.%Y'))
+                            stage_stats=stage_stats,
+                            operator_stats=operator_stats,
+                            plot_url=plot_url,
+                            current_date=datetime.now().strftime('%d.%m.%Y'))
 
     def generate_plot(hourly_stats, time_ranges):
         plt.figure(figsize=(12, 6))
@@ -82,7 +82,7 @@ def init_routes(app):
         plt.xticks(rotation=45)
         
         buffer = BytesIO()
-        plt.savefig(buffer, format='png', bbox_inches='tight')
+        plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
         buffer.seek(0)
         plot_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
         plt.close()
@@ -91,6 +91,9 @@ def init_routes(app):
 
     @app.route('/webhook', methods=['POST'])
     def webhook():
+        if request.headers.get('X-Bitrix-Secret') != os.environ.get('BITRIX_WEBHOOK_SECRET'):
+            return jsonify({'status': 'unauthorized'}), 401
+            
         data = request.json
         lead_data = data.get('data', {})
         
