@@ -16,6 +16,12 @@
       color: #555;
       margin-bottom: 10px;
     }
+    #operator-filter {
+      margin-bottom: 20px;
+      padding: 8px;
+      min-width: 250px;
+      font-size: 14px;
+    }
     .stage-columns {
       display: flex;
       flex-wrap: wrap;
@@ -52,11 +58,19 @@
       color: #888;
       text-align: center;
     }
+    .highlight {
+      background-color: #fffacd;
+    }
   </style>
 </head>
 <body>
 
   <h1>Статистика по стадиям</h1>
+
+  <select id="operator-filter">
+    <option value="">Все операторы</option>
+    <!-- Опции будут добавлены динамически -->
+  </select>
 
   <p id="update-log">Обновления ещё не начались.</p>
 
@@ -70,6 +84,9 @@
   <script>
     const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
     let stageIndex = 0;
+    let allOperators = new Set();
+    let currentData = {};
+    let selectedOperator = '';
 
     async function fetchData() {
       try {
@@ -87,14 +104,47 @@
       document.getElementById("update-log").textContent = statusText;
     }
 
-    async function updateStageCycle() {
-      const current = STAGE_CYCLE[stageIndex];
-      showUpdateStatus(current); // ⏳ Обновление стадии
+    function updateOperatorFilter() {
+      const filterSelect = document.getElementById("operator-filter");
+      // Сохраняем текущее значение
+      const currentValue = filterSelect.value;
+      
+      // Очищаем и добавляем опции
+      filterSelect.innerHTML = '<option value="">Все операторы</option>';
+      
+      // Сортируем операторов по алфавиту
+      const sortedOperators = Array.from(allOperators).sort();
+      
+      sortedOperators.forEach(operator => {
+        const option = document.createElement("option");
+        option.value = operator;
+        option.textContent = operator;
+        filterSelect.appendChild(option);
+      });
+      
+      // Восстанавливаем выбранное значение
+      if (currentValue && sortedOperators.includes(currentValue)) {
+        filterSelect.value = currentValue;
+      }
+    }
 
-      const data = await fetchData();
-      if (!data || !data.data) return;
+    function filterDataByOperator(data) {
+      if (!selectedOperator) return data;
+      
+      const filteredData = JSON.parse(JSON.stringify(data));
+      
+      for (const stage in filteredData.data) {
+        if (filteredData.data[stage].details) {
+          filteredData.data[stage].details = filteredData.data[stage].details.filter(
+            item => item.operator === selectedOperator
+          );
+        }
+      }
+      
+      return filteredData;
+    }
 
-      const info = data.data[current];
+    function renderStage(current, info) {
       const block = Array.from(document.getElementById("content").children)
         .find(el => el.querySelector("h2")?.textContent?.includes(current));
 
@@ -104,7 +154,7 @@
       if (!info?.details || info.details.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-message";
-        empty.textContent = "Нет лидов.";
+        empty.textContent = selectedOperator ? `Нет данных для ${selectedOperator}` : "Нет лидов.";
         block.appendChild(empty);
       } else {
         const table = document.createElement("table");
@@ -115,6 +165,9 @@
         const body = document.createElement("tbody");
         info.details.forEach(row => {
           const tr = document.createElement("tr");
+          if (row.operator === selectedOperator) {
+            tr.classList.add("highlight");
+          }
           tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
           body.appendChild(tr);
         });
@@ -122,10 +175,55 @@
         table.appendChild(body);
         block.appendChild(table);
       }
+    }
+
+    async function updateStageCycle() {
+      const current = STAGE_CYCLE[stageIndex];
+      showUpdateStatus(current);
+
+      const data = await fetchData();
+      if (!data || !data.data) {
+        stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
+        setTimeout(updateStageCycle, 3000);
+        return;
+      }
+
+      // Сохраняем все данные
+      currentData = data;
+      
+      // Собираем всех операторов
+      for (const stage in data.data) {
+        if (data.data[stage].details) {
+          data.data[stage].details.forEach(item => {
+            allOperators.add(item.operator);
+          });
+        }
+      }
+      
+      // Обновляем фильтр операторов
+      updateOperatorFilter();
+      
+      // Фильтруем данные по выбранному оператору
+      const filteredData = filterDataByOperator(data);
+      
+      // Рендерим текущую стадию
+      renderStage(current, filteredData.data[current]);
 
       stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
       setTimeout(updateStageCycle, 3000);
     }
+
+    // Обработчик изменения фильтра
+    document.getElementById("operator-filter").addEventListener("change", function() {
+      selectedOperator = this.value;
+      // Применяем фильтр ко всем уже загруженным данным
+      const filteredData = filterDataByOperator(currentData);
+      
+      // Перерисовываем все стадии
+      STAGE_CYCLE.forEach(stage => {
+        renderStage(stage, filteredData.data[stage]);
+      });
+    });
 
     updateStageCycle(); // 🚀 запуск
   </script>
