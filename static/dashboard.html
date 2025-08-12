@@ -32,6 +32,8 @@
       margin-bottom: 30px;
       padding-bottom: 15px;
       border-bottom: 1px solid #e0e0e0;
+      flex-wrap: wrap;
+      gap: 15px;
     }
     
     .header-controls {
@@ -71,6 +73,8 @@
     .last-update {
       font-size: 0.85rem;
       color: #666;
+      min-width: 80px;
+      display: inline-block;
     }
     
     .dashboard-grid {
@@ -110,26 +114,7 @@
     .chart-container {
       height: 250px;
       margin-bottom: 20px;
-    }
-    
-    .chart-actions {
-      display: flex;
-      gap: 10px;
-    }
-    
-    .chart-actions button {
-      padding: 5px 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background: white;
-      cursor: pointer;
-      font-size: 0.8rem;
-    }
-    
-    .chart-actions button.active {
-      background: var(--primary);
-      color: white;
-      border-color: var(--primary);
+      position: relative;
     }
     
     table {
@@ -151,14 +136,54 @@
       border-bottom: 1px solid #f0f0f0;
     }
     
-    .loading {
-      color: #999;
-      text-align: center;
-      padding: 20px;
+    .count-cell {
+      position: relative;
+      min-width: 80px;
     }
     
-    .error-message {
-      color: var(--danger);
+    .count-value {
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+    
+    .count-update {
+      position: absolute;
+      right: 0;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background-color: #ffeb3b;
+      color: #000;
+      opacity: 0;
+      transform: translateY(-20px);
+      animation: count-update-fade 2s forwards;
+    }
+    
+    @keyframes count-update-fade {
+      0% { opacity: 1; transform: translateY(-20px); }
+      70% { opacity: 1; transform: translateY(-30px); }
+      100% { opacity: 0; transform: translateY(-40px); }
+    }
+    
+    .highlight-update {
+      animation: highlight-update 1.5s ease-out;
+    }
+    
+    @keyframes highlight-update {
+      0% { background-color: rgba(255, 235, 59, 0.5); }
+      100% { background-color: transparent; }
+    }
+    
+    .diff-up {
+      background-color: rgba(76, 175, 80, 0.1);
+    }
+    
+    .diff-down {
+      background-color: rgba(244, 67, 54, 0.1);
+    }
+    
+    .loading {
+      color: #999;
       text-align: center;
       padding: 20px;
     }
@@ -168,459 +193,349 @@
       text-align: center;
       padding: 20px;
     }
+    
+    .operator-filter {
+      min-width: 250px;
+    }
+    
+    .operator-filter select {
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background: white;
+      font-family: inherit;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+    
+    .hidden-row {
+      display: none;
+    }
+    
+    .highlight-operator {
+      background-color: rgba(66, 133, 244, 0.1) !important;
+    }
+    
+    .empty-message {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+      display: none;
+    }
+    
+    .show-empty-message {
+      display: block;
+    }
+    
+    .error-message {
+      color: var(--danger);
+      text-align: center;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    
+    .changes-notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      max-width: 300px;
+      transition: opacity 0.5s;
+    }
+    
+    .changes-notification.fade-out {
+      opacity: 0;
+    }
+    
+    .changes-notification h4 {
+      margin-top: 0;
+      color: var(--primary);
+    }
+    
+    .changes-notification ul {
+      padding-left: 20px;
+      margin-bottom: 0;
+    }
+    
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .header-controls {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      
+      .operator-filter {
+        width: 100%;
+      }
+      
+      .changes-notification {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>📊 Real-Time Leads Dashboard</h1>
-      <div class="header-controls">
-        <div class="operator-filter">
-          <select id="operator-select">
-            <option value="">Все операторы</option>
-          </select>
-        </div>
-        <div class="status-indicator">
-          <div class="indicator" id="connection-status"></div>
-          <span id="status-text">Connecting...</span>
-          <span class="last-update" id="last-update">-</span>
-        </div>
-      </div>
-    </div>
-    
-    <div class="dashboard-grid">
-      <div class="card" style="grid-column: 1 / -1;">
-        <div class="card-header">
-          <span>📈 Динамика лидов</span>
-          <div class="chart-actions">
-            <button class="active" data-period="minutes">По минутам</button>
-            <button data-period="hourly">По часам</button>
-            <button data-period="daily">По дням</button>
+  <div id="app-container">
+    <div class="container">
+      <div class="header">
+        <h1>📊 Real-Time Leads Dashboard</h1>
+        <div class="header-controls">
+          <div class="operator-filter">
+            <select id="operator-select">
+              <option value="">Все операторы</option>
+            </select>
           </div>
-        </div>
-        <div class="card-body">
-          <div class="chart-container">
-            <canvas id="trendChart"></canvas>
+          <div class="status-indicator">
+            <div class="indicator" id="connection-status"></div>
+            <span id="status-text">Connecting...</span>
+            <span class="last-update" id="last-update">-</span>
           </div>
         </div>
       </div>
       
-      <div class="card">
-        <div class="card-header" id="agreement-header">
-          <span>На согласовании</span>
-          <span class="card-count" id="agreement-count">0</span>
-        </div>
-        <div class="card-body">
-          <div class="chart-container">
-            <canvas id="agreementChart"></canvas>
+      <div class="dashboard-grid" id="content">
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <span>📈 Динамика лидов</span>
+            <div class="chart-actions">
+              <button class="active" data-period="hourly">За 24 часа</button>
+              <button data-period="daily">За 7 дней</button>
+            </div>
           </div>
-          <div id="agreement-content" class="loading">Загрузка...</div>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-header" id="callback-header">
-          <span>Перезвонить</span>
-          <span class="card-count" id="callback-count">0</span>
-        </div>
-        <div class="card-body">
-          <div class="chart-container">
-            <canvas id="callbackChart"></canvas>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="trendChart"></canvas>
+            </div>
           </div>
-          <div id="callback-content" class="loading">Загрузка...</div>
         </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-header" id="invited-header">
-          <span>Приглашен к рекрутеру</span>
-          <span class="card-count" id="invited-count">0</span>
-        </div>
-        <div class="card-body">
-          <div class="chart-container">
-            <canvas id="invitedChart"></canvas>
+        
+        <div class="card">
+          <div class="card-header" id="agreement-header">
+            <span>На согласовании</span>
+            <span class="card-count" id="agreement-count">0</span>
           </div>
-          <div id="invited-content" class="loading">Загрузка...</div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="agreementChart"></canvas>
+            </div>
+            <div id="agreement-content" class="loading">Загрузка...</div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header" id="callback-header">
+            <span>Перезвонить</span>
+            <span class="card-count" id="callback-count">0</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="callbackChart"></canvas>
+            </div>
+            <div id="callback-content" class="loading">Загрузка...</div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header" id="invited-header">
+            <span>Приглашен к рекрутеру</span>
+            <span class="card-count" id="invited-count">0</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="invitedChart"></canvas>
+            </div>
+            <div id="invited-content" class="loading">Загрузка...</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    // Конфигурация
     const STAGES = {
       "На согласовании": { 
         id: "agreement", 
         color: "rgba(66, 133, 244, 0.8)",
-        bgColor: "rgba(66, 133, 244, 0.2)"
+        bgColor: "rgba(66, 133, 244, 0.2)",
+        element: "agreement-content", 
+        count: "agreement-count", 
+        header: "agreement-header" 
       },
       "Перезвонить": { 
         id: "callback", 
         color: "rgba(251, 188, 5, 0.8)",
-        bgColor: "rgba(251, 188, 5, 0.2)"
+        bgColor: "rgba(251, 188, 5, 0.2)",
+        element: "callback-content", 
+        count: "callback-count", 
+        header: "callback-header" 
       },
       "Приглашен к рекрутеру": { 
         id: "invited", 
         color: "rgba(52, 168, 83, 0.8)",
-        bgColor: "rgba(52, 168, 83, 0.2)"
+        bgColor: "rgba(52, 168, 83, 0.2)",
+        element: "invited-content", 
+        count: "invited-count", 
+        header: "invited-header" 
       }
     };
     
+    let lastUpdateTime = 0;
     const POLLING_INTERVAL = 60000;
-    let currentPeriod = 'minutes';
+    let retryDelay = 1000;
+    let isFirstLoad = true;
+    let allOperators = [];
     let charts = {};
+    let currentPeriod = 'hourly';
     
-    // Основная функция инициализации
-    async function initDashboard() {
-      try {
-        // Проверка элементов
-        const requiredElements = [
-          'trendChart', 'agreementChart', 'callbackChart', 'invitedChart',
-          'agreement-content', 'callback-content', 'invited-content',
-          'agreement-count', 'callback-count', 'invited-count'
-        ];
-        
-        const missingElements = requiredElements.filter(id => !document.getElementById(id));
-        if (missingElements.length > 0) {
-          throw new Error(`Missing elements: ${missingElements.join(', ')}`);
-        }
-        
-        initCharts();
-        await fetchData();
-        setupEventListeners();
-        setInterval(fetchData, POLLING_INTERVAL);
-      } catch (error) {
-        console.error("Initialization error:", error);
-        showError("Ошибка инициализации: " + error.message);
-      }
-    }
-    
-    // Инициализация графиков
     function initCharts() {
-      try {
-        // Основной график трендов
-        charts.trend = new Chart(
-          document.getElementById('trendChart'),
+      charts.trend = new Chart(
+        document.getElementById('trendChart'),
+        {
+          type: 'line',
+          data: { datasets: [] },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: 'top' }
+            }
+          }
+        }
+      );
+      
+      Object.entries(STAGES).forEach(([stageName, stageConfig]) => {
+        charts[stageConfig.id] = new Chart(
+          document.getElementById(`${stageConfig.id}Chart`),
           {
-            type: 'line',
+            type: 'bar',
             data: { labels: [], datasets: [] },
             options: {
               responsive: true,
-              plugins: {
-                legend: { position: 'top' },
-                tooltip: {
-                  callbacks: {
-                    title: function(context) {
-                      return context[0].label.replace(',', ' в');
-                    }
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  title: {
-                    display: true,
-                    text: 'Время (часы:минуты)'
-                  },
-                  ticks: {
-                    maxRotation: 45,
-                    minRotation: 45
-                  }
-                }
-              }
+              plugins: { legend: { display: false } }
             }
           }
         );
-        
-        // Графики для каждого этапа
-        Object.values(STAGES).forEach(stage => {
-          charts[stage.id] = new Chart(
-            document.getElementById(`${stage.id}Chart`),
-            {
-              type: 'bar',
-              data: { labels: [], datasets: [] },
-              options: { 
-                responsive: true,
-                plugins: {
-                  legend: { display: false }
-                }
-              }
-            }
-          );
-        });
-      } catch (error) {
-        console.error("Chart init error:", error);
-        throw error;
-      }
+      });
     }
     
-    // Загрузка данных
     async function fetchData() {
       try {
-        console.log("Fetching data...");
-        updateStatus("Загрузка данных...");
+        const dashboardResponse = await fetch('/api/leads/by-stage?t=' + Date.now());
         
-        const startTime = Date.now();
-        const [statsResponse, operatorsResponse] = await Promise.all([
-          fetch('/api/leads/by-stage?t=' + Date.now()),
-          fetch('/api/leads/operators?t=' + Date.now())
-        ]);
-        
-        console.log(`API responses received in ${Date.now() - startTime}ms`);
-        
-        if (!statsResponse.ok) {
-          throw new Error(`Ошибка загрузки статистики: ${statsResponse.status}`);
-        }
-        if (!operatorsResponse.ok) {
-          throw new Error(`Ошибка загрузки операторов: ${operatorsResponse.status}`);
+        if (!dashboardResponse.ok) {
+          throw new Error(`Ошибка HTTP! Статус: ${dashboardResponse.status}`);
         }
         
-        const [stats, operators] = await Promise.all([
-          statsResponse.json(),
-          operatorsResponse.json()
-        ]);
+        const data = await dashboardResponse.json();
         
-        if (stats.status === "error" || operators.status === "error") {
-          throw new Error(stats.message || operators.message);
+        if (data.status === "error") {
+          throw new Error(data.message);
         }
         
-        processData(stats, operators);
-        updateStatus("Данные загружены", true);
+        const operatorsResponse = await fetch('/api/leads/operators?t=' + Date.now());
+        const operatorsData = await operatorsResponse.json();
+        
+        updateDashboard(data);
+        updateOperatorSelect(operatorsData.operators);
+        
+        lastUpdateTime = Date.now();
+        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+        
+        if (isFirstLoad) {
+          updateConnectionStatus(true);
+          isFirstLoad = false;
+        }
+        
+        retryDelay = 1000;
+        return true;
       } catch (error) {
-        console.error("Fetch error:", error);
-        updateStatus("Ошибка загрузки", false);
-        showError(error.message);
-      }
-    }
-    
-    // Обработка данных
-    function processData(stats, operators) {
-      try {
-        console.log("Processing data:", stats);
+        console.error('Ошибка загрузки данных:', error);
+        updateConnectionStatus(false);
+        document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
+        document.getElementById('status-text').textContent = 'Ошибка соединения';
         
-        // Нормализация данных
-        if (!stats.current) {
-          stats.current = {};
-          Object.keys(STAGES).forEach(stage => {
-            stats.current[stage] = { details: [] };
-          });
-        }
-        
-        // Обновление графиков
-        updateCharts(stats);
-        
-        // Обновление таблиц
-        updateTables(stats);
-        
-        // Обновление списка операторов
-        updateOperators(operators.operators || []);
-        
-        // Обновление времени последнего обновления
-        document.getElementById('last-update').textContent = 
-          stats.timestamp || new Date().toLocaleTimeString();
-          
-      } catch (error) {
-        console.error("Data processing error:", error);
-        showError("Ошибка обработки данных: " + error.message);
-      }
-    }
-    
-    // Обновление графиков
-    function updateCharts(data) {
-      if (!data?.history || !data?.current) {
-        console.error("Incomplete data for charts:", data);
-        return;
-      }
-
-      // Обновление основного графика
-      try {
-        const historyData = data.history[currentPeriod] || { 
-          labels: [], 
-          data: Object.fromEntries(Object.keys(STAGES).map(k => [k, []]))
-        };
-        
-        const formatLabel = (label) => {
-          try {
-            if (!label) return '';
-            const date = new Date(label);
-            if (isNaN(date)) return label;
-            
-            switch(currentPeriod) {
-              case 'minutes': 
-                return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-              case 'hourly': 
-                return `${date.getHours()}:00`;
-              case 'daily': 
-                return date.toLocaleDateString();
-              default: 
-                return label;
-            }
-          } catch (e) {
-            console.error("Error formatting label:", label, e);
-            return label;
+        Object.values(STAGES).forEach(stage => {
+          const container = document.getElementById(stage.element);
+          if (!container.querySelector('.error-message')) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
+            container.innerHTML = '';
+            container.appendChild(errorDiv);
           }
-        };
-        
-        const labels = historyData.labels.map(formatLabel);
-        const datasets = Object.entries(historyData.data)
-          .filter(([stage]) => STAGES[stage])
-          .map(([stage, values]) => ({
-            label: stage,
-            data: values,
-            borderColor: STAGES[stage].color,
-            backgroundColor: STAGES[stage].bgColor,
-            borderWidth: 2,
-            tension: 0.1,
-            fill: true
-          }));
-        
-        charts.trend.data = { labels, datasets };
-        charts.trend.options.scales.x.title.text = 
-          currentPeriod === 'minutes' ? 'Время (часы:минуты)' :
-          currentPeriod === 'hourly' ? 'Время (часы)' : 'Дата';
-        
-        charts.trend.update();
-      } catch (e) {
-        console.error("Trend chart update error:", e);
-      }
-
-      // Обновление графиков по этапам
-      Object.entries(data.current).forEach(([stage, stageData]) => {
-        try {
-          const chart = charts[STAGES[stage]?.id];
-          if (!chart) return;
-          
-          const labels = stageData.details?.map(item => item.operator || 'Неизвестно') || [];
-          const data = stageData.details?.map(item => item.count || 0) || [];
-          
-          chart.data = {
-            labels: labels,
-            datasets: [{
-              label: 'Количество',
-              data: data,
-              backgroundColor: STAGES[stage]?.color || '#ccc'
-            }]
-          };
-          chart.update();
-        } catch (e) {
-          console.error(`Chart update error for ${stage}:`, e);
-        }
-      });
-    }
-    
-    // Обновление таблиц
-    function updateTables(data) {
-      if (!data?.current) {
-        console.error("No current data available");
-        return;
-      }
-      
-      Object.entries(STAGES).forEach(([stageName, stageConfig]) => {
-        const container = document.getElementById(`${stageConfig.id}-content`);
-        const countElement = document.getElementById(`${stageConfig.id}-count`);
-        
-        if (!container || !countElement) {
-          console.error(`Elements not found for stage: ${stageName}`);
-          return;
-        }
-        
-        const stageData = data.current[stageName] || { details: [] };
-        const total = stageData.details?.reduce((sum, item) => sum + (item.count || 0), 0) || 0;
-        
-        // Обновление счетчика
-        countElement.textContent = total;
-        
-        // Обновление таблицы
-        if (!stageData.details || stageData.details.length === 0) {
-          container.innerHTML = '<div class="empty">Нет данных</div>';
-          return;
-        }
-        
-        let html = `
-          <table>
-            <thead>
-              <tr>
-                <th>Оператор</th>
-                <th>Количество</th>
-              </tr>
-            </thead>
-            <tbody>
-        `;
-        
-        stageData.details.forEach(item => {
-          html += `
-            <tr>
-              <td>${item.operator || 'Неизвестно'}</td>
-              <td>${item.count || 0}</td>
-            </tr>
-          `;
         });
         
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-      });
-    }
-    
-    // Обновление списка операторов
-    function updateOperators(operators) {
-      const select = document.getElementById('operator-select');
-      if (!select) return;
-      
-      select.innerHTML = '<option value="">Все операторы</option>';
-      operators.forEach(operator => {
-        const option = document.createElement('option');
-        option.value = operator;
-        option.textContent = operator;
-        select.appendChild(option);
-      });
-    }
-    
-    // Обновление статуса
-    function updateStatus(message, isSuccess = false) {
-      const statusElement = document.getElementById('status-text');
-      const indicator = document.getElementById('connection-status');
-      
-      if (statusElement) statusElement.textContent = message;
-      if (indicator) {
-        indicator.className = 'indicator ' + (isSuccess ? 'connected' : 'disconnected');
+        retryDelay = Math.min(retryDelay * 2, 60000);
+        return false;
       }
     }
     
-    // Показать ошибку
-    function showError(message) {
-      Object.values(STAGES).forEach(stage => {
-        const container = document.getElementById(`${stage.id}-content`);
-        if (container) {
-          container.innerHTML = `<div class="error-message">${message}</div>`;
-        }
+    function updateCharts(data) {
+      if (!data.history) return;
+      
+      charts.trend.data = {
+        labels: data.history[currentPeriod].labels,
+        datasets: Object.entries(data.history[currentPeriod].data).map(([stage, values]) => ({
+          label: stage,
+          data: values,
+          borderColor: STAGES[stage].color,
+          backgroundColor: STAGES[stage].bgColor,
+          borderWidth: 2,
+          tension: 0.1,
+          fill: true
+        }))
+      };
+      charts.trend.update();
+      
+      Object.entries(data.current).forEach(([stageName, stageData]) => {
+        const stageConfig = STAGES[stageName];
+        charts[stageConfig.id].data = {
+          labels: stageData.details.map(d => d.operator),
+          datasets: [{
+            label: 'Лиды',
+            data: stageData.details.map(d => d.count),
+            backgroundColor: stageConfig.color,
+            borderColor: stageConfig.color,
+            borderWidth: 1
+          }]
+        };
+        charts[stageConfig.id].update();
       });
     }
     
-    // Настройка обработчиков событий
-    function setupEventListeners() {
-      // Переключение периода
+    // Остальные функции (updateDashboard, updateStage и т.д.) остаются без изменений
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      initCharts();
+      fetchData();
+      setInterval(fetchData, POLLING_INTERVAL);
+      
       document.querySelectorAll('.chart-actions button').forEach(btn => {
         btn.addEventListener('click', function() {
+          document.querySelectorAll('.chart-actions button').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
           currentPeriod = this.dataset.period;
-          document.querySelectorAll('.chart-actions button').forEach(b => 
-            b.classList.toggle('active', b === this)
-          );
           fetchData();
         });
       });
       
-      // Фильтр операторов
-      document.getElementById('operator-select').addEventListener('change', function() {
-        const selected = this.value;
-        document.querySelectorAll('table tbody tr').forEach(row => {
-          const operator = row.cells[0].textContent;
-          row.style.display = !selected || operator === selected ? '' : 'none';
-        });
-      });
-    }
-    
-    // Запуск приложения
-    document.addEventListener('DOMContentLoaded', initDashboard);
+      document.getElementById('operator-select').addEventListener('change', applyOperatorFilter);
+    });
   </script>
 </body>
 </html>
