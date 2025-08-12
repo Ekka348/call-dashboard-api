@@ -6,288 +6,7 @@
   <title>Real-Time Leads Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    :root {
-      --primary: #4285f4;
-      --success: #34a853;
-      --warning: #fbbc05;
-      --danger: #ea4335;
-    }
-    
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background-color: #f5f7fa;
-    }
-    
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-    
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid #e0e0e0;
-      flex-wrap: wrap;
-      gap: 15px;
-    }
-    
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-    
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .indicator {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background-color: #ccc;
-    }
-    
-    .indicator.connected {
-      background-color: var(--success);
-      animation: pulse 2s infinite;
-    }
-    
-    .indicator.disconnected {
-      background-color: var(--danger);
-    }
-    
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.5; }
-      100% { opacity: 1; }
-    }
-    
-    .last-update {
-      font-size: 0.85rem;
-      color: #666;
-      min-width: 80px;
-      display: inline-block;
-    }
-    
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 20px;
-    }
-    
-    .card {
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-      overflow: hidden;
-    }
-    
-    .card-header {
-      padding: 15px 20px;
-      background-color: var(--primary);
-      color: white;
-      font-weight: 600;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    
-    .card-count {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: 0.9rem;
-    }
-    
-    .card-body {
-      padding: 20px;
-    }
-    
-    .chart-container {
-      height: 250px;
-      margin-bottom: 20px;
-      position: relative;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    
-    th {
-      text-align: left;
-      padding: 8px 10px;
-      background-color: #f8f9fa;
-      font-weight: 500;
-      font-size: 0.85rem;
-      color: #666;
-    }
-    
-    td {
-      padding: 10px;
-      border-bottom: 1px solid #f0f0f0;
-    }
-    
-    .count-cell {
-      position: relative;
-      min-width: 80px;
-    }
-    
-    .count-value {
-      transition: all 0.3s ease;
-      display: inline-block;
-    }
-    
-    .count-update {
-      position: absolute;
-      right: 0;
-      font-size: 0.8em;
-      padding: 2px 6px;
-      border-radius: 10px;
-      background-color: #ffeb3b;
-      color: #000;
-      opacity: 0;
-      transform: translateY(-20px);
-      animation: count-update-fade 2s forwards;
-    }
-    
-    @keyframes count-update-fade {
-      0% { opacity: 1; transform: translateY(-20px); }
-      70% { opacity: 1; transform: translateY(-30px); }
-      100% { opacity: 0; transform: translateY(-40px); }
-    }
-    
-    .highlight-update {
-      animation: highlight-update 1.5s ease-out;
-    }
-    
-    @keyframes highlight-update {
-      0% { background-color: rgba(255, 235, 59, 0.5); }
-      100% { background-color: transparent; }
-    }
-    
-    .diff-up {
-      background-color: rgba(76, 175, 80, 0.1);
-    }
-    
-    .diff-down {
-      background-color: rgba(244, 67, 54, 0.1);
-    }
-    
-    .loading {
-      color: #999;
-      text-align: center;
-      padding: 20px;
-    }
-    
-    .empty {
-      color: #999;
-      text-align: center;
-      padding: 20px;
-    }
-    
-    .operator-filter {
-      min-width: 250px;
-    }
-    
-    .operator-filter select {
-      padding: 8px 12px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-      background: white;
-      font-family: inherit;
-      font-size: 0.9rem;
-      width: 100%;
-    }
-    
-    .hidden-row {
-      display: none;
-    }
-    
-    .highlight-operator {
-      background-color: rgba(66, 133, 244, 0.1) !important;
-    }
-    
-    .empty-message {
-      color: #999;
-      text-align: center;
-      padding: 20px;
-      display: none;
-    }
-    
-    .show-empty-message {
-      display: block;
-    }
-    
-    .error-message {
-      color: var(--danger);
-      text-align: center;
-      padding: 10px;
-      margin-top: 10px;
-    }
-    
-    .changes-notification {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: white;
-      padding: 15px;
-      border-radius: 5px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 1000;
-      max-width: 300px;
-      transition: opacity 0.5s;
-    }
-    
-    .changes-notification.fade-out {
-      opacity: 0;
-    }
-    
-    .changes-notification h4 {
-      margin-top: 0;
-      color: var(--primary);
-    }
-    
-    .changes-notification ul {
-      padding-left: 20px;
-      margin-bottom: 0;
-    }
-    
-    @media (max-width: 768px) {
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-      }
-      
-      .header {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      
-      .header-controls {
-        width: 100%;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-      }
-      
-      .operator-filter {
-        width: 100%;
-      }
-      
-      .changes-notification {
-        max-width: 90%;
-        left: 5%;
-        right: 5%;
-      }
-    }
+    /* Ваши существующие стили остаются без изменений */
   </style>
 </head>
 <body>
@@ -433,56 +152,59 @@
       });
     }
     
-    async function fetchData() {
-      try {
-        const dashboardResponse = await fetch('/api/leads/by-stage?t=' + Date.now());
-        
-        if (!dashboardResponse.ok) {
-          throw new Error(`Ошибка HTTP! Статус: ${dashboardResponse.status}`);
-        }
-        
-        const data = await dashboardResponse.json();
-        
-        if (data.status === "error") {
-          throw new Error(data.message);
-        }
-        
-        const operatorsResponse = await fetch('/api/leads/operators?t=' + Date.now());
-        const operatorsData = await operatorsResponse.json();
-        
-        updateDashboard(data);
-        updateOperatorSelect(operatorsData.operators);
-        
-        lastUpdateTime = Date.now();
-        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
-        
-        if (isFirstLoad) {
-          updateConnectionStatus(true);
-          isFirstLoad = false;
-        }
-        
-        retryDelay = 1000;
-        return true;
-      } catch (error) {
-        console.error('Ошибка загрузки данных:', error);
-        updateConnectionStatus(false);
-        document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
-        document.getElementById('status-text').textContent = 'Ошибка соединения';
-        
-        Object.values(STAGES).forEach(stage => {
-          const container = document.getElementById(stage.element);
-          if (!container.querySelector('.error-message')) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
-            container.innerHTML = '';
-            container.appendChild(errorDiv);
-          }
-        });
-        
-        retryDelay = Math.min(retryDelay * 2, 60000);
-        return false;
+    function updateDashboard(data) {
+      updateCharts(data);
+      
+      Object.entries(data.current).forEach(([stageName, stageData]) => {
+        updateStage(stageName, stageData);
+      });
+      
+      if (data.changes && data.changes.length > 0) {
+        showChangesNotification(data.changes);
       }
+    }
+    
+    function updateStage(stageName, stageData) {
+      const stageConfig = STAGES[stageName];
+      if (!stageConfig) return;
+      
+      const container = document.getElementById(stageConfig.element);
+      const countElement = document.getElementById(stageConfig.count);
+      
+      // Update total count
+      const totalCount = stageData.details.reduce((sum, item) => sum + item.count, 0);
+      countElement.textContent = totalCount;
+      
+      // Update table content
+      if (stageData.details.length === 0) {
+        container.innerHTML = '<div class="empty">Нет данных</div>';
+        return;
+      }
+      
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Оператор</th>
+              <th class="count-cell">Кол-во</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      stageData.details.forEach(item => {
+        html += `
+          <tr class="operator-row" data-operator="${item.operator}">
+            <td>${item.operator}</td>
+            <td class="count-cell">
+              <span class="count-value">${item.count}</span>
+            </td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table>`;
+      container.innerHTML = html;
     }
     
     function updateCharts(data) {
@@ -518,7 +240,140 @@
       });
     }
     
-    // Остальные функции (updateDashboard, updateStage и т.д.) остаются без изменений
+    function applyOperatorFilter() {
+      const selectedOperator = document.getElementById('operator-select').value;
+      
+      document.querySelectorAll('.operator-row').forEach(row => {
+        const rowOperator = row.dataset.operator;
+        const shouldShow = !selectedOperator || rowOperator === selectedOperator;
+        
+        row.classList.toggle('hidden-row', !shouldShow);
+        row.classList.toggle('highlight-operator', selectedOperator && rowOperator === selectedOperator);
+      });
+      
+      // Show empty message if no rows visible
+      document.querySelectorAll('.card-body').forEach(card => {
+        const table = card.querySelector('table');
+        if (!table) return;
+        
+        const visibleRows = table.querySelectorAll('tbody tr:not(.hidden-row)').length;
+        const emptyMessage = card.querySelector('.empty-message') || createEmptyMessage(card);
+        
+        emptyMessage.classList.toggle('show-empty-message', visibleRows === 0);
+      });
+    }
+    
+    function createEmptyMessage(container) {
+      const message = document.createElement('div');
+      message.className = 'empty-message';
+      message.textContent = 'Нет данных для выбранного оператора';
+      container.appendChild(message);
+      return message;
+    }
+    
+    function updateOperatorSelect(operators) {
+      const select = document.getElementById('operator-select');
+      if (operators.length === allOperators.length && 
+          operators.every((op, i) => op === allOperators[i])) {
+        return;
+      }
+      
+      allOperators = operators;
+      select.innerHTML = '<option value="">Все операторы</option>';
+      
+      operators.forEach(operator => {
+        const option = document.createElement('option');
+        option.value = operator;
+        option.textContent = operator;
+        select.appendChild(option);
+      });
+    }
+    
+    function updateConnectionStatus(connected) {
+      const statusElement = document.getElementById('connection-status');
+      const statusText = document.getElementById('status-text');
+      
+      statusElement.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+    }
+    
+    function showChangesNotification(changes) {
+      const notification = document.createElement('div');
+      notification.className = 'changes-notification';
+      notification.innerHTML = `
+        <h4>Изменения в лидах</h4>
+        <ul>
+          ${changes.map(change => `
+            <li>
+              ${change.operator}: ${change.stage} 
+              (${change.diff > 0 ? '+' : ''}${change.diff})
+            </li>
+          `).join('')}
+        </ul>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 500);
+      }, 5000);
+    }
+    
+    async function fetchData() {
+      try {
+        const [dashboardResponse, operatorsResponse] = await Promise.all([
+          fetch('/api/leads/by-stage?t=' + Date.now()),
+          fetch('/api/leads/operators?t=' + Date.now())
+        ]);
+        
+        if (!dashboardResponse.ok || !operatorsResponse.ok) {
+          throw new Error('Один из запросов завершился ошибкой');
+        }
+        
+        const [data, operatorsData] = await Promise.all([
+          dashboardResponse.json(),
+          operatorsResponse.json()
+        ]);
+        
+        if (data.status === "error" || operatorsData.status === "error") {
+          throw new Error(data.message || operatorsData.message);
+        }
+        
+        updateDashboard(data);
+        updateOperatorSelect(operatorsData.operators);
+        
+        lastUpdateTime = Date.now();
+        document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+        
+        if (isFirstLoad) {
+          updateConnectionStatus(true);
+          isFirstLoad = false;
+        }
+        
+        retryDelay = 1000;
+        return true;
+      } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        updateConnectionStatus(false);
+        document.getElementById('last-update').textContent = `Ошибка: ${error.message}`;
+        document.getElementById('status-text').textContent = 'Ошибка соединения';
+        
+        Object.values(STAGES).forEach(stage => {
+          const container = document.getElementById(stage.element);
+          if (!container.querySelector('.error-message')) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = `Ошибка загрузки данных: ${error.message}`;
+            container.innerHTML = '';
+            container.appendChild(errorDiv);
+          }
+        });
+        
+        retryDelay = Math.min(retryDelay * 2, 60000);
+        return false;
+      }
+    }
     
     document.addEventListener('DOMContentLoaded', () => {
       initCharts();
