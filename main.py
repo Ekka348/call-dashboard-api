@@ -1,16 +1,16 @@
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 import requests, os, time, threading
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from pytz import timezone
+from copy import deepcopy
+from auth import requires_auth  # Импортируем декоратор аутентификации
 
 app = Flask(__name__, static_folder='static')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Конфигурация
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 120 
-HISTORY_HOURS = 24
-DATA_RETENTION_DAYS = 7
+UPDATE_INTERVAL = 60  # Интервал обновления в секундах
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -20,45 +20,45 @@ STAGE_LABELS = {
 
 # Кеширование
 user_cache = {"data": {}, "last": 0}
-data_cache = {
-    "current": {},
-    "hourly": defaultdict(list),
-    "daily": defaultdict(list),
-    "timestamp": 0
-}
+data_cache = {"data": {}, "timestamp": 0}
 cache_lock = threading.Lock()
 last_operator_status = defaultdict(dict)
 
 def get_moscow_time():
-    return datetime.now(timezone("Europe/Moscow"))
+    tz = timezone("Europe/Moscow")
+    return datetime.now(tz)
 
-def get_date_ranges():
+def get_range_dates():
     now = get_moscow_time()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return {
-        'today': (today_start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")),
-        'hourly': [(now - timedelta(hours=i)).strftime("%Y-%m-%d %H:00:00") for i in range(HISTORY_HOURS)][::-1]
-    }
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
 def load_users():
     if time.time() - user_cache["last"] < 300:
         return user_cache["data"]
-
+    
     users = {}
     try:
         start = 0
         while True:
-            response = requests.post(f"{HOOK}user.get.json", json={"start": start}, timeout=20).json()
+            response = requests.post(
+                f"{HOOK}user.get.json",
+                json={"start": start},
+                timeout=20
+            ).json()
+            
             if "result" not in response:
                 break
+                
             for user in response["result"]:
                 users[int(user["ID"])] = f'{user["NAME"]} {user["LAST_NAME"]}'
-            start = response.get("next", 0)
-            if not start:
+            
+            if "next" not in response:
                 break
+            start = response["next"]
     except Exception as e:
         print(f"Error loading users: {e}")
-
+    
     user_cache["data"] = users
     user_cache["last"] = time.time()
     return users
@@ -77,24 +77,27 @@ def fetch_leads(stage, start, end):
                 },
                 timeout=20
             ).json()
-
+            
             if "result" not in response:
                 break
+                
             leads.extend(response["result"])
             offset = response.get("next", 0)
             if not offset:
                 break
     except Exception as e:
         print(f"Error fetching leads for {stage}: {e}")
+    
     return leads
 
-def check_for_changes(new_data):
+def check_for_operator_changes(new_data):
     changes = []
-    for stage_name, stage_data in new_data.items():
+    for stage_name, stage_data in new_data['data'].items():
         for operator in stage_data['details']:
             operator_name = operator['operator']
             new_count = operator['count']
             old_count = last_operator_status[stage_name].get(operator_name, 0)
+            
             if new_count != old_count:
                 changes.append({
                     'stage': stage_name,
@@ -106,92 +109,60 @@ def check_for_changes(new_data):
             last_operator_status[stage_name][operator_name] = new_count
     return changes
 
-def update_history_data(current_data):
-    now = get_moscow_time()
-    current_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:00:00")
-
-    for stage, data in current_data.items():
-        total = sum(item['count'] for item in data['details'])
-        data_cache['hourly'][stage].append({'timestamp': current_hour, 'count': total})
-        if len(data_cache['hourly'][stage]) > HISTORY_HOURS:
-            data_cache['hourly'][stage] = data_cache['hourly'][stage][-HISTORY_HOURS:]
-
-    if now.hour == 0 and now.minute < 5:
-        for stage, data in current_data.items():
-            total = sum(item['count'] for item in data['details'])
-            data_cache['daily'][stage].append({'timestamp': now.strftime("%Y-%m-%d"), 'count': total})
-            if len(data_cache['daily'][stage]) > DATA_RETENTION_DAYS:
-                data_cache['daily'][stage] = data_cache['daily'][stage][-DATA_RETENTION_DAYS:]
-
 def get_lead_stats():
     with cache_lock:
         try:
             if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
-                return data_cache["current"]
-
-            ranges = get_date_ranges()
+                return data_cache["data"]
+            
+            start, end = get_range_dates()
             users = load_users()
-            current_data = {}
+            data = {}
 
             for name, stage_id in STAGE_LABELS.items():
-                leads = fetch_leads(stage_id, *ranges['today'])
+                leads = fetch_leads(stage_id, start, end)
                 stats = Counter()
                 for lead in leads:
                     if lead.get("ASSIGNED_BY_ID"):
                         stats[int(lead["ASSIGNED_BY_ID"])] += 1
 
-                current_data[name] = {
+                data[name] = {
                     "details": [
                         {"operator": users.get(uid, f"ID {uid}"), "count": cnt}
                         for uid, cnt in sorted(stats.items(), key=lambda x: -x[1])
                     ]
                 }
 
-            update_history_data(current_data)
-            data_cache["current"] = current_data
-            data_cache["timestamp"] = time.time()
-
-            return {
+            result = {
                 "status": "success",
-                "current": current_data,
-                "changes": check_for_changes(current_data),
-                "history": {
-                    "hourly": {
-                        "labels": [t['timestamp'][11:16] for t in data_cache['hourly'].get(list(STAGE_LABELS.keys())[0], [])],
-                        "data": {stage: [d['count'] for d in data_cache['hourly'].get(stage, [])] 
-                                for stage in STAGE_LABELS.keys()}
-                    },
-                    "daily": {
-                        "labels": [t['timestamp'] for t in data_cache['daily'].get(list(STAGE_LABELS.keys())[0], [])],
-                        "data": {stage: [d['count'] for d in data_cache['daily'].get(stage, [])] 
-                                for stage in STAGE_LABELS.keys()}
-                    }
-                },
-                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
-            }
-        except Exception as e:
-            print(f"Error in get_lead_stats: {e}")
-            return {
-                "status": "error",
-                "message": str(e),
+                "range": "today", 
+                "data": data,
+                "changes": check_for_operator_changes({"data": data}),
                 "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
             }
             
+            data_cache["data"] = result
+            data_cache["timestamp"] = time.time()
+            return result
+        except Exception as e:
+            print(f"Error in get_lead_stats: {e}")
+            raise
 
 @app.route("/api/leads/operators")
+@requires_auth
 def get_all_operators():
     try:
-        ranges = get_date_ranges()
+        start, end = get_range_dates()
         users = load_users()
         operators = set()
-
+        
         for stage_id in STAGE_LABELS.values():
-            leads = fetch_leads(stage_id, *ranges['today'])
+            leads = fetch_leads(stage_id, start, end)
             for lead in leads:
                 if lead.get("ASSIGNED_BY_ID"):
                     operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
                     operators.add(operator_name)
-
+        
         return jsonify({
             "status": "success",
             "operators": sorted(list(operators)),
@@ -205,6 +176,7 @@ def get_all_operators():
         }), 500
 
 @app.route("/api/leads/by-stage")
+@requires_auth
 def leads_by_stage():
     try:
         data = get_lead_stats()
