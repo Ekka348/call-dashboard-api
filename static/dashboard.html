@@ -273,13 +273,25 @@
     // Основная функция инициализации
     async function initDashboard() {
       try {
+        // Проверка элементов
+        const requiredElements = [
+          'trendChart', 'agreementChart', 'callbackChart', 'invitedChart',
+          'agreement-content', 'callback-content', 'invited-content',
+          'agreement-count', 'callback-count', 'invited-count'
+        ];
+        
+        const missingElements = requiredElements.filter(id => !document.getElementById(id));
+        if (missingElements.length > 0) {
+          throw new Error(`Missing elements: ${missingElements.join(', ')}`);
+        }
+        
         initCharts();
         await fetchData();
         setupEventListeners();
         setInterval(fetchData, POLLING_INTERVAL);
       } catch (error) {
         console.error("Initialization error:", error);
-        showError("Ошибка инициализации");
+        showError("Ошибка инициализации: " + error.message);
       }
     }
     
@@ -327,7 +339,12 @@
             {
               type: 'bar',
               data: { labels: [], datasets: [] },
-              options: { responsive: true }
+              options: { 
+                responsive: true,
+                plugins: {
+                  legend: { display: false }
+                }
+              }
             }
           );
         });
@@ -340,15 +357,22 @@
     // Загрузка данных
     async function fetchData() {
       try {
+        console.log("Fetching data...");
         updateStatus("Загрузка данных...");
         
+        const startTime = Date.now();
         const [statsResponse, operatorsResponse] = await Promise.all([
           fetch('/api/leads/by-stage?t=' + Date.now()),
           fetch('/api/leads/operators?t=' + Date.now())
         ]);
         
-        if (!statsResponse.ok || !operatorsResponse.ok) {
-          throw new Error("Ошибка загрузки данных");
+        console.log(`API responses received in ${Date.now() - startTime}ms`);
+        
+        if (!statsResponse.ok) {
+          throw new Error(`Ошибка загрузки статистики: ${statsResponse.status}`);
+        }
+        if (!operatorsResponse.ok) {
+          throw new Error(`Ошибка загрузки операторов: ${operatorsResponse.status}`);
         }
         
         const [stats, operators] = await Promise.all([
@@ -372,6 +396,16 @@
     // Обработка данных
     function processData(stats, operators) {
       try {
+        console.log("Processing data:", stats);
+        
+        // Нормализация данных
+        if (!stats.current) {
+          stats.current = {};
+          Object.keys(STAGES).forEach(stage => {
+            stats.current[stage] = { details: [] };
+          });
+        }
+        
         // Обновление графиков
         updateCharts(stats);
         
@@ -384,52 +418,63 @@
         // Обновление времени последнего обновления
         document.getElementById('last-update').textContent = 
           stats.timestamp || new Date().toLocaleTimeString();
+          
       } catch (error) {
         console.error("Data processing error:", error);
-        throw error;
+        showError("Ошибка обработки данных: " + error.message);
       }
     }
     
     // Обновление графиков
     function updateCharts(data) {
-      if (!data?.history || !data?.current) return;
-      
-      // Получаем данные для текущего периода
-      const historyData = data.history[currentPeriod] || { labels: [], data: {} };
-      
-      // Форматируем метки времени в зависимости от периода
-      const formattedLabels = historyData.labels.map(label => {
-        const date = new Date(label);
-        switch(currentPeriod) {
-          case 'minutes':
-            return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-          case 'hourly':
-            return `${date.getHours()}:00`;
-          case 'daily':
-            return date.toLocaleDateString();
-          default:
-            return label;
-        }
-      });
-      
-      // Обновляем основной график
+      if (!data?.history || !data?.current) {
+        console.error("Incomplete data for charts:", data);
+        return;
+      }
+
+      // Обновление основного графика
       try {
-        charts.trend.data = {
-          labels: formattedLabels,
-          datasets: Object.entries(historyData.data)
-            .filter(([stage]) => STAGES[stage])
-            .map(([stage, values]) => ({
-              label: stage,
-              data: values,
-              borderColor: STAGES[stage].color,
-              backgroundColor: STAGES[stage].bgColor,
-              borderWidth: 2,
-              tension: 0.1,
-              fill: true
-            }))
+        const historyData = data.history[currentPeriod] || { 
+          labels: [], 
+          data: Object.fromEntries(Object.keys(STAGES).map(k => [k, []]))
         };
         
-        // Обновляем заголовок оси X
+        const formatLabel = (label) => {
+          try {
+            if (!label) return '';
+            const date = new Date(label);
+            if (isNaN(date)) return label;
+            
+            switch(currentPeriod) {
+              case 'minutes': 
+                return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+              case 'hourly': 
+                return `${date.getHours()}:00`;
+              case 'daily': 
+                return date.toLocaleDateString();
+              default: 
+                return label;
+            }
+          } catch (e) {
+            console.error("Error formatting label:", label, e);
+            return label;
+          }
+        };
+        
+        const labels = historyData.labels.map(formatLabel);
+        const datasets = Object.entries(historyData.data)
+          .filter(([stage]) => STAGES[stage])
+          .map(([stage, values]) => ({
+            label: stage,
+            data: values,
+            borderColor: STAGES[stage].color,
+            backgroundColor: STAGES[stage].bgColor,
+            borderWidth: 2,
+            tension: 0.1,
+            fill: true
+          }));
+        
+        charts.trend.data = { labels, datasets };
         charts.trend.options.scales.x.title.text = 
           currentPeriod === 'minutes' ? 'Время (часы:минуты)' :
           currentPeriod === 'hourly' ? 'Время (часы)' : 'Дата';
@@ -445,11 +490,14 @@
           const chart = charts[STAGES[stage]?.id];
           if (!chart) return;
           
+          const labels = stageData.details?.map(item => item.operator || 'Неизвестно') || [];
+          const data = stageData.details?.map(item => item.count || 0) || [];
+          
           chart.data = {
-            labels: stageData.details.map(item => item.operator),
+            labels: labels,
             datasets: [{
               label: 'Количество',
-              data: stageData.details.map(item => item.count),
+              data: data,
               backgroundColor: STAGES[stage]?.color || '#ccc'
             }]
           };
@@ -462,20 +510,28 @@
     
     // Обновление таблиц
     function updateTables(data) {
-      if (!data?.current) return;
+      if (!data?.current) {
+        console.error("No current data available");
+        return;
+      }
       
-      Object.entries(data.current).forEach(([stage, stageData]) => {
-        const container = document.getElementById(`${STAGES[stage]?.id}-content`);
-        const countElement = document.getElementById(`${STAGES[stage]?.id}-count`);
+      Object.entries(STAGES).forEach(([stageName, stageConfig]) => {
+        const container = document.getElementById(`${stageConfig.id}-content`);
+        const countElement = document.getElementById(`${stageConfig.id}-count`);
         
-        if (!container || !countElement) return;
+        if (!container || !countElement) {
+          console.error(`Elements not found for stage: ${stageName}`);
+          return;
+        }
+        
+        const stageData = data.current[stageName] || { details: [] };
+        const total = stageData.details?.reduce((sum, item) => sum + (item.count || 0), 0) || 0;
         
         // Обновление счетчика
-        const total = stageData.details.reduce((sum, item) => sum + item.count, 0);
         countElement.textContent = total;
         
         // Обновление таблицы
-        if (stageData.details.length === 0) {
+        if (!stageData.details || stageData.details.length === 0) {
           container.innerHTML = '<div class="empty">Нет данных</div>';
           return;
         }
@@ -494,8 +550,8 @@
         stageData.details.forEach(item => {
           html += `
             <tr>
-              <td>${item.operator}</td>
-              <td>${item.count}</td>
+              <td>${item.operator || 'Неизвестно'}</td>
+              <td>${item.count || 0}</td>
             </tr>
           `;
         });
@@ -526,7 +582,7 @@
       
       if (statusElement) statusElement.textContent = message;
       if (indicator) {
-        indicator.className = isSuccess ? 'indicator connected' : 'indicator disconnected';
+        indicator.className = 'indicator ' + (isSuccess ? 'connected' : 'disconnected');
       }
     }
     
