@@ -10,11 +10,11 @@ def create_app():
     # Конфигурация для Railway
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace('postgres://', 'postgresql://')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
     
     db.init_app(app)
     
-    with app.app_context():
-        from . import routes
-        db.create_all()
+    from .routes import init_routes
+    init_routes(app)
     
     return app
