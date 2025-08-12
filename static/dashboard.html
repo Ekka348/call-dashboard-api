@@ -6,7 +6,6 @@
   <title>Real-Time Leads Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Все ваши стили остаются без изменений */
     :root {
       --primary: #4285f4;
       --success: #34a853;
@@ -21,347 +20,414 @@
       background-color: #f5f7fa;
     }
     
-    /* ... остальные стили ... */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ccc;
+    }
+    
+    .indicator.connected {
+      background-color: var(--success);
+      animation: pulse 2s infinite;
+    }
+    
+    .indicator.disconnected {
+      background-color: var(--danger);
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
+    .last-update {
+      font-size: 0.85rem;
+      color: #666;
+    }
+    
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+    
+    .card-header {
+      padding: 15px 20px;
+      background-color: var(--primary);
+      color: white;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .card-count {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+    
+    .card-body {
+      padding: 20px;
+    }
+    
+    .chart-container {
+      height: 250px;
+      margin-bottom: 20px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th {
+      text-align: left;
+      padding: 8px 10px;
+      background-color: #f8f9fa;
+      font-weight: 500;
+      font-size: 0.85rem;
+      color: #666;
+    }
+    
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .loading {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .error-message {
+      color: var(--danger);
+      text-align: center;
+      padding: 20px;
+    }
+    
+    /* Добавьте остальные стили по необходимости */
   </style>
 </head>
 <body>
-  <!-- HTML-структура остается без изменений -->
-  <div id="app-container">
-    <div class="container">
-      <!-- Ваш существующий контент dashboard -->
+  <div class="container">
+    <div class="header">
+      <h1>📊 Real-Time Leads Dashboard</h1>
+      <div class="header-controls">
+        <div class="operator-filter">
+          <select id="operator-select">
+            <option value="">Все операторы</option>
+          </select>
+        </div>
+        <div class="status-indicator">
+          <div class="indicator" id="connection-status"></div>
+          <span id="status-text">Connecting...</span>
+          <span class="last-update" id="last-update">-</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="dashboard-grid">
+      <div class="card" style="grid-column: 1 / -1;">
+        <div class="card-header">
+          <span>📈 Динамика лидов</span>
+          <div class="chart-actions">
+            <button class="active" data-period="hourly">За 24 часа</button>
+            <button data-period="daily">За 7 дней</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header" id="agreement-header">
+          <span>На согласовании</span>
+          <span class="card-count" id="agreement-count">0</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-container">
+            <canvas id="agreementChart"></canvas>
+          </div>
+          <div id="agreement-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header" id="callback-header">
+          <span>Перезвонить</span>
+          <span class="card-count" id="callback-count">0</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-container">
+            <canvas id="callbackChart"></canvas>
+          </div>
+          <div id="callback-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header" id="invited-header">
+          <span>Приглашен к рекрутеру</span>
+          <span class="card-count" id="invited-count">0</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-container">
+            <canvas id="invitedChart"></canvas>
+          </div>
+          <div id="invited-content" class="loading">Загрузка...</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
+    // Конфигурация
     const STAGES = {
       "На согласовании": { 
         id: "agreement", 
         color: "rgba(66, 133, 244, 0.8)",
-        bgColor: "rgba(66, 133, 244, 0.2)",
-        element: "agreement-content", 
-        count: "agreement-count", 
-        header: "agreement-header" 
+        bgColor: "rgba(66, 133, 244, 0.2)"
       },
       "Перезвонить": { 
         id: "callback", 
         color: "rgba(251, 188, 5, 0.8)",
-        bgColor: "rgba(251, 188, 5, 0.2)",
-        element: "callback-content", 
-        count: "callback-count", 
-        header: "callback-header" 
+        bgColor: "rgba(251, 188, 5, 0.2)"
       },
       "Приглашен к рекрутеру": { 
         id: "invited", 
         color: "rgba(52, 168, 83, 0.8)",
-        bgColor: "rgba(52, 168, 83, 0.2)",
-        element: "invited-content", 
-        count: "invited-count", 
-        header: "invited-header" 
+        bgColor: "rgba(52, 168, 83, 0.2)"
       }
     };
     
-    // Конфигурация
-    let lastUpdateTime = 0;
     const POLLING_INTERVAL = 60000;
-    let retryDelay = 1000;
-    let isFirstLoad = true;
-    let allOperators = [];
-    let charts = {};
     let currentPeriod = 'hourly';
+    let charts = {};
     
-    // Инициализация приложения
-    function initializeApp() {
-      // Проверка необходимых DOM-элементов
-      const requiredElements = [
-        'trendChart', 'agreementChart', 'callbackChart', 'invitedChart',
-        'agreement-content', 'callback-content', 'invited-content',
-        'connection-status', 'status-text', 'last-update', 'operator-select'
-      ];
-      
-      const missingElements = requiredElements.filter(id => !document.getElementById(id));
-      if (missingElements.length > 0) {
-        console.error("Missing required elements:", missingElements);
-        return false;
+    // Основная функция инициализации
+    async function initDashboard() {
+      try {
+        initCharts();
+        await fetchData();
+        setupEventListeners();
+        setInterval(fetchData, POLLING_INTERVAL);
+      } catch (error) {
+        console.error("Initialization error:", error);
+        showError("Ошибка инициализации");
       }
-
-      initCharts();
-      fetchData();
-      setInterval(fetchData, POLLING_INTERVAL);
-      setupEventListeners();
-      
-      return true;
     }
     
     // Инициализация графиков
     function initCharts() {
       try {
+        // Основной график трендов
         charts.trend = new Chart(
           document.getElementById('trendChart'),
           {
             type: 'line',
-            data: { datasets: [] },
-            options: {
-              responsive: true,
-              plugins: { legend: { position: 'top' } }
-            }
+            data: { labels: [], datasets: [] },
+            options: { responsive: true }
           }
         );
         
-        Object.entries(STAGES).forEach(([stageName, stageConfig]) => {
-          charts[stageConfig.id] = new Chart(
-            document.getElementById(`${stageConfig.id}Chart`),
+        // Графики для каждого этапа
+        Object.values(STAGES).forEach(stage => {
+          charts[stage.id] = new Chart(
+            document.getElementById(`${stage.id}Chart`),
             {
               type: 'bar',
               data: { labels: [], datasets: [] },
-              options: {
-                responsive: true,
-                plugins: { legend: { display: false } }
-              }
+              options: { responsive: true }
             }
           );
         });
-      } catch (e) {
-        console.error("Chart initialization error:", e);
+      } catch (error) {
+        console.error("Chart init error:", error);
+        throw error;
       }
     }
     
     // Загрузка данных
     async function fetchData() {
       try {
-        console.log("[%s] Fetching data...", new Date().toISOString());
+        updateStatus("Загрузка данных...");
         
-        const [dashboardResponse, operatorsResponse] = await Promise.all([
-          fetch('/api/leads/by-stage?t=' + Date.now()).catch(handleFetchError),
-          fetch('/api/leads/operators?t=' + Date.now()).catch(handleFetchError)
+        const [statsResponse, operatorsResponse] = await Promise.all([
+          fetch('/api/leads/by-stage'),
+          fetch('/api/leads/operators')
         ]);
-
-        // Проверка ответов
-        if (!dashboardResponse?.ok) {
-          throw new Error(`Dashboard request failed: ${dashboardResponse?.status}`);
+        
+        if (!statsResponse.ok || !operatorsResponse.ok) {
+          throw new Error("Ошибка загрузки данных");
         }
-        if (!operatorsResponse?.ok) {
-          throw new Error(`Operators request failed: ${operatorsResponse?.status}`);
-        }
-
-        const [data, operatorsData] = await Promise.all([
-          dashboardResponse.json().catch(() => null),
-          operatorsResponse.json().catch(() => null)
+        
+        const [stats, operators] = await Promise.all([
+          statsResponse.json(),
+          operatorsResponse.json()
         ]);
-
-        // Валидация данных
-        if (!data || typeof data !== 'object') {
-          throw new Error("Invalid dashboard data format");
-        }
-        if (!operatorsData || typeof operatorsData !== 'object') {
-          throw new Error("Invalid operators data format");
-        }
-
-        // Нормализация данных
-        const normalizedData = {
-          status: data.status || "success",
-          current: data.current || {},
-          history: data.history || {
-            hourly: { labels: [], data: {} },
-            daily: { labels: [], data: {} }
-          },
-          changes: data.changes || [],
-          timestamp: data.timestamp || new Date().toLocaleString()
-        };
-
-        updateDashboard(normalizedData);
-        updateOperatorSelect(operatorsData.operators || []);
         
-        lastUpdateTime = Date.now();
-        updateConnectionStatus(true);
-        document.getElementById('last-update').textContent = normalizedData.timestamp;
+        if (stats.status === "error" || operators.status === "error") {
+          throw new Error(stats.message || operators.message);
+        }
         
-        return true;
+        processData(stats, operators);
+        updateStatus("Данные загружены", true);
       } catch (error) {
-        console.error("Data fetch error:", error);
-        handleDataError(error);
-        return false;
+        console.error("Fetch error:", error);
+        updateStatus("Ошибка загрузки", false);
+        showError(error.message);
       }
     }
     
-    // Обновление дашборда
-    function updateDashboard(data) {
-      if (!data || typeof data !== 'object') {
-        console.error("Invalid data in updateDashboard:", data);
-        return;
-      }
-
+    // Обработка данных
+    function processData(stats, operators) {
       try {
-        updateCharts(data);
+        // Обновление графиков
+        updateCharts(stats);
         
-        Object.entries(data.current).forEach(([stageName, stageData]) => {
-          updateStage(stageName, stageData);
-        });
+        // Обновление таблиц
+        updateTables(stats);
         
-        if (data.changes?.length > 0) {
-          showChangesNotification(data.changes);
-        }
-      } catch (e) {
-        console.error("Dashboard update error:", e);
+        // Обновление списка операторов
+        updateOperators(operators.operators || []);
+        
+        // Обновление времени последнего обновления
+        document.getElementById('last-update').textContent = 
+          stats.timestamp || new Date().toLocaleTimeString();
+      } catch (error) {
+        console.error("Data processing error:", error);
+        throw error;
       }
     }
     
     // Обновление графиков
     function updateCharts(data) {
-      if (!data?.history || !data?.current) {
-        console.error("Missing required data for charts:", data);
-        return;
-      }
-
-      // Обновление основного графика трендов
-      try {
-        const historyData = data.history[currentPeriod] || { labels: [], data: {} };
-        
-        charts.trend.data = {
-          labels: historyData.labels || [],
-          datasets: Object.entries(historyData.data || {})
-            .filter(([stage]) => STAGES[stage])
-            .map(([stage, values]) => ({
-              label: stage,
-              data: values,
-              borderColor: STAGES[stage].color,
-              backgroundColor: STAGES[stage].bgColor,
-              borderWidth: 2,
-              tension: 0.1,
-              fill: true
-            }))
-        };
-        charts.trend.update();
-      } catch (e) {
-        console.error("Trend chart update error:", e);
-      }
-
+      if (!data?.history || !data?.current) return;
+      
+      // Обновление основного графика
+      const history = data.history[currentPeriod] || { labels: [], data: {} };
+      charts.trend.data = {
+        labels: history.labels,
+        datasets: Object.entries(history.data).map(([stage, values]) => ({
+          label: stage,
+          data: values,
+          borderColor: STAGES[stage]?.color || '#ccc',
+          backgroundColor: STAGES[stage]?.bgColor || 'rgba(0,0,0,0.1)',
+          borderWidth: 2
+        }))
+      };
+      charts.trend.update();
+      
       // Обновление графиков по этапам
-      Object.entries(data.current).forEach(([stageName, stageData]) => {
-        try {
-          const stageConfig = STAGES[stageName];
-          if (!stageConfig || !charts[stageConfig.id]) return;
-
-          charts[stageConfig.id].data = {
-            labels: stageData.details?.map(d => d.operator) || [],
-            datasets: [{
-              label: 'Лиды',
-              data: stageData.details?.map(d => d.count) || [],
-              backgroundColor: stageConfig.color,
-              borderColor: stageConfig.color,
-              borderWidth: 1
-            }]
-          };
-          charts[stageConfig.id].update();
-        } catch (e) {
-          console.error(`Chart update error for ${stageName}:`, e);
+      Object.entries(data.current).forEach(([stage, stageData]) => {
+        const chart = charts[STAGES[stage]?.id];
+        if (!chart) return;
+        
+        chart.data = {
+          labels: stageData.details.map(item => item.operator),
+          datasets: [{
+            label: 'Количество',
+            data: stageData.details.map(item => item.count),
+            backgroundColor: STAGES[stage]?.color || '#ccc'
+          }]
+        };
+        chart.update();
+      });
+    }
+    
+    // Обновление таблиц
+    function updateTables(data) {
+      if (!data?.current) return;
+      
+      Object.entries(data.current).forEach(([stage, stageData]) => {
+        const container = document.getElementById(`${STAGES[stage]?.id}-content`);
+        const countElement = document.getElementById(`${STAGES[stage]?.id}-count`);
+        
+        if (!container || !countElement) return;
+        
+        // Обновление счетчика
+        const total = stageData.details.reduce((sum, item) => sum + item.count, 0);
+        countElement.textContent = total;
+        
+        // Обновление таблицы
+        if (stageData.details.length === 0) {
+          container.innerHTML = '<div class="empty">Нет данных</div>';
+          return;
         }
-      });
-    }
-    
-    // Обновление таблицы этапа
-    function updateStage(stageName, stageData) {
-      const stageConfig = STAGES[stageName];
-      if (!stageConfig) {
-        console.warn(`Unknown stage: ${stageName}`);
-        return;
-      }
-
-      const container = document.getElementById(stageConfig.element);
-      const countElement = document.getElementById(stageConfig.count);
-      
-      if (!container || !countElement) {
-        console.error(`Elements not found for stage: ${stageName}`);
-        return;
-      }
-
-      // Обновление общего количества
-      const totalCount = stageData.details?.reduce((sum, item) => sum + (item.count || 0), 0) || 0;
-      countElement.textContent = totalCount;
-
-      // Обновление содержимого таблицы
-      if (!stageData.details || stageData.details.length === 0) {
-        container.innerHTML = '<div class="empty">Нет данных</div>';
-        return;
-      }
-
-      let html = `
-        <table>
-          <thead>
-            <tr>
-              <th>Оператор</th>
-              <th class="count-cell">Кол-во</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      stageData.details.forEach(item => {
-        html += `
-          <tr class="operator-row" data-operator="${item.operator || ''}">
-            <td>${item.operator || 'Неизвестный'}</td>
-            <td class="count-cell">
-              <span class="count-value">${item.count || 0}</span>
-            </td>
-          </tr>
+        
+        let html = `
+          <table>
+            <thead>
+              <tr>
+                <th>Оператор</th>
+                <th>Количество</th>
+              </tr>
+            </thead>
+            <tbody>
         `;
-      });
-      
-      html += `</tbody></table>`;
-      container.innerHTML = html;
-    }
-    
-    // Обработчики событий
-    function setupEventListeners() {
-      // Переключение периода графиков
-      document.querySelectorAll('.chart-actions button').forEach(btn => {
-        btn.addEventListener('click', function() {
-          document.querySelectorAll('.chart-actions button').forEach(b => b.classList.remove('active'));
-          this.classList.add('active');
-          currentPeriod = this.dataset.period;
-          fetchData();
+        
+        stageData.details.forEach(item => {
+          html += `
+            <tr>
+              <td>${item.operator}</td>
+              <td>${item.count}</td>
+            </tr>
+          `;
         });
-      });
-      
-      // Фильтр операторов
-      document.getElementById('operator-select').addEventListener('change', applyOperatorFilter);
-    }
-    
-    // Фильтрация по операторам
-    function applyOperatorFilter() {
-      const selectedOperator = document.getElementById('operator-select').value;
-      
-      document.querySelectorAll('.operator-row').forEach(row => {
-        const rowOperator = row.dataset.operator;
-        const shouldShow = !selectedOperator || rowOperator === selectedOperator;
         
-        row.classList.toggle('hidden-row', !shouldShow);
-        row.classList.toggle('highlight-operator', selectedOperator && rowOperator === selectedOperator);
-      });
-      
-      // Показать сообщение, если нет видимых строк
-      document.querySelectorAll('.card-body').forEach(card => {
-        const table = card.querySelector('table');
-        if (!table) return;
-        
-        const visibleRows = table.querySelectorAll('tbody tr:not(.hidden-row)').length;
-        const emptyMessage = card.querySelector('.empty-message') || createEmptyMessage(card);
-        
-        emptyMessage.classList.toggle('show-empty-message', visibleRows === 0);
+        html += `</tbody></table>`;
+        container.innerHTML = html;
       });
     }
     
     // Обновление списка операторов
-    function updateOperatorSelect(operators) {
+    function updateOperators(operators) {
       const select = document.getElementById('operator-select');
       if (!select) return;
       
-      // Проверяем, изменились ли операторы
-      if (JSON.stringify(operators) === JSON.stringify(allOperators)) return;
-      
-      allOperators = operators || [];
       select.innerHTML = '<option value="">Все операторы</option>';
-      
-      allOperators.forEach(operator => {
+      operators.forEach(operator => {
         const option = document.createElement('option');
         option.value = operator;
         option.textContent = operator;
@@ -369,94 +435,52 @@
       });
     }
     
-    // Управление статусом соединения
-    function updateConnectionStatus(connected) {
-      const statusElement = document.getElementById('connection-status');
-      const statusText = document.getElementById('status-text');
+    // Обновление статуса
+    function updateStatus(message, isSuccess = false) {
+      const statusElement = document.getElementById('status-text');
+      const indicator = document.getElementById('connection-status');
       
-      if (statusElement) {
-        statusElement.className = 'indicator ' + (connected ? 'connected' : 'disconnected');
-      }
-      if (statusText) {
-        statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      if (statusElement) statusElement.textContent = message;
+      if (indicator) {
+        indicator.className = isSuccess ? 'indicator connected' : 'indicator disconnected';
       }
     }
     
-    // Показать уведомление об изменениях
-    function showChangesNotification(changes) {
-      if (!changes?.length) return;
-      
-      const notification = document.createElement('div');
-      notification.className = 'changes-notification';
-      notification.innerHTML = `
-        <h4>Изменения в лидах</h4>
-        <ul>
-          ${changes.map(change => `
-            <li>
-              ${change.operator || 'Неизвестный'}: ${change.stage || 'Неизвестный этап'} 
-              (${change.diff > 0 ? '+' : ''}${change.diff || 0})
-            </li>
-          `).join('')}
-        </ul>
-      `;
-      
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.classList.add('fade-out');
-        setTimeout(() => notification.remove(), 500);
-      }, 5000);
-    }
-    
-    // Создать сообщение об отсутствии данных
-    function createEmptyMessage(container) {
-      const message = document.createElement('div');
-      message.className = 'empty-message';
-      message.textContent = 'Нет данных для выбранного оператора';
-      container.appendChild(message);
-      return message;
-    }
-    
-    // Обработка ошибок запросов
-    function handleFetchError(error) {
-      console.error("Fetch error:", error);
-      throw error;
-    }
-    
-    // Обработка ошибок данных
-    function handleDataError(error) {
-      console.error("Data processing error:", error);
-      updateConnectionStatus(false);
-      
-      const errorMessage = error.message || "Unknown error";
-      const lastUpdateElement = document.getElementById('last-update');
-      const statusTextElement = document.getElementById('status-text');
-      
-      if (lastUpdateElement) {
-        lastUpdateElement.textContent = `Ошибка: ${errorMessage}`;
-      }
-      if (statusTextElement) {
-        statusTextElement.textContent = 'Ошибка соединения';
-      }
-
-      // Показать ошибки во всех секциях
+    // Показать ошибку
+    function showError(message) {
       Object.values(STAGES).forEach(stage => {
-        const container = document.getElementById(stage.element);
-        if (!container) return;
-        
-        const errorDiv = container.querySelector('.error-message') || document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.textContent = `Ошибка загрузки данных: ${errorMessage}`;
-        
-        if (!container.contains(errorDiv)) {
-          container.innerHTML = '';
-          container.appendChild(errorDiv);
+        const container = document.getElementById(`${stage.id}-content`);
+        if (container) {
+          container.innerHTML = `<div class="error-message">${message}</div>`;
         }
       });
     }
     
-    // Запуск приложения после загрузки DOM
-    document.addEventListener('DOMContentLoaded', initializeApp);
+    // Настройка обработчиков событий
+    function setupEventListeners() {
+      // Переключение периода
+      document.querySelectorAll('.chart-actions button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          currentPeriod = this.dataset.period;
+          document.querySelectorAll('.chart-actions button').forEach(b => 
+            b.classList.toggle('active', b === this)
+          );
+          fetchData();
+        });
+      });
+      
+      // Фильтр операторов
+      document.getElementById('operator-select').addEventListener('change', function() {
+        const selected = this.value;
+        document.querySelectorAll('table tbody tr').forEach(row => {
+          const operator = row.cells[0].textContent;
+          row.style.display = !selected || operator === selected ? '' : 'none';
+        });
+      });
+    }
+    
+    // Запуск приложения
+    document.addEventListener('DOMContentLoaded', initDashboard);
   </script>
 </body>
 </html>
