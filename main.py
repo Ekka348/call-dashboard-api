@@ -17,8 +17,6 @@ STAGE_LABELS = {
     "База ВВ": "11"
 }
 
-GROUPED_STAGES = ["NEW", "OLD", "База ВВ"]
-
 user_cache = {"data": {}, "last": 0}
 
 def get_range_dates(rtype):
