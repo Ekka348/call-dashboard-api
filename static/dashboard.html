@@ -16,13 +16,6 @@
       color: #555;
       margin-bottom: 10px;
     }
-    .info-box {
-      background-color: #e8f4ff;
-      padding: 15px;
-      border: 1px solid #b3d8ff;
-      margin-bottom: 30px;
-      max-width: 600px;
-    }
     .stage-columns {
       display: flex;
       flex-wrap: wrap;
@@ -63,19 +56,9 @@
 </head>
 <body>
 
-<div id="active_operators_box">
-  <!-- список прилетит сюда -->
-</div>
-
-  <div>🟢 Операторов на линии: <strong>5</strong></div>
-  
-  <h1>📊 Статистика по стадиям — сегодня</h1>
+  <h1>Статистика по стадиям</h1>
 
   <p id="update-log">Обновления ещё не начались.</p>
-
-  <div class="info-box" id="stats">
-    <p><strong>Загрузка инфо-стадий...</strong></p>
-  </div>
 
   <div class="stage-columns" id="content">
     <div class="stage-table"><h2>Стадия: НДЗ</h2></div>
@@ -85,8 +68,7 @@
   </div>
 
   <script>
-    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру", "INFO"];
-    const INFO_STAGES = ["NEW", "OLD", "База ВВ"];
+    const STAGE_CYCLE = ["НДЗ", "НДЗ 2", "Перезвонить", "Приглашен к рекрутеру"];
     let stageIndex = 0;
 
     async function fetchData() {
@@ -112,44 +94,33 @@
       const data = await fetchData();
       if (!data || !data.data) return;
 
-      if (current === "INFO") {
-        const statsContainer = document.getElementById("stats");
-        statsContainer.innerHTML = "";
-        INFO_STAGES.forEach(stage => {
-          const value = data.data[stage]?.count ?? 0;
-          const line = document.createElement("p");
-          line.innerHTML = `<strong>${stage}:</strong> ${value}`;
-          statsContainer.appendChild(line);
-        });
+      const info = data.data[current];
+      const block = Array.from(document.getElementById("content").children)
+        .find(el => el.querySelector("h2")?.textContent?.includes(current));
+
+      if (!block) return;
+      block.innerHTML = `<h2>Стадия: ${current}</h2>`;
+
+      if (!info?.details || info.details.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-message";
+        empty.textContent = "Нет лидов.";
+        block.appendChild(empty);
       } else {
-        const info = data.data[current];
-        const block = Array.from(document.getElementById("content").children)
-          .find(el => el.querySelector("h2")?.textContent?.includes(current));
+        const table = document.createElement("table");
+        const header = document.createElement("thead");
+        header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
+        table.appendChild(header);
 
-        if (!block) return;
-        block.innerHTML = `<h2>Стадия: ${current}</h2>`;
+        const body = document.createElement("tbody");
+        info.details.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
+          body.appendChild(tr);
+        });
 
-        if (!info?.details || info.details.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "empty-message";
-          empty.textContent = "Нет лидов.";
-          block.appendChild(empty);
-        } else {
-          const table = document.createElement("table");
-          const header = document.createElement("thead");
-          header.innerHTML = `<tr><th>Оператор</th><th>Количество</th></tr>`;
-          table.appendChild(header);
-
-          const body = document.createElement("tbody");
-          info.details.forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${row.operator}</td><td>${row.count}</td>`;
-            body.appendChild(tr);
-          });
-
-          table.appendChild(body);
-          block.appendChild(table);
-        }
+        table.appendChild(body);
+        block.appendChild(table);
       }
 
       stageIndex = (stageIndex + 1) % STAGE_CYCLE.length;
