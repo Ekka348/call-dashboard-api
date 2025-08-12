@@ -8,9 +8,10 @@ app = Flask(__name__, static_folder='static')
 
 # Конфигурация
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 60 
+UPDATE_INTERVAL = 60  # Обновление данных каждую минуту
 HISTORY_HOURS = 24
 DATA_RETENTION_DAYS = 7
+MINUTE_INTERVAL = 5  # Интервал сбора данных в минутах
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -22,6 +23,7 @@ STAGE_LABELS = {
 user_cache = {"data": {}, "last": 0}
 data_cache = {
     "current": {},
+    "minutes": defaultdict(list),
     "hourly": defaultdict(list),
     "daily": defaultdict(list),
     "timestamp": 0
@@ -35,8 +37,16 @@ def get_moscow_time():
 def get_date_ranges():
     now = get_moscow_time()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Генерация временных меток с интервалом в MINUTE_INTERVAL минут
+    minute_labels = [
+        (now - timedelta(minutes=i*MINUTE_INTERVAL)).strftime("%Y-%m-%d %H:%M:%S")
+        for i in range(0, (HISTORY_HOURS*60)//MINUTE_INTERVAL)
+    ][::-1]
+    
     return {
         'today': (today_start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")),
+        'minutes': minute_labels,
         'hourly': [(now - timedelta(hours=i)).strftime("%Y-%m-%d %H:00:00") for i in range(HISTORY_HOURS)][::-1]
     }
 
@@ -108,14 +118,23 @@ def check_for_changes(new_data):
 
 def update_history_data(current_data):
     now = get_moscow_time()
+    current_minute = now.replace(second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
     current_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:00:00")
     
     for stage, data in current_data.items():
         total = sum(item['count'] for item in data['details'])
+        
+        # Обновление минутных данных
+        data_cache['minutes'][stage].append({'timestamp': current_minute, 'count': total})
+        if len(data_cache['minutes'][stage]) > (HISTORY_HOURS*60)/MINUTE_INTERVAL:
+            data_cache['minutes'][stage] = data_cache['minutes'][stage][-(HISTORY_HOURS*60)//MINUTE_INTERVAL:]
+        
+        # Обновление часовых данных
         data_cache['hourly'][stage].append({'timestamp': current_hour, 'count': total})
         if len(data_cache['hourly'][stage]) > HISTORY_HOURS:
             data_cache['hourly'][stage] = data_cache['hourly'][stage][-HISTORY_HOURS:]
     
+    # Обновление дневных данных в полночь
     if now.hour == 0 and now.minute < 5:
         for stage, data in current_data.items():
             total = sum(item['count'] for item in data['details'])
@@ -132,7 +151,18 @@ def get_lead_stats():
             ranges = get_date_ranges()
             users = load_users()
             current_data = {}
+            minute_data = defaultdict(dict)
 
+            # Сбор минутных данных
+            for i in range(len(ranges['minutes'])-1):
+                start_time = ranges['minutes'][i]
+                end_time = ranges['minutes'][i+1]
+                
+                for name, stage_id in STAGE_LABELS.items():
+                    leads = fetch_leads(stage_id, start_time, end_time)
+                    minute_data[name][start_time] = len(leads)
+
+            # Сбор текущих данных
             for name, stage_id in STAGE_LABELS.items():
                 leads = fetch_leads(stage_id, *ranges['today'])
                 stats = Counter()
@@ -151,11 +181,18 @@ def get_lead_stats():
             data_cache["current"] = current_data
             data_cache["timestamp"] = time.time()
             
+            # Подготовка минутных данных для ответа
+            minute_history = {
+                "labels": list(minute_data[list(STAGE_LABELS.keys())[0]].keys()),
+                "data": {stage: list(values.values()) for stage, values in minute_data.items()}
+            }
+            
             return {
                 "status": "success",
                 "current": current_data,
                 "changes": check_for_changes(current_data),
                 "history": {
+                    "minutes": minute_history,
                     "hourly": {
                         "labels": [t['timestamp'][11:16] for t in data_cache['hourly'].get(list(STAGE_LABELS.keys())[0], [])],
                         "data": {stage: [d['count'] for d in data_cache['hourly'].get(stage, [])] 
