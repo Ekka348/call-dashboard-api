@@ -176,7 +176,7 @@ def get_lead_stats():
                 "message": str(e),
                 "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
             }
-            }
+            
 
 @app.route("/api/leads/operators")
 def get_all_operators():
