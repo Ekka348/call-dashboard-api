@@ -6,7 +6,288 @@
   <title>Real-Time Leads Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Ваши существующие стили остаются без изменений */
+    :root {
+      --primary: #4285f4;
+      --success: #34a853;
+      --warning: #fbbc05;
+      --danger: #ea4335;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f7fa;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e0e0e0;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ccc;
+    }
+    
+    .indicator.connected {
+      background-color: var(--success);
+      animation: pulse 2s infinite;
+    }
+    
+    .indicator.disconnected {
+      background-color: var(--danger);
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
+    .last-update {
+      font-size: 0.85rem;
+      color: #666;
+      min-width: 80px;
+      display: inline-block;
+    }
+    
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+    
+    .card-header {
+      padding: 15px 20px;
+      background-color: var(--primary);
+      color: white;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .card-count {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+    
+    .card-body {
+      padding: 20px;
+    }
+    
+    .chart-container {
+      height: 250px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th {
+      text-align: left;
+      padding: 8px 10px;
+      background-color: #f8f9fa;
+      font-weight: 500;
+      font-size: 0.85rem;
+      color: #666;
+    }
+    
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .count-cell {
+      position: relative;
+      min-width: 80px;
+    }
+    
+    .count-value {
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+    
+    .count-update {
+      position: absolute;
+      right: 0;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background-color: #ffeb3b;
+      color: #000;
+      opacity: 0;
+      transform: translateY(-20px);
+      animation: count-update-fade 2s forwards;
+    }
+    
+    @keyframes count-update-fade {
+      0% { opacity: 1; transform: translateY(-20px); }
+      70% { opacity: 1; transform: translateY(-30px); }
+      100% { opacity: 0; transform: translateY(-40px); }
+    }
+    
+    .highlight-update {
+      animation: highlight-update 1.5s ease-out;
+    }
+    
+    @keyframes highlight-update {
+      0% { background-color: rgba(255, 235, 59, 0.5); }
+      100% { background-color: transparent; }
+    }
+    
+    .diff-up {
+      background-color: rgba(76, 175, 80, 0.1);
+    }
+    
+    .diff-down {
+      background-color: rgba(244, 67, 54, 0.1);
+    }
+    
+    .loading {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .empty {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .operator-filter {
+      min-width: 250px;
+    }
+    
+    .operator-filter select {
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background: white;
+      font-family: inherit;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+    
+    .hidden-row {
+      display: none;
+    }
+    
+    .highlight-operator {
+      background-color: rgba(66, 133, 244, 0.1) !important;
+    }
+    
+    .empty-message {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+      display: none;
+    }
+    
+    .show-empty-message {
+      display: block;
+    }
+    
+    .error-message {
+      color: var(--danger);
+      text-align: center;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    
+    .changes-notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      max-width: 300px;
+      transition: opacity 0.5s;
+    }
+    
+    .changes-notification.fade-out {
+      opacity: 0;
+    }
+    
+    .changes-notification h4 {
+      margin-top: 0;
+      color: var(--primary);
+    }
+    
+    .changes-notification ul {
+      padding-left: 20px;
+      margin-bottom: 0;
+    }
+    
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .header-controls {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      
+      .operator-filter {
+        width: 100%;
+      }
+      
+      .changes-notification {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
+      }
+    }
   </style>
 </head>
 <body>
