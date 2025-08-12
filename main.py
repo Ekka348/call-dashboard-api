@@ -8,10 +8,9 @@ app = Flask(__name__, static_folder='static')
 
 # Конфигурация
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 60
+UPDATE_INTERVAL = 60 
 HISTORY_HOURS = 24
 DATA_RETENTION_DAYS = 7
-MINUTE_INTERVAL = 5
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -23,7 +22,6 @@ STAGE_LABELS = {
 user_cache = {"data": {}, "last": 0}
 data_cache = {
     "current": {},
-    "minutes": defaultdict(list),
     "hourly": defaultdict(list),
     "daily": defaultdict(list),
     "timestamp": 0
@@ -37,22 +35,15 @@ def get_moscow_time():
 def get_date_ranges():
     now = get_moscow_time()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    minute_labels = [
-        (now - timedelta(minutes=i*MINUTE_INTERVAL)).strftime("%Y-%m-%d %H:%M:%S")
-        for i in range(0, (HISTORY_HOURS*60)//MINUTE_INTERVAL)
-    ][::-1]
-    
     return {
         'today': (today_start.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")),
-        'minutes': minute_labels,
         'hourly': [(now - timedelta(hours=i)).strftime("%Y-%m-%d %H:00:00") for i in range(HISTORY_HOURS)][::-1]
     }
 
 def load_users():
     if time.time() - user_cache["last"] < 300:
         return user_cache["data"]
-    
+
     users = {}
     try:
         start = 0
@@ -67,7 +58,7 @@ def load_users():
                 break
     except Exception as e:
         print(f"Error loading users: {e}")
-    
+
     user_cache["data"] = users
     user_cache["last"] = time.time()
     return users
@@ -86,7 +77,7 @@ def fetch_leads(stage, start, end):
                 },
                 timeout=20
             ).json()
-            
+
             if "result" not in response:
                 break
             leads.extend(response["result"])
@@ -117,20 +108,14 @@ def check_for_changes(new_data):
 
 def update_history_data(current_data):
     now = get_moscow_time()
-    current_minute = now.replace(second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
     current_hour = now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:00:00")
-    
+
     for stage, data in current_data.items():
         total = sum(item['count'] for item in data['details'])
-        
-        data_cache['minutes'][stage].append({'timestamp': current_minute, 'count': total})
-        if len(data_cache['minutes'][stage]) > (HISTORY_HOURS*60)/MINUTE_INTERVAL:
-            data_cache['minutes'][stage] = data_cache['minutes'][stage][-(HISTORY_HOURS*60)//MINUTE_INTERVAL:]
-        
         data_cache['hourly'][stage].append({'timestamp': current_hour, 'count': total})
         if len(data_cache['hourly'][stage]) > HISTORY_HOURS:
             data_cache['hourly'][stage] = data_cache['hourly'][stage][-HISTORY_HOURS:]
-    
+
     if now.hour == 0 and now.minute < 5:
         for stage, data in current_data.items():
             total = sum(item['count'] for item in data['details'])
@@ -143,19 +128,10 @@ def get_lead_stats():
         try:
             if time.time() - data_cache["timestamp"] < UPDATE_INTERVAL:
                 return data_cache["current"]
-            
+
             ranges = get_date_ranges()
             users = load_users()
             current_data = {}
-            minute_data = defaultdict(dict)
-
-            for i in range(len(ranges['minutes'])-1):
-                start_time = ranges['minutes'][i]
-                end_time = ranges['minutes'][i+1]
-                
-                for name, stage_id in STAGE_LABELS.items():
-                    leads = fetch_leads(stage_id, start_time, end_time)
-                    minute_data[name][start_time] = len(leads)
 
             for name, stage_id in STAGE_LABELS.items():
                 leads = fetch_leads(stage_id, *ranges['today'])
@@ -174,18 +150,12 @@ def get_lead_stats():
             update_history_data(current_data)
             data_cache["current"] = current_data
             data_cache["timestamp"] = time.time()
-            
-            minute_history = {
-                "labels": list(minute_data[list(STAGE_LABELS.keys())[0]].keys()),
-                "data": {stage: list(values.values()) for stage, values in minute_data.items()}
-            }
-            
+
             return {
                 "status": "success",
                 "current": current_data,
                 "changes": check_for_changes(current_data),
                 "history": {
-                    "minutes": minute_history,
                     "hourly": {
                         "labels": [t['timestamp'][11:16] for t in data_cache['hourly'].get(list(STAGE_LABELS.keys())[0], [])],
                         "data": {stage: [d['count'] for d in data_cache['hourly'].get(stage, [])] 
@@ -201,7 +171,7 @@ def get_lead_stats():
             }
         except Exception as e:
             print(f"Error in get_lead_stats: {e}")
-            return {
+ return {
                 "status": "error",
                 "message": str(e),
                 "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
@@ -213,14 +183,14 @@ def get_all_operators():
         ranges = get_date_ranges()
         users = load_users()
         operators = set()
-        
+
         for stage_id in STAGE_LABELS.values():
             leads = fetch_leads(stage_id, *ranges['today'])
             for lead in leads:
                 if lead.get("ASSIGNED_BY_ID"):
                     operator_name = users.get(int(lead["ASSIGNED_BY_ID"]), f"ID {lead['ASSIGNED_BY_ID']}")
                     operators.add(operator_name)
-        
+
         return jsonify({
             "status": "success",
             "operators": sorted(list(operators)),
@@ -252,13 +222,6 @@ def serve_index():
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
