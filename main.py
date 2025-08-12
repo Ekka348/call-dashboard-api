@@ -8,10 +8,10 @@ app = Flask(__name__, static_folder='static')
 
 # Конфигурация
 HOOK = os.environ.get('BITRIX_HOOK', "https://ers2023.bitrix24.ru/rest/27/1bc1djrnc455xeth/")
-UPDATE_INTERVAL = 60  # Обновление данных каждую минуту
+UPDATE_INTERVAL = 60
 HISTORY_HOURS = 24
 DATA_RETENTION_DAYS = 7
-MINUTE_INTERVAL = 5  # Интервал сбора данных в минутах
+MINUTE_INTERVAL = 5
 
 STAGE_LABELS = {
     "На согласовании": "UC_A2DF81",
@@ -38,7 +38,6 @@ def get_date_ranges():
     now = get_moscow_time()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # Генерация временных меток с интервалом в MINUTE_INTERVAL минут
     minute_labels = [
         (now - timedelta(minutes=i*MINUTE_INTERVAL)).strftime("%Y-%m-%d %H:%M:%S")
         for i in range(0, (HISTORY_HOURS*60)//MINUTE_INTERVAL)
@@ -124,17 +123,14 @@ def update_history_data(current_data):
     for stage, data in current_data.items():
         total = sum(item['count'] for item in data['details'])
         
-        # Обновление минутных данных
         data_cache['minutes'][stage].append({'timestamp': current_minute, 'count': total})
         if len(data_cache['minutes'][stage]) > (HISTORY_HOURS*60)/MINUTE_INTERVAL:
             data_cache['minutes'][stage] = data_cache['minutes'][stage][-(HISTORY_HOURS*60)//MINUTE_INTERVAL:]
         
-        # Обновление часовых данных
         data_cache['hourly'][stage].append({'timestamp': current_hour, 'count': total})
         if len(data_cache['hourly'][stage]) > HISTORY_HOURS:
             data_cache['hourly'][stage] = data_cache['hourly'][stage][-HISTORY_HOURS:]
     
-    # Обновление дневных данных в полночь
     if now.hour == 0 and now.minute < 5:
         for stage, data in current_data.items():
             total = sum(item['count'] for item in data['details'])
@@ -153,7 +149,6 @@ def get_lead_stats():
             current_data = {}
             minute_data = defaultdict(dict)
 
-            # Сбор минутных данных
             for i in range(len(ranges['minutes'])-1):
                 start_time = ranges['minutes'][i]
                 end_time = ranges['minutes'][i+1]
@@ -162,7 +157,6 @@ def get_lead_stats():
                     leads = fetch_leads(stage_id, start_time, end_time)
                     minute_data[name][start_time] = len(leads)
 
-            # Сбор текущих данных
             for name, stage_id in STAGE_LABELS.items():
                 leads = fetch_leads(stage_id, *ranges['today'])
                 stats = Counter()
@@ -181,7 +175,6 @@ def get_lead_stats():
             data_cache["current"] = current_data
             data_cache["timestamp"] = time.time()
             
-            # Подготовка минутных данных для ответа
             minute_history = {
                 "labels": list(minute_data[list(STAGE_LABELS.keys())[0]].keys()),
                 "data": {stage: list(values.values()) for stage, values in minute_data.items()}
@@ -259,6 +252,13 @@ def serve_index():
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
