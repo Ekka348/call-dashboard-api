@@ -208,7 +208,10 @@
     }
     
     function updateCharts(data) {
-      if (!data.history) return;
+  if (!data || !data.history || !data.current) {
+    console.error("Invalid data format:", data);
+    return;
+  }
       
       charts.trend.data = {
         labels: data.history[currentPeriod].labels,
