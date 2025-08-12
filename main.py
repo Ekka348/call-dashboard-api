@@ -171,7 +171,11 @@ def get_lead_stats():
             }
         except Exception as e:
             print(f"Error in get_lead_stats: {e}")
-            raise
+            return {
+                "status": "error",
+                "message": str(e),
+                "timestamp": get_moscow_time().strftime("%Y-%m-%d %H:%M:%S")
+            }
 
 @app.route("/api/leads/operators")
 def get_all_operators():
