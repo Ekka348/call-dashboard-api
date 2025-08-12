@@ -112,6 +112,26 @@
       margin-bottom: 20px;
     }
     
+    .chart-actions {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .chart-actions button {
+      padding: 5px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    
+    .chart-actions button.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    
     table {
       width: 100%;
       border-collapse: collapse;
@@ -143,7 +163,11 @@
       padding: 20px;
     }
     
-    /* Добавьте остальные стили по необходимости */
+    .empty {
+      color: #999;
+      text-align: center;
+      padding: 20px;
+    }
   </style>
 </head>
 <body>
@@ -169,8 +193,9 @@
         <div class="card-header">
           <span>📈 Динамика лидов</span>
           <div class="chart-actions">
-            <button class="active" data-period="hourly">За 24 часа</button>
-            <button data-period="daily">За 7 дней</button>
+            <button class="active" data-period="minutes">По минутам</button>
+            <button data-period="hourly">По часам</button>
+            <button data-period="daily">По дням</button>
           </div>
         </div>
         <div class="card-body">
@@ -242,7 +267,7 @@
     };
     
     const POLLING_INTERVAL = 60000;
-    let currentPeriod = 'hourly';
+    let currentPeriod = 'minutes';
     let charts = {};
     
     // Основная функция инициализации
@@ -267,7 +292,31 @@
           {
             type: 'line',
             data: { labels: [], datasets: [] },
-            options: { responsive: true }
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                  callbacks: {
+                    title: function(context) {
+                      return context[0].label.replace(',', ' в');
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  title: {
+                    display: true,
+                    text: 'Время (часы:минуты)'
+                  },
+                  ticks: {
+                    maxRotation: 45,
+                    minRotation: 45
+                  }
+                }
+              }
+            }
           }
         );
         
@@ -294,8 +343,8 @@
         updateStatus("Загрузка данных...");
         
         const [statsResponse, operatorsResponse] = await Promise.all([
-          fetch('/api/leads/by-stage'),
-          fetch('/api/leads/operators')
+          fetch('/api/leads/by-stage?t=' + Date.now()),
+          fetch('/api/leads/operators?t=' + Date.now())
         ]);
         
         if (!statsResponse.ok || !operatorsResponse.ok) {
@@ -345,34 +394,69 @@
     function updateCharts(data) {
       if (!data?.history || !data?.current) return;
       
-      // Обновление основного графика
-      const history = data.history[currentPeriod] || { labels: [], data: {} };
-      charts.trend.data = {
-        labels: history.labels,
-        datasets: Object.entries(history.data).map(([stage, values]) => ({
-          label: stage,
-          data: values,
-          borderColor: STAGES[stage]?.color || '#ccc',
-          backgroundColor: STAGES[stage]?.bgColor || 'rgba(0,0,0,0.1)',
-          borderWidth: 2
-        }))
-      };
-      charts.trend.update();
+      // Получаем данные для текущего периода
+      const historyData = data.history[currentPeriod] || { labels: [], data: {} };
       
+      // Форматируем метки времени в зависимости от периода
+      const formattedLabels = historyData.labels.map(label => {
+        const date = new Date(label);
+        switch(currentPeriod) {
+          case 'minutes':
+            return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+          case 'hourly':
+            return `${date.getHours()}:00`;
+          case 'daily':
+            return date.toLocaleDateString();
+          default:
+            return label;
+        }
+      });
+      
+      // Обновляем основной график
+      try {
+        charts.trend.data = {
+          labels: formattedLabels,
+          datasets: Object.entries(historyData.data)
+            .filter(([stage]) => STAGES[stage])
+            .map(([stage, values]) => ({
+              label: stage,
+              data: values,
+              borderColor: STAGES[stage].color,
+              backgroundColor: STAGES[stage].bgColor,
+              borderWidth: 2,
+              tension: 0.1,
+              fill: true
+            }))
+        };
+        
+        // Обновляем заголовок оси X
+        charts.trend.options.scales.x.title.text = 
+          currentPeriod === 'minutes' ? 'Время (часы:минуты)' :
+          currentPeriod === 'hourly' ? 'Время (часы)' : 'Дата';
+        
+        charts.trend.update();
+      } catch (e) {
+        console.error("Trend chart update error:", e);
+      }
+
       // Обновление графиков по этапам
       Object.entries(data.current).forEach(([stage, stageData]) => {
-        const chart = charts[STAGES[stage]?.id];
-        if (!chart) return;
-        
-        chart.data = {
-          labels: stageData.details.map(item => item.operator),
-          datasets: [{
-            label: 'Количество',
-            data: stageData.details.map(item => item.count),
-            backgroundColor: STAGES[stage]?.color || '#ccc'
-          }]
-        };
-        chart.update();
+        try {
+          const chart = charts[STAGES[stage]?.id];
+          if (!chart) return;
+          
+          chart.data = {
+            labels: stageData.details.map(item => item.operator),
+            datasets: [{
+              label: 'Количество',
+              data: stageData.details.map(item => item.count),
+              backgroundColor: STAGES[stage]?.color || '#ccc'
+            }]
+          };
+          chart.update();
+        } catch (e) {
+          console.error(`Chart update error for ${stage}:`, e);
+        }
       });
     }
     
